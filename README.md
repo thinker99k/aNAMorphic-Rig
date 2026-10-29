@@ -3,21 +3,21 @@
 ## 1. Build
 0. clone this repo, change directory to project root(`..../aNAMorphic-Rig/`)
 
-1. run setup script\
-   - Windows : `powershell -ExecutionPolicy Bypass .\script\setup.ps1` (UAC will appear)\
-   - macOS : `./script/setup.zsh` (can ask password to access system area)\
+1. run setup script
+   - Windows : `powershell -ExecutionPolicy Bypass .\script\setup.ps1` (UAC will appear)
+   - macOS : `./script/setup.zsh` (can ask password to access system area)
    - linux : `sudo ./script/setup.bash` (package manager require root privilege)
    - 
 2. close and open new terminal window (must be new process)
 
 3. run build script
    - normal build
-     - Windows : `powershell -ExecutionPolicy Bypass .\build.ps1`\
-     - macOS : `./build.zsh`\
+     - Windows : `powershell -ExecutionPolicy Bypass .\build.ps1`
+     - macOS : `./build.zsh`
      - Linux : `./build.bash`
    - clean build (use if normal build fail)
-     - Windows : `powershell -ExecutionPolicy Bypass .\build2.ps1`\
-     - macOS : `./build2.zsh`\
+     - Windows : `powershell -ExecutionPolicy Bypass .\build2.ps1`
+     - macOS : `./build2.zsh`
      - Linux : `./build2.bash`
 
 ## 2. Binary Location
