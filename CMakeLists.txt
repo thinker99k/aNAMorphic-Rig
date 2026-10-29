@@ -9,6 +9,19 @@
 
 cmake_minimum_required(VERSION 3.22)
 
+# 컴파일러를 따로 지정하지 않으면 clang 사용 (CLion 기본 설정 대비)
+if(NOT CMAKE_CXX_COMPILER)
+    if(CMAKE_HOST_WIN32)
+        set(CMAKE_C_COMPILER clang-cl)
+        set(CMAKE_CXX_COMPILER clang-cl)
+    else()
+        set(CMAKE_C_COMPILER clang)
+        set(CMAKE_CXX_COMPILER clang++)
+    endif()
+endif()
+
+project(aNAMorphicRig VERSION 0.1.0 LANGUAGES C CXX)
+
 project(aNAMorphic-Rig VERSION 0.1.0 LANGUAGES C CXX)
 
 # 빌드 타입을 안 주면 Release. NAM은 Debug로 돌리면 실시간 처리가 안 될 만큼 느림.
