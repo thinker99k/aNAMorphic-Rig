@@ -24,10 +24,18 @@ if (-not $env:VSINSTALLDIR) {
     Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
 }
 
+
+# clang 19(VS Build Tools 동봉) 우회: clang 내장 intrin.h 의 _xend 선언과 rtmintrin.h 의 정의가 충돌해
+# "multiversioning ... always_inline" 에러가 난다. rtmintrin.h 의 include guard 를 미리 정의해 건너뛴다.
+# cmake 명령줄(-D...)이 아니라 환경변수인 이유: JUCE 가 configure 중 따로 돌리는 juceaide 빌드에는
+# 명령줄 플래그가 전달되지 않고 환경변수만 전달된다. 이 스크립트 프로세스 안에서만 유효하다.
+# CFLAGS 는 첫 configure 때만 읽히므로 바꾸면 build2.ps1 로 다시 빌드. "/D" 는 CMake 가 / 를 떼므로 "-D".
+$env:CFLAGS   = '-D__RTMINTRIN_H'
+$env:CXXFLAGS = '-D__RTMINTRIN_H'
+
 # 네이티브 명령은 실패해도 $ErrorActionPreference 로 멈추지 않으므로 종료 코드를 직접 확인
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
     -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
-    -DCMAKE_C_FLAGS_INIT=-D__RTMINTRIN_H -DCMAKE_CXX_FLAGS_INIT=-D__RTMINTRIN_H `
     -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
