@@ -20,8 +20,6 @@ if(NOT CMAKE_CXX_COMPILER)
     endif()
 endif()
 
-project(aNAMorphicRig VERSION 0.1.0 LANGUAGES C CXX)
-
 project(aNAMorphic-Rig VERSION 0.1.0 LANGUAGES C CXX)
 
 # 빌드 타입을 안 주면 Release. NAM은 Debug로 돌리면 실시간 처리가 안 될 만큼 느림.

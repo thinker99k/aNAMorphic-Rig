@@ -26,8 +26,9 @@ if (-not $env:VSINSTALLDIR) {
 
 # 네이티브 명령은 실패해도 $ErrorActionPreference 로 멈추지 않으므로 종료 코드를 직접 확인
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
-      -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
-      -DCMAKE_C_FLAGS_INIT=-D__RTMINTRIN_H -DCMAKE_CXX_FLAGS_INIT=-D__RTMINTRIN_H
+    -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+    -DCMAKE_C_FLAGS_INIT=-D__RTMINTRIN_H -DCMAKE_CXX_FLAGS_INIT=-D__RTMINTRIN_H `
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 cmake --build build

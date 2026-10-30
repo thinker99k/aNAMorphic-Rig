@@ -7,7 +7,7 @@
    - Windows : `powershell -ExecutionPolicy Bypass .\script\setup.ps1` (UAC will appear)
    - macOS : `./script/setup.zsh` (can ask password to access system area)
    - linux : `sudo ./script/setup.bash` (package manager require root privilege)
-   - 
+
 2. close and open new terminal window (must be new process)
 
 3. run build script
