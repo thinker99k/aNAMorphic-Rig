@@ -5,7 +5,7 @@
 #         -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++    (Windows: clang-cl)
 #   cmake --build build
 #
-# 결과물: build/aNAMorphic-Rig/Release/aNAMorphic-Rig(.exe / .app)
+# 결과물: build/aNAMorphic-Rig_artefacts/Release/aNAMorphic-Rig(.exe / .app)
 
 cmake_minimum_required(VERSION 3.22)
 
@@ -115,6 +115,7 @@ set_target_properties(namcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # 앱
 # ---------------------------------------------------------------------------
 juce_add_gui_app(aNAMorphic-Rig
+    VERSION "${PROJECT_VERSION}"
     PRODUCT_NAME "aNAMorphic-Rig"
     COMPANY_NAME "thinker99k"
     BUNDLE_ID "com.thinker99k.anamorphic-rig"
@@ -143,7 +144,7 @@ target_compile_definitions(aNAMorphic-Rig PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:aNAMorphic-Rig,JUCE_PRODUCT_NAME>"
-    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:aNAMorphic-Rig,AR_JUCE_VER>")
+    JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
 
 target_link_libraries(aNAMorphic-Rig
     PRIVATE
