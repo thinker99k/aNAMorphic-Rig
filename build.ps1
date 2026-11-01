@@ -9,22 +9,6 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
-if (-not $env:VSINSTALLDIR) {
-    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (-not (Test-Path $vswhere)) {
-        throw "Visual Studio 설치 관리자를 찾지 못했습니다. script\setup.ps1 을 먼저 실행하세요."
-    }
-    $vs = & $vswhere -latest -products * `
-        -requires Microsoft.VisualStudio.Component.VC.Llvm.Clang -property installationPath
-    if (-not $vs) {
-        throw "clang-cl 이 포함된 Visual Studio Build Tools 가 없습니다. script\setup.ps1 을 실행하거나 " +
-                "Visual Studio Installer -> 수정 -> 'C++ Clang tools for Windows' 를 체크하세요."
-    }
-    Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
-    Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
-}
-
-
 # clang 19(VS Build Tools 동봉) 우회: clang 내장 intrin.h 의 _xend 선언과 rtmintrin.h 의 정의가 충돌해
 # "multiversioning ... always_inline" 에러가 난다. rtmintrin.h 의 include guard 를 미리 정의해 건너뛴다.
 # cmake 명령줄(-D...)이 아니라 환경변수인 이유: JUCE 가 configure 중 따로 돌리는 juceaide 빌드에는
