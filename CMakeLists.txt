@@ -136,7 +136,9 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/SettingsDialog.cpp
         source/ui/ChainView.cpp
         source/ui/BlockEditor.cpp
-        source/ui/StatusBar.cpp)
+        source/ui/StatusBar.cpp
+        source/ui/GainKnob.cpp
+        source/ui/WaveformWindow.cpp)
 
 target_include_directories(aNAMorphic-Rig PRIVATE source)
 

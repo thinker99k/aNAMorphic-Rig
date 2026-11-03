@@ -6,7 +6,7 @@
 
 namespace rig
 {
-    // 상단 바: [Patch 콤보박스] ............................ [Settings 버튼]
+    // 상단 바: [Patch 콤보박스] ................ [Waveform 버튼] [Settings 버튼]
     class TopBar final : public juce::Component
     {
     public:
@@ -16,6 +16,7 @@ namespace rig
 
         std::function<void (int)> onPatchChanged;
         std::function<void()> onSettingsClicked;
+        std::function<void()> onWaveformClicked;
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -24,6 +25,7 @@ namespace rig
         juce::Label patchLabel { {}, "Patch" };
         juce::ComboBox patchBox;
         juce::TextButton settingsButton { "Settings..." };
+        juce::TextButton waveformButton { "Waveform" };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TopBar)
     };

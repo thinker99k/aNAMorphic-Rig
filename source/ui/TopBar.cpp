@@ -19,11 +19,18 @@ namespace rig
                 onSettingsClicked();
         };
 
+        waveformButton.onClick = [this]
+        {
+            if (onWaveformClicked)
+                onWaveformClicked();
+        };
+
         patchLabel.setJustificationType (juce::Justification::centredRight);
 
         addAndMakeVisible (patchLabel);
         addAndMakeVisible (patchBox);
         addAndMakeVisible (settingsButton);
+        addAndMakeVisible (waveformButton);
     }
 
     void TopBar::setPatchNumber (int number)
@@ -43,5 +50,7 @@ namespace rig
         area.removeFromLeft (4);
         patchBox.setBounds (area.removeFromLeft (80));
         settingsButton.setBounds (area.removeFromRight (110));
+        area.removeFromRight (6);
+        waveformButton.setBounds (area.removeFromRight (110));   // Settings 바로 왼쪽
     }
 }

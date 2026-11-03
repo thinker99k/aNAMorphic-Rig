@@ -27,6 +27,12 @@ namespace rig
             std::vector<std::shared_ptr<Block>> blocks;
         };
 
+        // 입력/출력 볼륨 범위 (dB). 입력의 최솟값은 실제 -15 dB, 출력은 outputMinDb 이하가 -inf(무음)
+        static constexpr float inputMinDb  = -15.0f;
+        static constexpr float inputMaxDb  =  15.0f;
+        static constexpr float outputMinDb = -60.0f;
+        static constexpr float outputMaxDb =  10.0f;
+
         AudioEngine() = default;
         ~AudioEngine() override;
 
@@ -34,12 +40,39 @@ namespace rig
         void setChain (std::unique_ptr<Chain> newChain);
         void collectGarbage();
 
+        // 입력 직후(체인 앞) / 출력 직전(체인 뒤) 볼륨
+        void setInputGainDb (float db);
+        void setOutputGainDb (float db);
+
         double getSampleRate() const noexcept   { return sampleRate.load(); }
         int getMaxBlockSize() const noexcept    { return maxBlockSize.load(); }
 
         // UI 미터용: 마지막으로 읽은 뒤의 피크 값을 가져오고 0 으로 초기화
         float takeInputPeak() noexcept  { return inputPeak.exchange (0.0f); }
         float takeOutputPeak() noexcept { return outputPeak.exchange (0.0f); }
+
+        // 파형 창용 (UI 스레드): 가장 최근 numSamples 개를 복사. 데이터가 부족하거나 도중에 덮어쓰였으면 false
+        //  - 입력: 입력 게인 앞 (IN 미터와 같은 지점)
+        //  - 출력: 출력 게인 뒤, 출력 채널로 복사하기 직전 (OUT 미터와 같은 지점)
+        bool copyLatestInput (float* dest, int numSamples) const noexcept  { return inputScope.copyLatest (dest, numSamples); }
+        bool copyLatestOutput (float* dest, int numSamples) const noexcept { return outputScope.copyLatest (dest, numSamples); }
+
+        // 파형 창이 보일 때만 true: 꺼져 있으면 오디오 스레드는 기록하지 않는다
+        void setScopeEnabled (bool shouldBeEnabled) noexcept { scopeEnabled.store (shouldBeEnabled, std::memory_order_relaxed); }
+
+        // 가장 최근 샘플을 덮어쓰는 링 버퍼. 쓰는 쪽은 오디오 스레드 하나, 읽는 쪽은 UI 스레드 하나
+        struct ScopeRing
+        {
+            static constexpr int size = 32768;   // 2의 거듭제곱, 48 kHz 에서 약 0.68 초
+
+            void write (const float* samples, int n) noexcept;                  // 오디오 스레드
+            bool copyLatest (float* dest, int numSamples) const noexcept;       // UI 스레드
+
+        private:
+            // atomic 배열: 쓰는 도중에 읽어도 data race 가 아니다 (relaxed 라 일반 float 와 같은 속도). 생성 후 크기 불변
+            std::unique_ptr<std::atomic<float>[]> data { new std::atomic<float>[size] {} };
+            std::atomic<juce::uint64> writePos { 0 };                           // 지금까지 쓴 샘플 총 개수
+        };
 
         // --- AudioIODeviceCallback ---
         void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
@@ -74,6 +107,16 @@ namespace rig
 
         std::atomic<float> inputPeak { 0.0f };
         std::atomic<float> outputPeak { 0.0f };
+
+        // 목표 게인(선형). 메시지 스레드가 쓰고 오디오 스레드가 읽는다
+        std::atomic<float> inputGain { 1.0f };
+        std::atomic<float> outputGain { 1.0f };
+
+        // 오디오 스레드 전용: 게인 변화를 20 ms 동안 선형으로 이어 "틱" 잡음을 막는다
+        juce::SmoothedValue<float> inputSmoothed { 1.0f }, outputSmoothed { 1.0f };
+
+        ScopeRing inputScope, outputScope;
+        std::atomic<bool> scopeEnabled { false };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)
     };
