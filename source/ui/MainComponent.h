@@ -7,7 +7,6 @@
 #include "ui/GainKnob.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
-#include "ui/WaveformWindow.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -38,7 +37,6 @@ namespace rig
     private:
         void timerCallback() override;
         void openSettings();
-        void openWaveform();
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
 
         juce::AudioDeviceManager& deviceManager;
@@ -52,9 +50,6 @@ namespace rig
         GainKnob inputKnob  { "INPUT",  AudioEngine::inputMinDb,  AudioEngine::inputMaxDb,  false };
         GainKnob outputKnob { "OUTPUT", AudioEngine::outputMinDb, AudioEngine::outputMaxDb, true  };
         juce::TextButton muteButton { "MUTE" };
-
-        // 파형 창 (모달 아님). 닫으면 숨기기만 하고, MainComponent 와 함께 지워진다
-        std::unique_ptr<WaveformWindow> waveformWindow;
 
         juce::Rectangle<int> reservedArea;
 

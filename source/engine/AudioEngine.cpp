@@ -46,33 +46,6 @@ namespace rig
         outputGain.store (juce::Decibels::decibelsToGain (db, outputMinDb), std::memory_order_relaxed);
     }
 
-    void AudioEngine::ScopeRing::write (const float* samples, int n) noexcept
-    {
-        const auto pos = writePos.load (std::memory_order_relaxed);   // 쓰는 쪽은 이 스레드 하나
-
-        for (int i = 0; i < n; ++i)
-            data[(size_t) ((pos + (juce::uint64) i) & (size - 1))].store (samples[i], std::memory_order_relaxed);
-
-        writePos.store (pos + (juce::uint64) n, std::memory_order_release);
-    }
-
-    bool AudioEngine::ScopeRing::copyLatest (float* dest, int numSamples) const noexcept
-    {
-        const auto end = writePos.load (std::memory_order_acquire);
-
-        if (numSamples <= 0 || numSamples > size / 2 || end < (juce::uint64) numSamples)
-            return false;
-
-        const auto start = end - (juce::uint64) numSamples;
-
-        for (int i = 0; i < numSamples; ++i)
-            dest[i] = data[(size_t) ((start + (juce::uint64) i) & (size - 1))].load (std::memory_order_relaxed);
-
-        // 복사하는 사이 오디오 스레드가 start 구간을 덮어썼다면 이번 프레임은 버린다
-        const auto newEnd = writePos.load (std::memory_order_acquire);
-        return newEnd - start <= (juce::uint64) size;
-    }
-
     void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
     {
         // 장치가 멈춘 상태에서 호출되므로 할당/Reset 이 허용된다
@@ -125,8 +98,6 @@ namespace rig
         inputSmoothed.setTargetValue (inputGain.load (std::memory_order_relaxed));
         outputSmoothed.setTargetValue (outputGain.load (std::memory_order_relaxed));
 
-        const bool scopeOn = scopeEnabled.load (std::memory_order_relaxed);
-
         for (int offset = 0; offset < numSamples && blockSize > 0; offset += blockSize)
         {
             const int n = juce::jmin (blockSize, numSamples - offset);
@@ -144,10 +115,6 @@ namespace rig
             {
                 juce::FloatVectorOperations::clear (a, n);
             }
-
-            // 입력 파형: 게인 앞, 입력이 없으면 0 이 쌓인다
-            if (scopeOn)
-                inputScope.write (a, n);
 
             // 입력 볼륨 (IN 미터는 게인 앞에서 잰다)
             inputSmoothed.applyGain (a, n);
@@ -167,10 +134,6 @@ namespace rig
 
             storeMax (outputPeak, juce::FloatVectorOperations::findMaximum (a, n));
             storeMax (outputPeak, -juce::FloatVectorOperations::findMinimum (a, n));
-
-            // 출력 파형: 게인 뒤, 클리핑 전 값 그대로
-            if (scopeOn)
-                outputScope.write (a, n);
 
             // 모노 결과를 열려 있는 모든 출력 채널(보통 L/R)에 복사
             for (int ch = 0; ch < numOutputChannels; ++ch)
