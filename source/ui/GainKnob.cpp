@@ -1,5 +1,7 @@
 #include "GainKnob.h"
 
+#include <cmath>
+
 namespace rig
 {
     namespace
@@ -63,9 +65,37 @@ namespace rig
     {
         slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        slider.setRange (min, max, 0.1);
-        // 범위를 정한 뒤에 불러야 한다: 0 dB 가 회전 범위 정중앙 (대칭 범위면 skew 1 = 선형)
-        slider.setSkewFactorFromMidPoint (0.0);
+        if (minIsInf)
+        {
+            // 출력: 진폭 기준 오디오 테이퍼. gain(p) = Gmax * p^k, k = log2(Gmax) 이라 p = 0.5(12시) 에서 정확히 0 dB.
+            //  dB(p) = max + 20k*log10(p).  p=0 -> -inf (min 이하로 붙임), p=1 -> max.
+            //  체감 크기 ~ gain^0.6 이므로 돌린 만큼 거의 일정하게 커진다 (min 근처에서 튀지 않음)
+            const double k = (double) max / (20.0 * std::log10 (2.0));   // +10 dB 면 약 1.66
+            juce::NormalisableRange<double> range (
+                min, max,
+                [k] (double start, double end, double p)            // 0..1 -> dB
+                {
+                    if (p <= 0.0) return start;
+                    return juce::jlimit (start, end, end + 20.0 * k * std::log10 (p));
+                },
+                [k] (double start, double end, double db)           // dB -> 0..1
+                {
+                    if (db <= start) return 0.0;
+                    return juce::jlimit (0.0, 1.0, std::pow (10.0, (db - end) / (20.0 * k)));
+                },
+                [] (double start, double end, double db)            // 0.1 dB 단위
+                {
+                    return juce::jlimit (start, end, std::round (db * 10.0) / 10.0);
+                });
+            slider.setNormalisableRange (range);
+        }
+        else
+        {
+            // 입력: 범위를 정한 뒤에 skew 를 불러야 한다.
+            // 대칭 범위라 skew 1 = 선형, 12시 = 0 dB
+            slider.setRange (min, max, 0.1);
+            slider.setSkewFactorFromMidPoint (0.0);
+        }
 
         // 12시 기준 좌우 135도씩: 7시 30분(최소) ~ 4시 30분(최대)
         slider.setRotaryParameters (juce::MathConstants<float>::pi * 1.25f,
