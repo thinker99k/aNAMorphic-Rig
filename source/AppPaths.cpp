@@ -21,6 +21,11 @@ namespace rig::paths
         return root().getChildFile ("audio-device.xml");
     }
 
+    juce::File settingsFile()
+    {
+        return root().getChildFile ("settings.json");
+    }
+
     juce::File capturesDir()
     {
         return root().getChildFile ("captures");

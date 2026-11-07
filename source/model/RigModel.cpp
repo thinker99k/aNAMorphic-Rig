@@ -6,7 +6,10 @@
 
 namespace rig
 {
-    RigModel::RigModel (AudioEngine& e) : engine (e) {}
+    RigModel::RigModel (AudioEngine& e) : engine (e)
+    {
+        loadSettings();
+    }
 
     RigModel::~RigModel()
     {
@@ -14,12 +17,42 @@ namespace rig
     }
 
     //==============================================================================
+    // 앱 전역 설정 : ~/aNAMorphic-Rig/settings.json  (JSON)
+    //
+    //  { "inputGainDb": 0.0, "outputGainDb": -3.5 }
+
+    void RigModel::loadSettings()
+    {
+        const auto file = paths::settingsFile();
+
+        if (file.existsAsFile())
+        {
+            const auto json = juce::JSON::parse (file);
+
+            inputGainDb  = juce::jlimit (AudioEngine::inputMinDb, AudioEngine::inputMaxDb,
+                                         (float) json.getProperty ("inputGainDb", 0.0));
+            outputGainDb = juce::jlimit (AudioEngine::outputMinDb, AudioEngine::outputMaxDb,
+                                         (float) json.getProperty ("outputGainDb", 0.0));
+        }
+
+        engine.setInputGainDb (inputGainDb);
+        engine.setOutputGainDb (outputGainDb);
+    }
+
+    void RigModel::saveSettings() const
+    {
+        auto root = std::make_unique<juce::DynamicObject>();
+        root->setProperty ("inputGainDb", inputGainDb);
+        root->setProperty ("outputGainDb", outputGainDb);
+
+        paths::settingsFile().replaceWithText (juce::JSON::toString (juce::var (root.release())));
+    }
+
+    //==============================================================================
     // 패치 저장/불러오기 : ~/aNAMorphic-Rig/config<N>  (JSON)
     //
     //  {
     //    "version": 1,
-    //    "inputGainDb": 0.0,
-    //    "outputGainDb": -3.5,
     //    "blocks": [ { "type": "nam", "file": "/path/amp.nam", "bypass": false },
     //                { "type": "ir",  "file": "/path/cab.wav", "bypass": false } ]
     //  }
@@ -30,21 +63,11 @@ namespace rig
         slots.clear();
         selectedIndex = -1;
 
-        // config 가 없는 패치로 옮겨도 이전 패치의 볼륨이 남지 않게 먼저 0 dB 로
-        inputGainDb = 0.0f;
-        outputGainDb = 0.0f;
-
         const auto file = paths::patchFile (patchNumber);
 
         if (file.existsAsFile())
         {
             const auto json = juce::JSON::parse (file);
-
-            // 이전 범위(-80 ~ +6 dB)로 저장된 값도 새 범위의 가장 가까운 끝값으로 맞춘다
-            inputGainDb  = juce::jlimit (AudioEngine::inputMinDb, AudioEngine::inputMaxDb,
-                                         (float) json.getProperty ("inputGainDb", 0.0));
-            outputGainDb = juce::jlimit (AudioEngine::outputMinDb, AudioEngine::outputMaxDb,
-                                         (float) json.getProperty ("outputGainDb", 0.0));
 
             if (auto* blocks = json.getProperty ("blocks", {}).getArray())
             {
@@ -82,7 +105,6 @@ namespace rig
     {
         inputGainDb = juce::jlimit (AudioEngine::inputMinDb, AudioEngine::inputMaxDb, db);
         engine.setInputGainDb (inputGainDb);
-        savePatch();
     }
 
     void RigModel::setOutputGainDb (float db)
@@ -90,12 +112,16 @@ namespace rig
         outputGainDb = juce::jlimit (AudioEngine::outputMinDb, AudioEngine::outputMaxDb, db);
         outputMuted = false;
         engine.setOutputGainDb (outputGainDb);
-        savePatch();
+    }
+
+    void RigModel::saveGains()
+    {
+        saveSettings();
     }
 
     void RigModel::setOutputMuted (bool shouldBeMuted)
     {
-        // 저장하지 않는다: config 에는 뮤트 전 원래 값(outputGainDb)이 남는다
+        // 저장하지 않는다: settings.json 에는 뮤트 전 원래 값(outputGainDb)이 남는다
         outputMuted = shouldBeMuted;
         engine.setOutputGainDb (outputMuted ? AudioEngine::outputMinDb : outputGainDb);
     }
@@ -115,8 +141,6 @@ namespace rig
 
         auto root = std::make_unique<juce::DynamicObject>();
         root->setProperty ("version", 1);
-        root->setProperty ("inputGainDb", inputGainDb);
-        root->setProperty ("outputGainDb", outputGainDb);
         root->setProperty ("blocks", blocks);
 
         paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release())));

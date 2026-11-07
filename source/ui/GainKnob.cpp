@@ -73,7 +73,8 @@ namespace rig
                                     true);
         slider.setLookAndFeel (&knobLnf);
         slider.setValue (0.0, juce::dontSendNotification);
-        slider.setDoubleClickReturnValue (true, 0.0);
+        // 휠로 바꾸면 드래그 끝(onDragEnd)이 오지 않아 저장이 안 되므로 휠은 막는다
+        slider.setScrollWheelEnabled (false);
         slider.onValueChange = [this]
         {
             updateValueLabel();
@@ -81,6 +82,7 @@ namespace rig
             if (onValueChanged)
                 onValueChanged ((float) slider.getValue());
         };
+        slider.onDragEnd = [this] { if (onDragEnded) onDragEnded(); };
 
         for (auto* label : { &valueLabel, &nameLabel })
         {

@@ -35,6 +35,10 @@ namespace rig
             updateMuteButton();
         };
 
+        // 볼륨 저장은 드래그가 끝났을 때 한 번만
+        inputKnob.onDragEnded  = [this] { model.saveGains(); };
+        outputKnob.onDragEnded = [this] { model.saveGains(); };
+
         muteButton.onClick = [this]
         {
             model.setOutputMuted (! model.isOutputMuted());

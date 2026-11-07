@@ -8,11 +8,14 @@
 //   Linux   : /home/<user>/aNAMorphic-Rig
 //   macOS   : /Users/<user>/aNAMorphic-Rig
 //   Windows : C:\Users\<user>\aNAMorphic-Rig
+//
+//   ~/aNAMorphic-Rig/settings.json (앱 전역 설정: 입력/출력 볼륨)
 namespace rig::paths
 {
     juce::File root();                    // ~/aNAMorphic-Rig (없으면 생성)
     juce::File patchFile (int number);    // ~/aNAMorphic-Rig/config<N>  (패치 N의 체인)
     juce::File deviceSettingsFile();      // ~/aNAMorphic-Rig/audio-device.xml
+    juce::File settingsFile();            // ~/aNAMorphic-Rig/settings.json (앱 전역 설정)
     juce::File capturesDir();             // ~/aNAMorphic-Rig/captures  (*.nam 검색 위치)
     juce::File irsDir();                  // ~/aNAMorphic-Rig/irs       (*.wav 검색 위치)
 

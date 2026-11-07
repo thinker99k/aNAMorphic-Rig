@@ -17,6 +17,9 @@ namespace rig
         // 사용자가 노브를 돌렸을 때만 호출 (dB)
         std::function<void (float)> onValueChanged;
 
+        // 사용자가 드래그를 끝냈을 때. 저장은 여기서
+        std::function<void()> onDragEnded;
+
         // 외부에서 값만 바꾼다 (onValueChanged 는 부르지 않음)
         void setValueDb (float db);
 
