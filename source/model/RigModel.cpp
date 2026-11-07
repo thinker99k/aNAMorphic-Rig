@@ -14,7 +14,8 @@ namespace rig
     }
 
     //==============================================================================
-    // 패치 저장/불러오기 : ~/aNAMorphic-Rig/config<N>  (JSON)
+    // 패치 저장/불러오기 : ~/Documents/aNAMorphic-Rig/patch/config<NN>  (JSON)
+    //  "file" 이 "" 이면 파일 미지정 슬롯 (기본 패치가 이렇게 만들어진다)
     //
     //  {
     //    "version": 1,

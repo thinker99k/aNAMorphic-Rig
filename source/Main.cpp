@@ -1,4 +1,5 @@
 #include "AppPaths.h"
+#include "Defaults.h"
 #include "engine/AudioEngine.h"
 #include "model/RigModel.h"
 #include "ui/MainComponent.h"
@@ -17,6 +18,7 @@ namespace rig
                               DocumentWindow::allButtons)
         {
             // 저장된 장치 설정이 있으면 사용, 없으면 기본 장치 (입력 1채널, 출력 2채널)
+            // 마지막 인자 true: 저장된 장치를 못 열면 기본 장치로 대신 연다
             std::unique_ptr<juce::XmlElement> saved;
             if (paths::deviceSettingsFile().existsAsFile())
                 saved = juce::parseXML (paths::deviceSettingsFile());
@@ -24,6 +26,17 @@ namespace rig
             const auto error = deviceManager.initialise (1, 2, saved.get(), true);
             if (error.isNotEmpty())
                 DBG ("Audio device error: " << error);
+
+            // 처음 실행: 지금 열린 장치를 "고른 장치"로 확정하고 audio-device.xml 을 만든다.
+            // 같은 설정을 그대로 넘기면 JUCE 가 아무것도 안 하고 돌아가므로(상태 XML 도 안 만들어짐)
+            // 한 번 닫았다가 같은 설정으로 다시 연다
+            if (! paths::deviceSettingsFile().existsAsFile())
+            {
+                const auto setup = deviceManager.getAudioDeviceSetup();
+                deviceManager.closeAudioDevice();
+                deviceManager.setAudioDeviceSetup (setup, true);
+                saveDeviceState();
+            }
 
             deviceManager.addAudioCallback (&engine);
             model.loadPatch (1);
@@ -41,6 +54,7 @@ namespace rig
             // 순서 중요: UI 제거 -> 오디오 콜백 해제 -> 장치 닫기
             clearContentComponent();
             deviceManager.removeAudioCallback (&engine);
+            saveDeviceState();   // 장치를 닫기 전에 저장
             deviceManager.closeAudioDevice();
         }
 
@@ -50,6 +64,12 @@ namespace rig
         }
 
     private:
+        void saveDeviceState()
+        {
+            if (auto xml = deviceManager.createStateXml())
+                xml->writeTo (paths::deviceSettingsFile());
+        }
+
         juce::AudioDeviceManager deviceManager;
         AudioEngine engine;
         RigModel model { engine };
@@ -66,6 +86,8 @@ namespace rig
 
         void initialise (const juce::String&) override
         {
+            // RigModel 이 패치를 읽기 전에 기본 폴더/파일부터 준비
+            defaults::ensureAll();
             mainWindow = std::make_unique<MainWindow> (getApplicationName());
         }
 
