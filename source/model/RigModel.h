@@ -13,7 +13,7 @@ namespace rig
     // 체인 편집 상태 (메시지 스레드 전용).
     //
     // UI 는 RigModel 만 보고 편집하고, RigModel 은 변경될 때마다
-    //  1) 현재 패치를 ~/aNAMorphic-Rig/config<N> 에 자동 저장하고
+    //  1) 현재 패치를 ~/Documents/aNAMorphic-Rig/patch/config<NN> 에 자동 저장하고
     //  2) 오디오 엔진에 새 Chain 을 넘기고
     //  3) ChangeBroadcaster 로 UI 에 알린다.
     class RigModel final : public juce::ChangeBroadcaster

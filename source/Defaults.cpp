@@ -1,0 +1,116 @@
+#include "Defaults.h"
+
+#include "AppPaths.h"
+#include "model/RigModel.h"
+
+namespace rig::defaults
+{
+    namespace
+    {
+        // RigModel::loadPatch 가 읽을 수 있는 형태인지: JSON 객체 + "blocks" 배열 (빈 배열도 정상)
+        bool isValidPatch (const juce::String& text)
+        {
+            const auto json = juce::JSON::parse (text);
+            return json.getDynamicObject() != nullptr && json.getProperty ("blocks", {}).isArray();
+        }
+
+        // 기본 패치: 빈 NAM 블록 + 빈 IR 블록 ("file": "" = 아직 파일 미지정)
+        juce::String defaultPatchText()
+        {
+            juce::Array<juce::var> blocks;
+
+            for (const auto* type : { "nam", "ir" })
+            {
+                auto obj = std::make_unique<juce::DynamicObject>();
+                obj->setProperty ("type", type);
+                obj->setProperty ("file", "");
+                obj->setProperty ("bypass", false);
+                blocks.add (juce::var (obj.release()));
+            }
+
+            auto root = std::make_unique<juce::DynamicObject>();
+            root->setProperty ("version", 1);
+            root->setProperty ("blocks", blocks);
+
+            return juce::JSON::toString (juce::var (root.release()));
+        }
+
+        void ensureDirectory (const juce::File& dir)
+        {
+            if (! dir.isDirectory())
+            {
+                const auto result = dir.createDirectory();
+                if (result.failed())
+                    DBG ("Could not create " << dir.getFullPathName() << ": " << result.getErrorMessage());
+            }
+        }
+
+        void ensurePatch (const juce::File& file)
+        {
+            if (file.existsAsFile() && file.getSize() > 0)
+            {
+                const auto text = file.loadFileAsString();
+
+                if (isValidPatch (text))
+                    return;
+
+                // 깨진 파일은 덮어쓰기 전에 남겨 둔다
+                file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
+            }
+
+            file.replaceWithText (defaultPatchText());
+        }
+
+        // settings.json: 없거나, 0 바이트거나, JSON 객체가 아니면 기본값으로 다시 쓴다.
+        // 객체인데 키가 빠져 있으면 빠진 키만 기본값으로 채운다 (범위 제한은 RigModel::loadSettings 에서)
+        void ensureSettings (const juce::File& file)
+        {
+            const std::pair<const char*, juce::var> defaultsList[] = {
+                { "version", 1 },
+                { "inputGainDb", 0.0 },
+                { "outputGainDb", 0.0 },
+            };
+
+            juce::var json;
+
+            if (file.existsAsFile() && file.getSize() > 0)
+            {
+                json = juce::JSON::parse (file.loadFileAsString());
+
+                // 깨진 파일은 덮어쓰기 전에 남겨 둔다
+                if (json.getDynamicObject() == nullptr)
+                    file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
+            }
+
+            if (json.getDynamicObject() == nullptr)
+                json = juce::var (new juce::DynamicObject());
+
+            auto* obj = json.getDynamicObject();
+            bool changed = ! file.existsAsFile() || file.getSize() == 0;
+
+            for (const auto& [key, value] : defaultsList)
+            {
+                if (! obj->hasProperty (key))
+                {
+                    obj->setProperty (key, value);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                file.replaceWithText (juce::JSON::toString (json));
+        }
+    }
+
+    void ensureAll()
+    {
+        ensureDirectory (paths::namDir());
+        ensureDirectory (paths::irDir());
+        ensureDirectory (paths::patchDir());
+
+        for (int n = 1; n <= RigModel::numPatches; ++n)
+            ensurePatch (paths::patchFile (n));
+
+        ensureSettings (paths::settingsFile());
+    }
+}
