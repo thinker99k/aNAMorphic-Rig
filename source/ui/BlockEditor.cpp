@@ -10,7 +10,7 @@ namespace rig
         constexpr int browseId = 100000;
 
         juce::String patternFor (BlockType t) { return t == BlockType::Nam ? "*.nam" : "*.wav"; }
-        juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::capturesDir() : paths::irsDir(); }
+        juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::namDir() : paths::irDir(); }
     }
 
     BlockEditor::BlockEditor (RigModel& m, AudioEngine& e) : model (m), engine (e)

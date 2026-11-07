@@ -43,7 +43,8 @@
 │   ├── setup.zsh 
 ├── source/                             <- 모든 소스
 │   ├── Main.cpp                        앱 시작, 메인 창, 오디오 장치 초기화
-│   ├── AppPaths.*                      ~/aNAMorphic-Rig 아래 경로 모음
+│   ├── AppPaths.*                      사용자 데이터(~/Documents/aNAMorphic-Rig) 경로 모음
+│   ├── Defaults.*                      처음 실행 시 기본 폴더/패치 파일 생성
 │   ├── engine/                         오디오 처리 (UI 모름)
 │   │   ├── Block.h                     블록 공통 인터페이스
 │   │   ├── NamBlock.*                  .nam 캡처 (NAM Core)
@@ -65,4 +66,19 @@
 
 (빌드 완료 시)
 └── build/                              <- 빌드 결과물 (git 올리지 말것!!!!)
+```
+
+## 4. User Data
+
+앱이 쓰는 파일은 OS별 문서 폴더 아래에 있습니다. 처음 실행할 때 빠진 폴더와 파일은 자동으로 만들어집니다.
+
+```
+~/Documents/aNAMorphic-Rig/             (Windows: C:\Users\<user>\Documents\aNAMorphic-Rig)
+├── settings.json                       앱 전역 설정: 입력/출력 볼륨 (없거나 깨지면 0 dB 로 생성, 노브 드래그 끝/종료 시 저장)
+├── audio-device.xml                    오디오 장치 설정 (처음 실행 시 기본 장치로 생성, 종료 시 저장)
+├── nam/                                *.nam 캡처를 여기에 넣으면 블록 편집기 목록에 표시
+├── ir/                                 *.wav IR 을 여기에 넣으면 블록 편집기 목록에 표시
+└── patch/
+    ├── config01 ~ config32             패치별 체인 (JSON). 없거나 비었거나 깨지면 기본 패치(NAM + IR)로 다시 만듦
+    └── configNN.bak                    깨진 파일을 다시 만들 때 남기는 백업
 ```

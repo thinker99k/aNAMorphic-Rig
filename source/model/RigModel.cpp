@@ -13,13 +13,14 @@ namespace rig
 
     RigModel::~RigModel()
     {
+        saveSettings();   // 종료할 때 항상 저장 (드래그 끝 저장과 별개)
         loader.removeAllJobs (true, 10000);
     }
 
     //==============================================================================
-    // 앱 전역 설정 : ~/aNAMorphic-Rig/settings.json  (JSON)
+    // 앱 전역 설정 : ~/Documents/aNAMorphic-Rig/settings.json  (JSON)
     //
-    //  { "inputGainDb": 0.0, "outputGainDb": -3.5 }
+    //  { "version": 1, "inputGainDb": 0.0, "outputGainDb": -3.5 }
 
     void RigModel::loadSettings()
     {
@@ -42,6 +43,7 @@ namespace rig
     void RigModel::saveSettings() const
     {
         auto root = std::make_unique<juce::DynamicObject>();
+        root->setProperty ("version", 1);
         root->setProperty ("inputGainDb", inputGainDb);
         root->setProperty ("outputGainDb", outputGainDb);
 
@@ -49,7 +51,8 @@ namespace rig
     }
 
     //==============================================================================
-    // 패치 저장/불러오기 : ~/aNAMorphic-Rig/config<N>  (JSON)
+    // 패치 저장/불러오기 : ~/Documents/aNAMorphic-Rig/patch/config<NN>  (JSON)
+    //  "file" 이 "" 이면 파일 미지정 슬롯 (기본 패치가 이렇게 만들어진다)
     //
     //  {
     //    "version": 1,

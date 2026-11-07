@@ -4,16 +4,31 @@ namespace rig::paths
 {
     juce::File root()
     {
-        auto dir = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+        auto dir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
                        .getChildFile ("aNAMorphic-Rig");
         if (! dir.isDirectory())
             dir.createDirectory();
         return dir;
     }
 
+    juce::File namDir()
+    {
+        return root().getChildFile ("nam");
+    }
+
+    juce::File irDir()
+    {
+        return root().getChildFile ("ir");
+    }
+
+    juce::File patchDir()
+    {
+        return root().getChildFile ("patch");
+    }
+
     juce::File patchFile (int number)
     {
-        return root().getChildFile ("config" + juce::String (number));
+        return patchDir().getChildFile ("config" + juce::String (number).paddedLeft ('0', 2));
     }
 
     juce::File deviceSettingsFile()
@@ -24,16 +39,6 @@ namespace rig::paths
     juce::File settingsFile()
     {
         return root().getChildFile ("settings.json");
-    }
-
-    juce::File capturesDir()
-    {
-        return root().getChildFile ("captures");
-    }
-
-    juce::File irsDir()
-    {
-        return root().getChildFile ("irs");
     }
 
     std::filesystem::path toStdPath (const juce::File& file)

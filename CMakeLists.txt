@@ -127,6 +127,7 @@ juce_add_gui_app(aNAMorphic-Rig
 target_sources(aNAMorphic-Rig PRIVATE
         source/Main.cpp
         source/AppPaths.cpp
+        source/Defaults.cpp
         source/engine/AudioEngine.cpp
         source/engine/NamBlock.cpp
         source/engine/IrBlock.cpp
