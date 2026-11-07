@@ -108,16 +108,18 @@ namespace rig
             if (input != nullptr)
             {
                 juce::FloatVectorOperations::copy (a, input + offset, n);
+
+                // 입력 볼륨 (IN 미터는 게인 뒤에서 잰다 = 모델에 들어가는 레벨)
+                inputSmoothed.applyGain (a, n);
+
                 storeMax (inputPeak, juce::FloatVectorOperations::findMaximum (a, n));
                 storeMax (inputPeak, -juce::FloatVectorOperations::findMinimum (a, n));
             }
             else
             {
                 juce::FloatVectorOperations::clear (a, n);
+                inputSmoothed.skip (n);
             }
-
-            // 입력 볼륨 (IN 미터는 게인 앞에서 잰다)
-            inputSmoothed.applyGain (a, n);
 
             // 직렬 체인: a -> 블록 -> b, 그다음 a/b 를 바꿔가며 진행
             if (chain != nullptr)
