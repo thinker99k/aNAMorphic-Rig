@@ -23,6 +23,9 @@ namespace rig
         // 외부에서 값만 바꾼다 (onValueChanged 는 부르지 않음)
         void setValueDb (float db);
 
+        // 아래쪽 이름 글자 표시 여부 (기본 true). 상태바처럼 옆에 이름이 있는 곳에서는 숨긴다
+        void setNameVisible (bool shouldBeVisible);
+
         void resized() override;
 
     private:
@@ -31,6 +34,7 @@ namespace rig
 
         const float minDb;
         const bool minIsInf;
+        bool nameVisible = true;
 
         // 노브 몸통 + 호(맨 왼쪽 ~ 현재 값) + 지시선
         struct KnobLookAndFeel final : juce::LookAndFeel_V4

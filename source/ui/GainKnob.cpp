@@ -6,20 +6,23 @@ namespace rig
 {
     namespace
     {
-        constexpr int labelHeight = 18;
+        constexpr int labelHeight = 12;   // 위쪽 dB 글자 / 아래쪽 이름 글자 높이
 
         const juce::Colour arcColour (0xffd9822b);   // ChainView 의 NAM 타일과 같은 주황
-        constexpr float arcThickness = 3.0f;
-        constexpr float arcGap = 3.0f;               // 호와 몸통 사이 여백
     }
 
     void GainKnob::KnobLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                                                       float sliderPos, float rotaryStartAngle,
                                                       float rotaryEndAngle, juce::Slider&)
     {
+        // 굵기·여백은 지름에 비례 (지름 44 px 정도의 작은 노브에서도 잘리지 않게)
+        const auto radius = (float) juce::jmin (width, height) * 0.5f;
+        const auto arcThickness = juce::jlimit (2.5f, 4.0f, radius * 0.15f);
+        const auto arcGap = juce::jlimit (1.5f, 3.0f, radius * 0.08f);   // 호와 몸통 사이 여백
+
         const auto cx = (float) x + (float) width * 0.5f;
         const auto cy = (float) y + (float) height * 0.5f;
-        const auto arcRadius = (float) juce::jmin (width, height) * 0.5f - arcThickness;
+        const auto arcRadius = radius - arcThickness;
         const auto bodyRadius = arcRadius - arcThickness * 0.5f - arcGap;
 
         if (bodyRadius <= 0.0f)
@@ -48,14 +51,15 @@ namespace rig
             g.strokePath (value, stroke);
         }
 
-        // 4. 지시선 (각도는 12시 기준 시계 방향)
+        // 4. 지시선 (각도는 12시 기준 시계 방향). 길이는 몸통 반지름의 약 0.65 배
         auto pointAt = [&] (float r) { return juce::Point<float> (cx + r * std::sin (toAngle), cy - r * std::cos (toAngle)); };
 
         juce::Path pointer;
         pointer.startNewSubPath (pointAt (bodyRadius * 0.3f));
-        pointer.lineTo (pointAt (bodyRadius));
+        pointer.lineTo (pointAt (bodyRadius * 0.95f));
         g.setColour (juce::Colours::white.withAlpha (0.9f));
-        g.strokePath (pointer, juce::PathStrokeType (2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.strokePath (pointer, juce::PathStrokeType (juce::jlimit (1.5f, 2.5f, radius * 0.1f),
+                                                     juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
     //==============================================================================
@@ -119,6 +123,7 @@ namespace rig
             label->setJustificationType (juce::Justification::centred);
             label->setColour (juce::Label::textColourId, juce::Colours::lightgrey);
             label->setInterceptsMouseClicks (false, false);
+            label->setBorderSize ({});   // 12 px 높이에 12 pt 글자가 들어가도록 안쪽 여백 없음
         }
 
         valueLabel.setFont (juce::FontOptions (12.0f));
@@ -141,6 +146,16 @@ namespace rig
     {
         slider.setValue (db, juce::dontSendNotification);
         updateValueLabel();
+    }
+
+    void GainKnob::setNameVisible (bool shouldBeVisible)
+    {
+        if (nameVisible == shouldBeVisible)
+            return;
+
+        nameVisible = shouldBeVisible;
+        nameLabel.setVisible (nameVisible);
+        resized();
     }
 
     juce::String GainKnob::toText (double db) const
@@ -171,9 +186,9 @@ namespace rig
         auto area = getLocalBounds();
 
         valueLabel.setBounds (area.removeFromTop (labelHeight));
-        nameLabel.setBounds (area.removeFromBottom (labelHeight));
+        nameLabel.setBounds (area.removeFromBottom (nameVisible ? labelHeight : 0));
 
-        // 남는 높이에 맞춰 정사각형 노브
+        // 지름은 상수가 아니라 남은 공간 안의 정사각형으로 정한다
         const int size = juce::jmin (area.getWidth(), area.getHeight());
         slider.setBounds (area.withSizeKeepingCentre (size, size));
     }

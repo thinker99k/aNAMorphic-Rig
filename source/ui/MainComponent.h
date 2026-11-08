@@ -4,7 +4,6 @@
 #include "model/RigModel.h"
 #include "ui/BlockEditor.h"
 #include "ui/ChainView.h"
-#include "ui/GainKnob.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
 
@@ -21,9 +20,9 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ BlockEditor (본문 하단 절반의 위쪽 절반)        │
     //  ├──────────────────────────────────────────────┤
-    //  │ [INPUT 노브]   (예약 영역)  [OUTPUT 노브][MUTE] │
+    //  │ (예약 영역: 이후 기능용)                       │
     //  ├──────────────────────────────────────────────┤
-    //  │ StatusBar : IN 미터 | CPU | OUT 미터            │
+    //  │ StatusBar (60): [노브] IN | CPU | OUT [노브][MUTE] │
     //  └──────────────────────────────────────────────┘
     class MainComponent final : public juce::Component,
                                 private juce::Timer
@@ -46,10 +45,7 @@ namespace rig
         TopBar topBar;
         ChainView chainView;
         BlockEditor blockEditor;
-        StatusBar statusBar;
-        GainKnob inputKnob  { "INPUT",  AudioEngine::inputMinDb,  AudioEngine::inputMaxDb,  false };
-        GainKnob outputKnob { "OUTPUT", AudioEngine::outputMinDb, AudioEngine::outputMaxDb, true  };
-        juce::TextButton muteButton { "MUTE" };
+        StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
 
         juce::Rectangle<int> reservedArea;
 
