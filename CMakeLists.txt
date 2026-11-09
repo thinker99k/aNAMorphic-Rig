@@ -127,7 +127,6 @@ juce_add_gui_app(aNAMorphic-Rig
 target_sources(aNAMorphic-Rig PRIVATE
         source/Main.cpp
         source/AppPaths.cpp
-        source/Defaults.cpp
         source/engine/AudioEngine.cpp
         source/engine/NamBlock.cpp
         source/engine/IrBlock.cpp
@@ -137,8 +136,7 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/SettingsDialog.cpp
         source/ui/ChainView.cpp
         source/ui/BlockEditor.cpp
-        source/ui/StatusBar.cpp
-        source/ui/GainKnob.cpp)
+        source/ui/StatusBar.cpp)
 
 target_include_directories(aNAMorphic-Rig PRIVATE source)
 
