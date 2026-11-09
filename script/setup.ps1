@@ -1,4 +1,4 @@
-﻿﻿# aNAMorphic-Rig : Windows 빌드 준비물 설치
+﻿# aNAMorphic-Rig : Windows 빌드 준비물 설치
 #
 # 설치하는 것
 #   - Visual Studio 2022 Build Tools (IDE 없음) 하나로 전부:
