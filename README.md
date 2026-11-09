@@ -74,6 +74,7 @@
 
 ```
 ~/Documents/aNAMorphic-Rig/             (Windows: C:\Users\<user>\Documents\aNAMorphic-Rig)
+├── settings.json                       앱 전역 설정: 입력/출력 볼륨 (없거나 깨지면 0 dB 로 생성, 노브 드래그 끝/종료 시 저장)
 ├── audio-device.xml                    오디오 장치 설정 (처음 실행 시 기본 장치로 생성, 종료 시 저장)
 ├── nam/                                *.nam 캡처를 여기에 넣으면 블록 편집기 목록에 표시
 ├── ir/                                 *.wav IR 을 여기에 넣으면 블록 편집기 목록에 표시

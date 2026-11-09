@@ -1,5 +1,8 @@
 #pragma once
 
+#include "engine/AudioEngine.h"
+#include "ui/GainKnob.h"
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace rig
@@ -21,11 +24,15 @@ namespace rig
         float fraction = 0.0f;
     };
 
-    // 최하단 상태 바: [Input 미터](왼쪽) ...... [CPU](가운데) ...... [Output 미터](오른쪽)
     class StatusBar final : public juce::Component
     {
     public:
         StatusBar();
+
+        // 콜백 연결은 MainComponent 가 한다
+        GainKnob inputKnob  { "INPUT",  AudioEngine::inputMinDb,  AudioEngine::inputMaxDb,  false };
+        GainKnob outputKnob { "OUTPUT", AudioEngine::outputMinDb, AudioEngine::outputMaxDb, true  };
+        juce::TextButton muteButton { "MUTE" };
 
         // 피크 값(선형 0..1+), CPU(0..1) 를 받아 갱신. UI 타이머에서 호출.
         void update (float inputPeak, double cpuUsage, float outputPeak);
@@ -41,6 +48,8 @@ namespace rig
         Gauge output { "OUT", juce::Colours::limegreen };
 
         float inputDb = -100.0f, outputDb = -100.0f;   // 감쇠(decay) 를 위한 표시값
+
+        int dividerX[2] {};                            // 구역 구분선 x 위치 (resized 에서 계산)
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StatusBar)
     };

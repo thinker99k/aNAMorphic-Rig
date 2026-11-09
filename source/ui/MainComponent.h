@@ -22,7 +22,7 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ (예약 영역: 이후 기능용)                       │
     //  ├──────────────────────────────────────────────┤
-    //  │ StatusBar : IN 미터 | CPU | OUT 미터            │
+    //  │ StatusBar (60): [노브] IN | CPU | OUT [노브][MUTE] │
     //  └──────────────────────────────────────────────┘
     class MainComponent final : public juce::Component,
                                 private juce::Timer
@@ -30,12 +30,17 @@ namespace rig
     public:
         MainComponent (juce::AudioDeviceManager& deviceManager, AudioEngine& engine, RigModel& model);
 
+        // 창 최소 크기 = 처음 실행 크기
+        static constexpr int minWidth  = 1024;
+        static constexpr int minHeight = 720;
+        
         void paint (juce::Graphics&) override;
         void resized() override;
 
     private:
         void timerCallback() override;
         void openSettings();
+        void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
 
         juce::AudioDeviceManager& deviceManager;
         AudioEngine& engine;
@@ -44,7 +49,7 @@ namespace rig
         TopBar topBar;
         ChainView chainView;
         BlockEditor blockEditor;
-        StatusBar statusBar;
+        StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
 
         juce::Rectangle<int> reservedArea;
 

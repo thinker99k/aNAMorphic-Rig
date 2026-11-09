@@ -10,6 +10,7 @@
 //   Windows : C:\Users\<user>\Documents\aNAMorphic-Rig
 //
 //   aNAMorphic-Rig/
+//   ├── settings.json        앱 전역 설정: 입력/출력 볼륨
 //   ├── audio-device.xml     오디오 장치 설정
 //   ├── nam/                 *.nam 캡처 (BlockEditor 목록)
 //   ├── ir/                  *.wav IR   (BlockEditor 목록)
@@ -24,6 +25,7 @@ namespace rig::paths
     juce::File patchDir();                // .../patch
     juce::File patchFile (int number);    // .../patch/config<NN>  (패치 N의 체인, 두 자리: config01)
     juce::File deviceSettingsFile();      // .../audio-device.xml
+    juce::File settingsFile();            // .../settings.json (앱 전역 설정)
 
     // juce::File -> std::filesystem::path. Windows에서 한글 경로가 깨지지 않도록 wide 문자열 사용.
     std::filesystem::path toStdPath (const juce::File& file);

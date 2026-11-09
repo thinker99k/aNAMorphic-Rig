@@ -41,6 +41,17 @@ namespace rig
         int getPatchNumber() const noexcept { return patchNumber; }
         void loadPatch (int number);
 
+        // 입력/출력 볼륨 (dB, 앱 전역, settings.json 에 저장). UI 재구성을 막기 위해 변경 알림은 보내지 않는다
+        float getInputGainDb() const noexcept  { return inputGainDb; }
+        float getOutputGainDb() const noexcept { return outputGainDb; }
+        void setInputGainDb (float db);
+        void setOutputGainDb (float db);   // 뮤트도 함께 해제한다
+        void saveGains();                   // 노브 드래그가 끝났을 때 settings.json 에 저장
+
+        // 출력 뮤트: settings.json 에 저장하지 않고 패치를 바꿔도 유지된다. 뮤트 중에도 outputGainDb 는 원래 값
+        bool isOutputMuted() const noexcept { return outputMuted; }
+        void setOutputMuted (bool shouldBeMuted);
+
         // 체인 편집 (블록 개수 제한 없음: CPU 가 버티는 만큼)
         const std::vector<Slot>& getSlots() const noexcept { return slots; }
         int getSelectedIndex() const noexcept { return selectedIndex; }
@@ -61,12 +72,16 @@ namespace rig
         void onLoaded (juce::uint64 slotId, int generation, std::shared_ptr<Block> block, juce::String error);
         void rebuildChain();
         void savePatch() const;
+        void loadSettings();
+        void saveSettings() const;
         void changed();   // 저장 + 체인 재구성 + UI 알림
 
         AudioEngine& engine;
         juce::ThreadPool loader { 1 };          // 모델/IR 로딩 전용 스레드
 
         int patchNumber = 1;
+        float inputGainDb = 0.0f, outputGainDb = 0.0f;
+        bool outputMuted = false;               // loadPatch() 에서 초기화하지 않는다
         std::vector<Slot> slots;
         int selectedIndex = -1;
         juce::uint64 nextSlotId = 1;

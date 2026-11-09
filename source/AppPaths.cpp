@@ -36,6 +36,11 @@ namespace rig::paths
         return root().getChildFile ("audio-device.xml");
     }
 
+    juce::File settingsFile()
+    {
+        return root().getChildFile ("settings.json");
+    }
+
     std::filesystem::path toStdPath (const juce::File& file)
     {
        #if JUCE_WINDOWS

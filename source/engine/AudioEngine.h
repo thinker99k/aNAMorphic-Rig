@@ -27,12 +27,22 @@ namespace rig
             std::vector<std::shared_ptr<Block>> blocks;
         };
 
+        // 입력/출력 볼륨 범위 (dB). 입력의 최솟값은 실제 -15 dB, 출력은 outputMinDb 이하가 -inf(무음)
+        static constexpr float inputMinDb  = -15.0f;
+        static constexpr float inputMaxDb  =  15.0f;
+        static constexpr float outputMinDb = -60.0f;
+        static constexpr float outputMaxDb =  10.0f;
+
         AudioEngine() = default;
         ~AudioEngine() override;
 
         // --- 메시지 스레드 전용 ---
         void setChain (std::unique_ptr<Chain> newChain);
         void collectGarbage();
+
+        // 입력 직후(체인 앞) / 출력 직전(체인 뒤) 볼륨
+        void setInputGainDb (float db);
+        void setOutputGainDb (float db);
 
         double getSampleRate() const noexcept   { return sampleRate.load(); }
         int getMaxBlockSize() const noexcept    { return maxBlockSize.load(); }
@@ -74,6 +84,13 @@ namespace rig
 
         std::atomic<float> inputPeak { 0.0f };
         std::atomic<float> outputPeak { 0.0f };
+
+        // 목표 게인(선형). 메시지 스레드가 쓰고 오디오 스레드가 읽는다
+        std::atomic<float> inputGain { 1.0f };
+        std::atomic<float> outputGain { 1.0f };
+
+        // 오디오 스레드 전용: 게인 변화를 20 ms 동안 선형으로 이어 "틱" 잡음을 막는다
+        juce::SmoothedValue<float> inputSmoothed { 1.0f }, outputSmoothed { 1.0f };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)
     };

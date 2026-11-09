@@ -6,11 +6,48 @@
 
 namespace rig
 {
-    RigModel::RigModel (AudioEngine& e) : engine (e) {}
+    RigModel::RigModel (AudioEngine& e) : engine (e)
+    {
+        loadSettings();
+    }
 
     RigModel::~RigModel()
     {
+        saveSettings();   // 종료할 때 항상 저장 (드래그 끝 저장과 별개)
         loader.removeAllJobs (true, 10000);
+    }
+
+    //==============================================================================
+    // 앱 전역 설정 : ~/Documents/aNAMorphic-Rig/settings.json  (JSON)
+    //
+    //  { "version": 1, "inputGainDb": 0.0, "outputGainDb": -3.5 }
+
+    void RigModel::loadSettings()
+    {
+        const auto file = paths::settingsFile();
+
+        if (file.existsAsFile())
+        {
+            const auto json = juce::JSON::parse (file);
+
+            inputGainDb  = juce::jlimit (AudioEngine::inputMinDb, AudioEngine::inputMaxDb,
+                                         (float) json.getProperty ("inputGainDb", 0.0));
+            outputGainDb = juce::jlimit (AudioEngine::outputMinDb, AudioEngine::outputMaxDb,
+                                         (float) json.getProperty ("outputGainDb", 0.0));
+        }
+
+        engine.setInputGainDb (inputGainDb);
+        engine.setOutputGainDb (outputGainDb);
+    }
+
+    void RigModel::saveSettings() const
+    {
+        auto root = std::make_unique<juce::DynamicObject>();
+        root->setProperty ("version", 1);
+        root->setProperty ("inputGainDb", inputGainDb);
+        root->setProperty ("outputGainDb", outputGainDb);
+
+        paths::settingsFile().replaceWithText (juce::JSON::toString (juce::var (root.release())));
     }
 
     //==============================================================================
@@ -59,8 +96,37 @@ namespace rig
         if (! slots.empty())
             selectedIndex = 0;
 
+        // 뮤트 중이면 새 패치의 출력 값은 멤버에만 두고 엔진에는 계속 무음
+        engine.setInputGainDb (inputGainDb);
+        engine.setOutputGainDb (outputMuted ? AudioEngine::outputMinDb : outputGainDb);
+
         rebuildChain();
         sendChangeMessage();
+    }
+
+    void RigModel::setInputGainDb (float db)
+    {
+        inputGainDb = juce::jlimit (AudioEngine::inputMinDb, AudioEngine::inputMaxDb, db);
+        engine.setInputGainDb (inputGainDb);
+    }
+
+    void RigModel::setOutputGainDb (float db)
+    {
+        outputGainDb = juce::jlimit (AudioEngine::outputMinDb, AudioEngine::outputMaxDb, db);
+        outputMuted = false;
+        engine.setOutputGainDb (outputGainDb);
+    }
+
+    void RigModel::saveGains()
+    {
+        saveSettings();
+    }
+
+    void RigModel::setOutputMuted (bool shouldBeMuted)
+    {
+        // 저장하지 않는다: settings.json 에는 뮤트 전 원래 값(outputGainDb)이 남는다
+        outputMuted = shouldBeMuted;
+        engine.setOutputGainDb (outputMuted ? AudioEngine::outputMinDb : outputGainDb);
     }
 
     void RigModel::savePatch() const

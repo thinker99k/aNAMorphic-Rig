@@ -60,6 +60,46 @@ namespace rig::defaults
 
             file.replaceWithText (defaultPatchText());
         }
+
+        // settings.json: 없거나, 0 바이트거나, JSON 객체가 아니면 기본값으로 다시 쓴다.
+        // 객체인데 키가 빠져 있으면 빠진 키만 기본값으로 채운다 (범위 제한은 RigModel::loadSettings 에서)
+        void ensureSettings (const juce::File& file)
+        {
+            const std::pair<const char*, juce::var> defaultsList[] = {
+                { "version", 1 },
+                { "inputGainDb", 0.0 },
+                { "outputGainDb", 0.0 },
+            };
+
+            juce::var json;
+
+            if (file.existsAsFile() && file.getSize() > 0)
+            {
+                json = juce::JSON::parse (file.loadFileAsString());
+
+                // 깨진 파일은 덮어쓰기 전에 남겨 둔다
+                if (json.getDynamicObject() == nullptr)
+                    file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
+            }
+
+            if (json.getDynamicObject() == nullptr)
+                json = juce::var (new juce::DynamicObject());
+
+            auto* obj = json.getDynamicObject();
+            bool changed = ! file.existsAsFile() || file.getSize() == 0;
+
+            for (const auto& [key, value] : defaultsList)
+            {
+                if (! obj->hasProperty (key))
+                {
+                    obj->setProperty (key, value);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                file.replaceWithText (juce::JSON::toString (json));
+        }
     }
 
     void ensureAll()
@@ -70,5 +110,7 @@ namespace rig::defaults
 
         for (int n = 1; n <= RigModel::numPatches; ++n)
             ensurePatch (paths::patchFile (n));
+
+        ensureSettings (paths::settingsFile());
     }
 }
