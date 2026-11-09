@@ -9,10 +9,10 @@ namespace rig
         constexpr float meterFloorDb = -60.0f;
         constexpr float decayDbPerTick = 1.5f;   // 30Hz 기준 약 45dB/s
 
-        // 구역 너비 비율 IN : CPU : OUT
-        constexpr int unitsIn = 5, unitsCpu = 3, unitsOut = 5;
-        constexpr int pad = 6, gap = 6;          // 구역 안쪽 좌우 여백 / 구성 요소 사이 간격
-        constexpr int captionPad = 14;           // 구분선 바로 오른쪽에서 시작하는 CPU / OUT 글자의 왼쪽 여백
+        constexpr int captionW = 34, valueW = 64;
+        constexpr int gaugeW = 200;           // IN / OUT 게이지
+        constexpr int cpuW = 160;             // CPU 게이지
+        constexpr int gap = 6;                   // 구성 요소 사이 간격
         constexpr int knobW = 56, knobH = 56;    // 노브 크기는 고정, 상태바가 커지면 위아래 여백만 늘어난다
         constexpr int muteW = 56, muteH = 26;
         constexpr int gaugeH = 30;               // 상태바가 60 이어도 막대가 두꺼워지지 않게
@@ -38,10 +38,10 @@ namespace rig
 
         g.setColour (juce::Colours::lightgrey);
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText (caption, area.removeFromLeft (34), juce::Justification::centredLeft);
+        g.drawText (caption, area.removeFromLeft (captionW), juce::Justification::centredLeft);
         g.setFont (juce::FontOptions (12.0f));
         // 수치는 막대 바로 오른쪽에 붙인다 (왼쪽 정렬, 막대와 4 px 간격)
-        auto valueArea = area.removeFromRight (64);
+        auto valueArea = area.removeFromRight (valueW);
         g.drawText (valueText, valueArea.withTrimmedLeft (4), juce::Justification::centredLeft);
 
         auto bar = area.reduced (2, 6).toFloat();
@@ -96,42 +96,31 @@ namespace rig
     void StatusBar::paint (juce::Graphics& g)
     {
         g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.3f));
-
-        // 구역 사이 구분선
-        g.setColour (juce::Colours::grey.withAlpha (0.4f));
-        for (int x : dividerX)
-            g.drawVerticalLine (x, 8.0f, (float) getHeight() - 8.0f);
     }
 
     void StatusBar::resized()
     {
         auto area = getLocalBounds().reduced (8, 2);
-        const int unit = area.getWidth() / (unitsIn + unitsCpu + unitsOut);
+        auto centredY = [] (juce::Rectangle<int> r, int h) { return r.withSizeKeepingCentre (r.getWidth(), h); };
 
-        auto inZone  = area.removeFromLeft (unit * unitsIn);
-        auto cpuZone = area.removeFromLeft (unit * unitsCpu);
-        auto outZone = area;                                     // 나머지 (반올림 오차 흡수)
-
-        dividerX[0] = inZone.getRight();
-        dividerX[1] = cpuZone.getRight();
-
-        auto centred = [] (juce::Rectangle<int> r) { return r.withSizeKeepingCentre (r.getWidth(), gaugeH); };
-
-        // IN: [노브] [IN 게이지]
-        auto in = inZone.reduced (pad, 0);
+        // IN (왼쪽 끝 고정): [노브] [IN 게이지]
+        auto in = area.removeFromLeft (knobW + gap + gaugeW);
         inputKnob.setBounds (in.removeFromLeft (knobW).withSizeKeepingCentre (knobW, knobH));
         in.removeFromLeft (gap);
-        input.setBounds (centred (in));
+        input.setBounds (centredY (in, gaugeH));
 
-        // CPU: [CPU 게이지]
-        cpu.setBounds (centred (cpuZone.reduced (pad, 0).withTrimmedLeft (captionPad - pad)));
-
-        // OUT: [OUT 게이지] [노브] [MUTE]  (MUTE 가 맨 오른쪽)
-        auto out = outZone.reduced (pad, 0).withTrimmedLeft (captionPad - pad);
+        // OUT (오른쪽 끝 고정): [OUT 게이지] [노브] [MUTE]
+        auto out = area.removeFromRight (gaugeW + gap + knobW + gap + muteW);
         muteButton.setBounds (out.removeFromRight (muteW).withSizeKeepingCentre (muteW, muteH));
         out.removeFromRight (gap);
         outputKnob.setBounds (out.removeFromRight (knobW).withSizeKeepingCentre (knobW, knobH));
         out.removeFromRight (gap);
-        output.setBounds (centred (out));
+        output.setBounds (centredY (out, gaugeH));
+
+        dividerX[0] = input.getRight() + gap;
+        dividerX[1] = output.getX() - gap;
+
+        // CPU: 창 정중앙, 고정 길이
+        cpu.setBounds (getLocalBounds().withSizeKeepingCentre (cpuW, gaugeH));
     }
 }

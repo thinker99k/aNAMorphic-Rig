@@ -55,7 +55,7 @@ namespace rig
         updateMuteButton();
 
         startTimerHz (30);
-        setSize (1024, 720);
+        setSize (minWidth, minHeight);
     }
 
     void MainComponent::openSettings()

@@ -24,8 +24,6 @@ namespace rig
         float fraction = 0.0f;
     };
 
-    // 최하단 상태 바 (높이 60). IN : CPU : OUT = 5 : 3 : 5, 구역 사이 세로 구분선
-    //  │ [입력 노브] IN [미터] 수치 │ CPU [막대] 수치 │ OUT [미터] 수치 [출력 노브] [MUTE] │
     class StatusBar final : public juce::Component
     {
     public:

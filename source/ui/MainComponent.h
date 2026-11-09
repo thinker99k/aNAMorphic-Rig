@@ -30,6 +30,10 @@ namespace rig
     public:
         MainComponent (juce::AudioDeviceManager& deviceManager, AudioEngine& engine, RigModel& model);
 
+        // 창 최소 크기 = 처음 실행 크기
+        static constexpr int minWidth  = 1024;
+        static constexpr int minHeight = 720;
+        
         void paint (juce::Graphics&) override;
         void resized() override;
 

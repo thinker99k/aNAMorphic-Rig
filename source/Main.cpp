@@ -44,7 +44,7 @@ namespace rig
             setUsingNativeTitleBar (true);
             setContentOwned (new MainComponent (deviceManager, engine, model), true);
             setResizable (true, true);
-            setResizeLimits (720, 480, 4096, 4096);
+            setResizeLimits (MainComponent::minWidth, MainComponent::minHeight, 4096, 4096);
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
         }
