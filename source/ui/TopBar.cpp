@@ -64,7 +64,7 @@ namespace rig
     {
         const auto nextPatch = patchBox.getSelectedId() + delta;
 
-        if (juce::isPositiveAndNotGreaterThan (nextPatch, patchBox.getNumItems()))
+        if (nextPatch >= 1 && nextPatch <= patchBox.getNumItems())
             patchBox.setSelectedId (nextPatch, juce::sendNotificationSync);
     }
 
