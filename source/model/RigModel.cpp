@@ -61,6 +61,17 @@ namespace rig
     //                { "type": "ir",  "file": "/path/cab.wav", "bypass": false } ]
     //  }
 
+    void RigModel::setPatchName (const juce::String& name)
+    {
+        const auto trimmedName = name.trim();
+        if (trimmedName.isEmpty() || trimmedName == patchName)
+            return;
+
+        patchName = trimmedName;
+        savePatch();
+        sendChangeMessage();
+    }
+
     void RigModel::loadPatch (int number)
     {
         patchNumber = juce::jlimit (1, numPatches, number);

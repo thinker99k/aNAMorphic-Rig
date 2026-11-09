@@ -16,6 +16,7 @@ namespace rig
         void setPatchName (const juce::String& name);
 
         std::function<void (int)> onPatchChanged;
+        std::function<void (const juce::String&)> onPatchNameChanged;
         std::function<void()> onSettingsClicked;
 
         void paint (juce::Graphics&) override;
@@ -25,6 +26,8 @@ namespace rig
         juce::Label patchLabel { {}, "Patch" };
         juce::ComboBox patchBox;
         juce::Label patchNameBox;
+        juce::DrawableButton editNameButton { "Edit patch name",
+                                             juce::DrawableButton::ImageOnButtonBackground };
         juce::TextButton settingsButton { "Settings..." };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TopBar)

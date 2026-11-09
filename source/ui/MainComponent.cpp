@@ -14,6 +14,11 @@ namespace rig
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());
+        topBar.onPatchNameChanged = [this] (const juce::String& name)
+        {
+            model.setPatchName (name);
+            topBar.setPatchName (model.getPatchName());
+        };
         topBar.onPatchChanged = [this] (int number)
         {
             model.loadPatch (number);

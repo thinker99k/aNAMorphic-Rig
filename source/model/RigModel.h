@@ -40,6 +40,7 @@ namespace rig
         // 패치
         int getPatchNumber() const noexcept { return patchNumber; }
         const juce::String& getPatchName() const noexcept { return patchName; }
+        void setPatchName (const juce::String& name);
         void loadPatch (int number);
 
         // 입력/출력 볼륨 (dB, 앱 전역, settings.json 에 저장). UI 재구성을 막기 위해 변경 알림은 보내지 않는다
