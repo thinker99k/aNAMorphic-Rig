@@ -15,7 +15,7 @@ namespace rig::defaults
         }
 
         // 기본 패치: 빈 NAM 블록 + 빈 IR 블록 ("file": "" = 아직 파일 미지정)
-        juce::String defaultPatchText()
+        juce::String defaultPatchText (const juce::String& name)
         {
             juce::Array<juce::var> blocks;
 
@@ -30,6 +30,7 @@ namespace rig::defaults
 
             auto root = std::make_unique<juce::DynamicObject>();
             root->setProperty ("version", 1);
+            root->setProperty ("name", name);
             root->setProperty ("blocks", blocks);
 
             return juce::JSON::toString (juce::var (root.release()));
@@ -58,7 +59,7 @@ namespace rig::defaults
                 file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
             }
 
-            file.replaceWithText (defaultPatchText());
+            file.replaceWithText (defaultPatchText (file.getFileName()));
         }
 
         // settings.json: 없거나, 0 바이트거나, JSON 객체가 아니면 기본값으로 다시 쓴다.

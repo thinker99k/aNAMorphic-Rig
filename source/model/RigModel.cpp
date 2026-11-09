@@ -56,6 +56,7 @@ namespace rig
     //
     //  {
     //    "version": 1,
+    //    "name": "config01",
     //    "blocks": [ { "type": "nam", "file": "/path/amp.nam", "bypass": false },
     //                { "type": "ir",  "file": "/path/cab.wav", "bypass": false } ]
     //  }
@@ -67,10 +68,13 @@ namespace rig
         selectedIndex = -1;
 
         const auto file = paths::patchFile (patchNumber);
+        patchName = file.getFileName();
 
         if (file.existsAsFile())
         {
             const auto json = juce::JSON::parse (file);
+
+            patchName = json.getProperty ("name", patchName).toString();
 
             if (auto* blocks = json.getProperty ("blocks", {}).getArray())
             {
@@ -145,6 +149,7 @@ namespace rig
         auto root = std::make_unique<juce::DynamicObject>();
         root->setProperty ("version", 1);
         root->setProperty ("blocks", blocks);
+        root->setProperty ("name", patchName);
 
         paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release())));
     }
