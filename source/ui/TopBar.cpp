@@ -1,5 +1,7 @@
 #include "TopBar.h"
 
+#include "model/RigModel.h"
+
 namespace rig
 {
     TopBar::TopBar (int numPatches)
@@ -49,6 +51,11 @@ namespace rig
         patchNameBox.setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.25f));
         patchNameBox.setColour (juce::Label::outlineColourId, juce::Colours::grey);
         patchNameBox.setEditable (false, false, false);
+        patchNameBox.onEditorShow = [this]
+        {
+            if (auto* ed = patchNameBox.getCurrentTextEditor())
+                ed->setInputRestrictions (RigModel::maxPatchNameLength);
+        };
         patchNameBox.onTextChange = [this]
         {
             if (onPatchNameChanged)
@@ -131,7 +138,7 @@ namespace rig
         settingsButton.setBounds (area.removeFromRight (110));
 
         const int sideMargin = juce::jmax (area.getX(), getWidth() - area.getRight()) + 48;
-        const int nameWidth = juce::jlimit (0, 360, getWidth() - 2 * sideMargin);
+        const int nameWidth = juce::jlimit (0, 420, getWidth() - 2 * sideMargin);
         patchNameBox.setBounds ((getWidth() - nameWidth) / 2, area.getY(), nameWidth, area.getHeight());
         editNameButton.setBounds (patchNameBox.getRight() + 6, area.getY(), 28, area.getHeight());
     }

@@ -61,15 +61,26 @@ namespace rig
     //                { "type": "ir",  "file": "/path/cab.wav", "bypass": false } ]
     //  }
 
+    juce::String RigModel::sanitizePatchName (const juce::var& value, const juce::String& fallback)
+    {
+        if (! value.isString())
+            return fallback;
+
+        const auto name = value.toString().trim();
+        if (name.isEmpty())
+            return fallback;
+
+        return name.substring (0, maxPatchNameLength).trimEnd();
+    }
+
     void RigModel::setPatchName (const juce::String& name)
     {
-        const auto trimmedName = name.trim();
+        const auto trimmedName = name.trim().substring (0, maxPatchNameLength).trimEnd();
         if (trimmedName.isEmpty() || trimmedName == patchName)
             return;
 
         patchName = trimmedName;
         savePatch();
-        sendChangeMessage();
     }
 
     void RigModel::loadPatch (int number)
@@ -85,7 +96,7 @@ namespace rig
         {
             const auto json = juce::JSON::parse (file);
 
-            patchName = json.getProperty ("name", patchName).toString();
+            patchName = sanitizePatchName (json.getProperty ("name", {}), file.getFileName());
 
             if (auto* blocks = json.getProperty ("blocks", {}).getArray())
             {
@@ -159,8 +170,8 @@ namespace rig
 
         auto root = std::make_unique<juce::DynamicObject>();
         root->setProperty ("version", 1);
-        root->setProperty ("blocks", blocks);
         root->setProperty ("name", patchName);
+        root->setProperty ("blocks", blocks);
 
         paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release())));
     }

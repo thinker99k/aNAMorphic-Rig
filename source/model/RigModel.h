@@ -33,6 +33,10 @@ namespace rig
         };
 
         static constexpr int numPatches = 32;
+        static constexpr int maxPatchNameLength = 32;   // 글자(코드 포인트) 수
+
+        // 패치 파일의 "name" 값 검증: 문자열이 아니거나 공백뿐이면 fallback, 길면 앞 32자만
+        static juce::String sanitizePatchName (const juce::var& value, const juce::String& fallback);
 
         explicit RigModel (AudioEngine& engine);
         ~RigModel() override;

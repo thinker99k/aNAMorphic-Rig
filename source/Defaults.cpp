@@ -49,19 +49,9 @@ namespace rig::defaults
         {
             if (file.existsAsFile() && file.getSize() > 0)
             {
-                const auto json = juce::JSON::parse (file.loadFileAsString());
-
-                if (isValidPatch (json))
-                {
-                    // 기존 패치의 내용은 유지하고, 빠진 이름만 파일명으로 채운다.
-                    auto* obj = json.getDynamicObject();
-                    if (! obj->hasProperty ("name"))
-                    {
-                        obj->setProperty ("name", file.getFileName());
-                        file.replaceWithText (juce::JSON::toString (json));
-                    }
+                // 이름 검증은 RigModel::loadPatch 에서 (파일은 다음 저장 때 version, name, blocks 순으로 다시 써진다)
+                if (isValidPatch (juce::JSON::parse (file.loadFileAsString())))
                     return;
-                }
 
                 // 깨진 파일은 덮어쓰기 전에 남겨 둔다
                 file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
