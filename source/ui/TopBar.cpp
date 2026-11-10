@@ -27,7 +27,7 @@ namespace rig
 
         patchBox.onChange = [this]
         {
-            patchNameBox.hideEditor (false);
+            patchNameBox.hideEditor (true);   // 패치를 바꾸면 편집 중이던 이름은 버린다
             updateNavigationButtons();
 
             if (onPatchChanged)
@@ -50,11 +50,22 @@ namespace rig
         patchNameBox.setJustificationType (juce::Justification::centred);
         patchNameBox.setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.25f));
         patchNameBox.setColour (juce::Label::outlineColourId, juce::Colours::grey);
-        patchNameBox.setEditable (false, false, false);
+        patchNameBox.setEditable (false, false, true);   // 포커스를 잃으면(바깥 클릭) 편집 취소
         patchNameBox.onEditorShow = [this]
         {
             if (auto* ed = patchNameBox.getCurrentTextEditor())
+            {
                 ed->setInputRestrictions (RigModel::maxPatchNameLength);
+                ed->setJustification (juce::Justification::centred);
+            }
+
+            editNameButton.setImages (&checkImage);
+            editNameButton.setTooltip ("Save patch name (Enter to save, Escape to cancel)");
+        };
+        patchNameBox.onEditorHide = [this]
+        {
+            editNameButton.setImages (&pencilImage);
+            editNameButton.setTooltip ("Edit patch name");
         };
         patchNameBox.onTextChange = [this]
         {
@@ -74,13 +85,34 @@ namespace rig
         pencil.lineTo (20.0f, 5.0f);
         pencil.lineTo (18.0f, 7.0f);
         pencil.closeSubPath();
-        juce::DrawablePath pencilImage;
         pencilImage.setPath (pencil);
         pencilImage.setFill (juce::Colours::lightgrey);
+
+        juce::Path check;
+        check.startNewSubPath (3.0f, 11.0f);
+        check.lineTo (8.0f, 16.0f);
+        check.lineTo (18.0f, 5.0f);
+        checkImage.setPath (check);
+        checkImage.setFill (juce::FillType());
+        checkImage.setStrokeFill (juce::Colours::lightgrey);
+        checkImage.setStrokeType (juce::PathStrokeType (2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
         editNameButton.setImages (&pencilImage);
         editNameButton.setEdgeIndent (6);
-        editNameButton.setTooltip ("Edit patch name (Enter to save, Escape to cancel)");
-        editNameButton.onClick = [this] { patchNameBox.showEditor(); };
+        editNameButton.setTooltip ("Edit patch name");
+
+        // 체크 버튼을 눌러도 편집기의 키보드 포커스를 빼앗지 않아야 저장된다 (포커스를 잃으면 취소되므로)
+        editNameButton.setWantsKeyboardFocus (false);
+        editNameButton.setMouseClickGrabsKeyboardFocus (false);
+        editNameButton.setInterceptsMouseClicks (true, false);   // 안쪽 아이콘 컴포넌트가 클릭을 받으면 포커스가 다른 곳으로 넘어간다
+        patchNameBox.allowWhileEditing = [this] (const juce::Component* target) { return target == &editNameButton; };
+        editNameButton.onClick = [this]
+        {
+            if (patchNameBox.isBeingEdited())
+                patchNameBox.hideEditor (false);
+            else
+                patchNameBox.showEditor();
+        };
 
         addAndMakeVisible (patchLabel);
         addAndMakeVisible (patchBox);
