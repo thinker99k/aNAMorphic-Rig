@@ -13,8 +13,8 @@ namespace rig
     public:
         Gauge (juce::String caption, juce::Colour colour);
 
-        // fraction: 0..1 (막대 길이), text: 오른쪽에 보일 수치
-        void setValue (float fraction, const juce::String& text);
+        // fraction: 0..1 (막대 길이), text: 이름 줄 오른쪽 끝에 보일 수치 (비우면 표시 안 함)
+        void setValue (float fraction, const juce::String& text = {});
 
         void paint (juce::Graphics&) override;
 
@@ -48,8 +48,6 @@ namespace rig
         Gauge output { "OUT", juce::Colours::limegreen };
 
         float inputDb = -100.0f, outputDb = -100.0f;   // 감쇠(decay) 를 위한 표시값
-
-        int dividerX[2] {};                            // 구역 구분선 x 위치 (resized 에서 계산)
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StatusBar)
     };

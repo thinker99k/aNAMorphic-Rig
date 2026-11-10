@@ -22,7 +22,7 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ (예약 영역: 이후 기능용)                       │
     //  ├──────────────────────────────────────────────┤
-    //  │ StatusBar (60): [노브] IN | CPU | OUT [노브][MUTE] │
+    //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
     class MainComponent final : public juce::Component,
                                 private juce::Timer
