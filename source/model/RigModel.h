@@ -33,12 +33,18 @@ namespace rig
         };
 
         static constexpr int numPatches = 32;
+        static constexpr int maxPatchNameLength = 32;   // 글자(코드 포인트) 수
+
+        // 패치 파일의 "name" 값 검증: 문자열이 아니거나 공백뿐이면 fallback, 길면 앞 32자만
+        static juce::String sanitizePatchName (const juce::var& value, const juce::String& fallback);
 
         explicit RigModel (AudioEngine& engine);
         ~RigModel() override;
 
         // 패치
         int getPatchNumber() const noexcept { return patchNumber; }
+        const juce::String& getPatchName() const noexcept { return patchName; }
+        void setPatchName (const juce::String& name);
         void loadPatch (int number);
 
         // 입력/출력 볼륨 (dB, 앱 전역, settings.json 에 저장). UI 재구성을 막기 위해 변경 알림은 보내지 않는다
@@ -80,6 +86,7 @@ namespace rig
         juce::ThreadPool loader { 1 };          // 모델/IR 로딩 전용 스레드
 
         int patchNumber = 1;
+        juce::String patchName { "config01" };
         float inputGainDb = 0.0f, outputGainDb = 0.0f;
         bool outputMuted = false;               // loadPatch() 에서 초기화하지 않는다
         std::vector<Slot> slots;

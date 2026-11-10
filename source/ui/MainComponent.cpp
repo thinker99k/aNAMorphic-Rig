@@ -13,9 +13,16 @@ namespace rig
           blockEditor (m, e)
     {
         topBar.setPatchNumber (model.getPatchNumber());
+        topBar.setPatchName (model.getPatchName());
+        topBar.onPatchNameChanged = [this] (const juce::String& name)
+        {
+            model.setPatchName (name);
+            topBar.setPatchName (model.getPatchName());
+        };
         topBar.onPatchChanged = [this] (int number)
         {
             model.loadPatch (number);
+            topBar.setPatchName (model.getPatchName());
 
             // 알림 없이 값만 바꾼다 (알림이 가면 새 패치 파일을 다시 저장하게 됨)
             // 뮤트는 패치를 바꿔도 유지되므로, 뮤트 중이면 출력 노브는 최솟값에 둔다

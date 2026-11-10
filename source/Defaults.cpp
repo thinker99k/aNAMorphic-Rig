@@ -8,14 +8,13 @@ namespace rig::defaults
     namespace
     {
         // RigModel::loadPatch 가 읽을 수 있는 형태인지: JSON 객체 + "blocks" 배열 (빈 배열도 정상)
-        bool isValidPatch (const juce::String& text)
+        bool isValidPatch (const juce::var& json)
         {
-            const auto json = juce::JSON::parse (text);
             return json.getDynamicObject() != nullptr && json.getProperty ("blocks", {}).isArray();
         }
 
         // 기본 패치: 빈 NAM 블록 + 빈 IR 블록 ("file": "" = 아직 파일 미지정)
-        juce::String defaultPatchText()
+        juce::String defaultPatchText (const juce::String& name)
         {
             juce::Array<juce::var> blocks;
 
@@ -30,6 +29,7 @@ namespace rig::defaults
 
             auto root = std::make_unique<juce::DynamicObject>();
             root->setProperty ("version", 1);
+            root->setProperty ("name", name);
             root->setProperty ("blocks", blocks);
 
             return juce::JSON::toString (juce::var (root.release()));
@@ -49,16 +49,15 @@ namespace rig::defaults
         {
             if (file.existsAsFile() && file.getSize() > 0)
             {
-                const auto text = file.loadFileAsString();
-
-                if (isValidPatch (text))
+                // 이름 검증은 RigModel::loadPatch 에서 (파일은 다음 저장 때 version, name, blocks 순으로 다시 써진다)
+                if (isValidPatch (juce::JSON::parse (file.loadFileAsString())))
                     return;
 
                 // 깨진 파일은 덮어쓰기 전에 남겨 둔다
                 file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
             }
 
-            file.replaceWithText (defaultPatchText());
+            file.replaceWithText (defaultPatchText (file.getFileName()));
         }
 
         // settings.json: 없거나, 0 바이트거나, JSON 객체가 아니면 기본값으로 다시 쓴다.
