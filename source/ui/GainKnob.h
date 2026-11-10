@@ -6,7 +6,7 @@
 
 namespace rig
 {
-    // 볼륨 노브 하나: 위쪽 dB 값 / 회전 노브 / 아래쪽 이름 (INPUT, OUTPUT)
+    // 볼륨 노브 하나: 회전 노브 / 아래쪽 이름 (INPUT, OUTPUT). dB 값은 돌리는 동안만 말풍선으로 표시
     class GainKnob final : public juce::Component
     {
     public:
@@ -30,7 +30,7 @@ namespace rig
 
     private:
         juce::String toText (double db) const;
-        void updateValueLabel();
+        void parentHierarchyChanged() override;
 
         const float minDb;
         const bool minIsInf;
@@ -42,12 +42,17 @@ namespace rig
             void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
                                    float sliderPosProportional, float rotaryStartAngle,
                                    float rotaryEndAngle, juce::Slider&) override;
+
+            // 값 말풍선: 항상 노브 위, 꼬리 없는 둥근 사각형
+            int getSliderPopupPlacement (juce::Slider&) override { return juce::BubbleComponent::above; }
+            void drawBubble (juce::Graphics&, juce::BubbleComponent&, const juce::Point<float>& tip,
+                             const juce::Rectangle<float>& body) override;
         };
 
         // slider 보다 먼저 선언: 멤버는 역순으로 소멸하므로 slider 가 먼저 사라진다
         KnobLookAndFeel knobLnf;
         juce::Slider slider;
-        juce::Label valueLabel, nameLabel;
+        juce::Label nameLabel;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GainKnob)
     };

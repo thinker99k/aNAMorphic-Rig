@@ -6,7 +6,7 @@ namespace rig
 {
     namespace
     {
-        constexpr int labelHeight = 12;   // 위쪽 dB 글자 / 아래쪽 이름 글자 높이
+        constexpr int labelHeight = 12;   // 아래쪽 이름 글자 높이
 
         const juce::Colour arcColour (0xffd9822b);   // ChainView 의 NAM 타일과 같은 주황
     }
@@ -62,6 +62,16 @@ namespace rig
                                                      juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
+    void GainKnob::KnobLookAndFeel::drawBubble (juce::Graphics& g, juce::BubbleComponent& bubble,
+                                                const juce::Point<float>&, const juce::Rectangle<float>& body)
+    {
+        const auto r = body.reduced (0.5f);
+        g.setColour (bubble.findColour (juce::BubbleComponent::backgroundColourId));
+        g.fillRoundedRectangle (r, 4.0f);
+        g.setColour (bubble.findColour (juce::BubbleComponent::outlineColourId));
+        g.drawRoundedRectangle (r, 4.0f, 1.0f);
+    }
+
     //==============================================================================
 
     GainKnob::GainKnob (const juce::String& name, float min, float max, bool minShowsInf)
@@ -109,32 +119,27 @@ namespace rig
         slider.setValue (0.0, juce::dontSendNotification);
         // 휠로 바꾸면 드래그 끝(onDragEnd)이 오지 않아 저장이 안 되므로 휠은 막는다
         slider.setScrollWheelEnabled (false);
+        // 더블클릭하면 0 dB 로. JUCE 가 드래그 시작/끝 알림을 같이 보내서 onDragEnd 저장도 그대로 된다
+        slider.setDoubleClickReturnValue (true, 0.0);
+        // dB 값은 상시 표시하지 않고, 누르거나 돌리는 동안만 말풍선으로 띄운다 (놓으면 잠시 뒤 사라짐)
+        slider.textFromValueFunction = [this] (double db) { return toText (db); };
+
         slider.onValueChange = [this]
         {
-            updateValueLabel();
-
             if (onValueChanged)
                 onValueChanged ((float) slider.getValue());
         };
         slider.onDragEnd = [this] { if (onDragEnded) onDragEnded(); };
 
-        for (auto* label : { &valueLabel, &nameLabel })
-        {
-            label->setJustificationType (juce::Justification::centred);
-            label->setColour (juce::Label::textColourId, juce::Colours::lightgrey);
-            label->setInterceptsMouseClicks (false, false);
-            label->setBorderSize ({});   // 12 px 높이에 12 pt 글자가 들어가도록 안쪽 여백 없음
-        }
-
-        valueLabel.setFont (juce::FontOptions (12.0f));
+        nameLabel.setJustificationType (juce::Justification::centred);
+        nameLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+        nameLabel.setInterceptsMouseClicks (false, false);
+        nameLabel.setBorderSize ({});   // 12 px 높이에 12 pt 글자가 들어가도록 안쪽 여백 없음
         nameLabel.setFont (juce::FontOptions (12.0f, juce::Font::bold));
         nameLabel.setText (name, juce::dontSendNotification);
 
-        addAndMakeVisible (valueLabel);
         addAndMakeVisible (slider);
         addAndMakeVisible (nameLabel);
-
-        updateValueLabel();
     }
 
     GainKnob::~GainKnob()
@@ -145,7 +150,6 @@ namespace rig
     void GainKnob::setValueDb (float db)
     {
         slider.setValue (db, juce::dontSendNotification);
-        updateValueLabel();
     }
 
     void GainKnob::setNameVisible (bool shouldBeVisible)
@@ -176,16 +180,16 @@ namespace rig
         return text;
     }
 
-    void GainKnob::updateValueLabel()
+    void GainKnob::parentHierarchyChanged()
     {
-        valueLabel.setText (toText (slider.getValue()), juce::dontSendNotification);
+        // 말풍선은 창 안(최상위 컴포넌트)에 그린다. 노브가 창에 붙은 뒤에야 알 수 있어서 여기서 설정
+        slider.setPopupDisplayEnabled (true, false, getTopLevelComponent());
     }
 
     void GainKnob::resized()
     {
         auto area = getLocalBounds();
 
-        valueLabel.setBounds (area.removeFromTop (labelHeight));
         nameLabel.setBounds (area.removeFromBottom (nameVisible ? labelHeight : 0));
 
         // 지름은 상수가 아니라 남은 공간 안의 정사각형으로 정한다

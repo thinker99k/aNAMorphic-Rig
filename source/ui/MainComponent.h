@@ -14,7 +14,7 @@ namespace rig
 {
     // 화면 배치
     //  ┌──────────────────────────────────────────────┐
-    //  │ TopBar   : Patch [콤보]            [Settings] │
+    //  │ TopBar   : Patch [콤보] [◀][▶]  [패치명]  [Settings] │
     //  ├──────────────────────────────────────────────┤
     //  │ ChainView (본문 상단 절반)                     │
     //  ├──────────────────────────────────────────────┤
@@ -22,7 +22,7 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ (예약 영역: 이후 기능용)                       │
     //  ├──────────────────────────────────────────────┤
-    //  │ StatusBar (60): [노브] IN | CPU | OUT [노브][MUTE] │
+    //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
     class MainComponent final : public juce::Component,
                                 private juce::Timer
@@ -30,9 +30,9 @@ namespace rig
     public:
         MainComponent (juce::AudioDeviceManager& deviceManager, AudioEngine& engine, RigModel& model);
 
-        // 창 최소 크기 = 처음 실행 크기
+        // 창 크기 (고정)
         static constexpr int minWidth  = 1024;
-        static constexpr int minHeight = 720;
+        static constexpr int minHeight = 768;
         
         void paint (juce::Graphics&) override;
         void resized() override;

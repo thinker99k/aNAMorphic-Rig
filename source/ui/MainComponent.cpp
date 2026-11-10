@@ -103,7 +103,7 @@ namespace rig
 
     void MainComponent::resized()
     {
-        constexpr int statusBarHeight = 68;   // 노브(56) 위아래로 6 px 씩 여유
+        constexpr int statusBarHeight = 62;   // 노브 호 위 여백 9 px, 몸통 아래 여백 7 px (StatusBar.cpp topExtra 참고)
 
         auto area = getLocalBounds();
 

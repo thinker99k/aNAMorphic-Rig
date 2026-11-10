@@ -15,7 +15,7 @@ namespace rig
             : DocumentWindow (name,
                               juce::Desktop::getInstance().getDefaultLookAndFeel()
                                   .findColour (juce::ResizableWindow::backgroundColourId),
-                              DocumentWindow::allButtons)
+                              DocumentWindow::closeButton)
         {
             // 저장된 장치 설정이 있으면 사용, 없으면 기본 장치 (입력 1채널, 출력 2채널)
             // 마지막 인자 true: 저장된 장치를 못 열면 기본 장치로 대신 연다
@@ -41,10 +41,11 @@ namespace rig
             deviceManager.addAudioCallback (&engine);
             model.loadPatch (1);
 
-            setUsingNativeTitleBar (true);
+            // 제목 표시줄은 JUCE 가 직접 그린다 (세 OS 모두 같은 모양, 닫기 버튼만)
+            setUsingNativeTitleBar (false);
             setContentOwned (new MainComponent (deviceManager, engine, model), true);
-            setResizable (true, true);
-            setResizeLimits (MainComponent::minWidth, MainComponent::minHeight, 4096, 4096);
+            // 창 크기 고정 (1024 x 768). 크기 조절은 추후 추가 예정
+            setResizable (false, false);
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
         }
