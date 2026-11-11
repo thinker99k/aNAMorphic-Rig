@@ -2,6 +2,9 @@
 
 #include "engine/AudioEngine.h"
 #include "model/RigModel.h"
+#include "model/NamMetadata.h"
+
+#include <map>
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -39,6 +42,15 @@ namespace rig
 
         juce::Array<juce::File> fileForItem;   // 목록 행 -> 파일
         juce::StringArray fileNames;
+        juce::StringArray displayNames;
+        juce::StringArray gearTypes;
+        struct CachedMetadata
+        {
+            juce::Time modified;
+            juce::int64 size = -1;
+            NamMetadata metadata;
+        };
+        std::map<juce::String, CachedMetadata> metadataCache;
         bool refreshing = false;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BlockEditor)

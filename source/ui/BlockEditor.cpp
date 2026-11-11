@@ -22,7 +22,8 @@ namespace rig
         fileList.setOutlineThickness (1);
         const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable;
         fileList.getHeader().addColumn ("File", 1, 360, 120, -1, columnFlags);
-        fileList.getHeader().addColumn ("Path", 2, 600, 160, -1, columnFlags);
+        fileList.getHeader().addColumn ("Gear Type", 3, 180, 100, -1, columnFlags);
+        fileList.getHeader().addColumn ("Path", 2, 420, 160, -1, columnFlags);
         fileList.getHeader().setStretchToFitActive (true);
 
         for (auto* c : std::initializer_list<juce::Component*> { &title, &fileList, &folderHint, &status })
@@ -60,6 +61,10 @@ namespace rig
             return;
         }
 
+        const bool isNam = slot->type == BlockType::Nam;
+        fileList.getHeader().setColumnName (1, isNam ? "Name" : "Filename");
+        fileList.getHeader().setColumnVisible (3, isNam);
+
         title.setText ("Block #" + juce::String (model.getSelectedIndex() + 1) + "  -  " + displayName (slot->type),
                        juce::dontSendNotification);
 
@@ -69,6 +74,8 @@ namespace rig
 
         fileForItem.clearQuick();
         fileNames.clear();
+        displayNames.clear();
+        gearTypes.clear();
 
         auto found = folder.findChildFiles (juce::File::findFiles, true, patternFor (slot->type));
         found.sort();
@@ -83,6 +90,28 @@ namespace rig
         {
             fileForItem.add (slot->file);
             fileNames.add (slot->file.getFullPathName());
+        }
+
+        for (const auto& file : fileForItem)
+        {
+            NamMetadata metadata;
+            if (isNam)
+            {
+                auto& cached = metadataCache[file.getFullPathName()];
+                const auto modified = file.getLastModificationTime();
+                const auto size = file.getSize();
+                if (cached.size != size || cached.modified != modified)
+                {
+                    juce::String error;
+                    cached.metadata = readNamMetadata (file, error).value_or (NamMetadata {});
+                    cached.modified = modified;
+                    cached.size = size;
+                }
+                metadata = cached.metadata;
+            }
+
+            displayNames.add (metadata.name.isNotEmpty() ? metadata.name : file.getFileName());
+            gearTypes.add (metadata.gearType);
         }
 
         fileList.updateContent();
@@ -150,7 +179,8 @@ namespace rig
         g.setColour (selected ? findColour (juce::TextEditor::highlightedTextColourId)
                               : findColour (juce::ListBox::textColourId));
         g.setFont (14.0f);
-        const auto text = columnId == 1 ? fileForItem[row].getFileName() : fileNames[row];
+        const auto text = columnId == 1 ? displayNames[row]
+                        : columnId == 3 ? gearTypes[row] : fileNames[row];
         g.drawText (text, 6, 0, juce::jmax (0, width - 12), height,
                     juce::Justification::centredLeft, true);
         g.setColour (juce::Colours::grey.withAlpha (0.25f));
