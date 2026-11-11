@@ -44,14 +44,13 @@ namespace rig
             return std::nullopt;
         }
 
-        const auto gearType = metadata.getProperty ("gear_type", {});
-        const auto name = metadata.getProperty ("name", {});
-        if ((! gearType.isVoid() && ! gearType.isString()) || (! name.isVoid() && ! name.isString()))
+        const auto text = [&metadata] (const char* key)
         {
-            error = "NAM metadata gear_type and name must be strings";
-            return std::nullopt;
-        }
+            const auto value = metadata.getProperty (key, {});
+            return value.isString() ? value.toString().trim() : juce::String();
+        };
 
-        return NamMetadata { gearType.toString(), name.toString() };
+        return NamMetadata { text ("gear_type"), text ("name"),
+                             text ("gear_model"), text ("tone_type"), text ("modeled_by") };
     }
 }

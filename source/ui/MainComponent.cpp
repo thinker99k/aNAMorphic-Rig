@@ -10,7 +10,7 @@ namespace rig
           model (m),
           topBar (RigModel::numPatches),
           chainView (m),
-          blockEditor (m, e)
+          blockEditor (m)
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());

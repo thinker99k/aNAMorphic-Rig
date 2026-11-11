@@ -1,7 +1,6 @@
 #include "BlockEditor.h"
 
 #include "AppPaths.h"
-#include "engine/IrBlock.h"
 
 namespace rig
 {
@@ -11,23 +10,35 @@ namespace rig
         juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::namDir() : paths::irDir(); }
     }
 
-    BlockEditor::BlockEditor (RigModel& m, AudioEngine& e) : model (m), engine (e)
+    BlockEditor::BlockEditor (RigModel& m) : model (m)
     {
         title.setFont (juce::FontOptions (16.0f, juce::Font::bold));
-        folderHint.setColour (juce::Label::textColourId, juce::Colours::grey);
-        status.setJustificationType (juce::Justification::topLeft);
 
-        fileList.setModel (this);
-        fileList.setRowHeight (24);
-        fileList.setOutlineThickness (1);
-        const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable;
-        fileList.getHeader().addColumn ("File", 1, 360, 120, -1, columnFlags);
-        fileList.getHeader().addColumn ("Gear Type", 3, 180, 100, -1, columnFlags);
-        fileList.getHeader().addColumn ("Path", 2, 420, 160, -1, columnFlags);
-        fileList.getHeader().setStretchToFitActive (true);
+        // 기본 열 폭 비율 (NAM 2:2:1:1:1). 사용자가 바꾼 폭은 이 표 객체에 남아 프로그램이 꺼질 때까지 유지된다
+        const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable
+                              | juce::TableHeaderComponent::sortable;
+        const std::tuple<Column, const char*, int> namColumns[] = {
+            { nameColumn, "Name", 2 }, { gearModelColumn, "Gear Model", 2 }, { gearTypeColumn, "Gear Type", 1 },
+            { toneColumn, "Tone", 1 }, { modeledByColumn, "Modeled By", 1 },
+        };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &title, &fileList, &folderHint, &status })
-            addAndMakeVisible (c);
+        for (const auto& [id, name, ratio] : namColumns)
+            namList.getHeader().addColumn (name, id, ratio * 100, 60, -1, columnFlags);
+
+        irList.getHeader().addColumn ("Filename", nameColumn, 100, 60, -1, columnFlags);
+
+        for (auto* list : { &namList, &irList })
+        {
+            list->setModel (this);
+            list->setRowHeight (24);
+            list->setOutlineThickness (1);
+            list->getHeader().setStretchToFitActive (true);
+            list->getHeader().setLookAndFeel (&headerLookAndFeel);
+            list->getHeader().setSortColumnId (nameColumn, true);
+            addChildComponent (list);
+        }
+
+        addAndMakeVisible (title);
 
         model.addChangeListener (this);
         refresh();
@@ -36,7 +47,8 @@ namespace rig
     BlockEditor::~BlockEditor()
     {
         model.removeChangeListener (this);
-        fileList.setModel (nullptr);
+        namList.setModel (nullptr);
+        irList.setModel (nullptr);
     }
 
     void BlockEditor::changeListenerCallback (juce::ChangeBroadcaster*)
@@ -44,7 +56,19 @@ namespace rig
         updateFromModel();
     }
 
-    BlockEditor::Entry BlockEditor::makeEntry (const juce::File& file, const juce::String& path, bool readMetadata)
+    const juce::String& BlockEditor::Entry::get (int columnId) const
+    {
+        switch (columnId)
+        {
+            case gearModelColumn:   return gearModel;
+            case gearTypeColumn:    return gearType;
+            case toneColumn:        return tone;
+            case modeledByColumn:   return modeledBy;
+            default:                return displayName;
+        }
+    }
+
+    BlockEditor::Entry BlockEditor::makeEntry (const juce::File& file, bool readMetadata)
     {
         NamMetadata metadata;
 
@@ -54,7 +78,10 @@ namespace rig
             metadata = readNamMetadata (file, error).value_or (NamMetadata {});
         }
 
-        return { file, path, metadata.name.isNotEmpty() ? metadata.name : file.getFileName(), metadata.gearType };
+        return { file,
+                 metadata.name.isNotEmpty() ? metadata.name : file.getFileName(),
+                 metadata.gearModel,
+                 metadata.gearType, metadata.toneType, metadata.modeledBy };
     }
 
     // 추후 설정창 refresh library 버튼에서 호출 예정
@@ -71,7 +98,7 @@ namespace rig
             found.sort();
 
             for (const auto& f : found)
-                entries.push_back (makeEntry (f, f.getRelativePathFrom (folder), type == BlockType::Nam));
+                entries.push_back (makeEntry (f, type == BlockType::Nam));
         }
 
         outsideEntry = {};
@@ -84,13 +111,10 @@ namespace rig
     {
         const auto* slot = model.getSelectedSlot();
 
-        const bool hasSlot = slot != nullptr;
-        fileList.setVisible (hasSlot);
-        folderHint.setVisible (hasSlot);
-        status.setVisible (hasSlot);
-
-        if (! hasSlot)
+        if (slot == nullptr)
         {
+            namList.setVisible (false);
+            irList.setVisible (false);
             title.setText ("No block selected. Click a block in the chain, or add one with \"+ Add block\".",
                            juce::dontSendNotification);
             shownSlotId = 0;
@@ -98,15 +122,14 @@ namespace rig
         }
 
         const bool isNam = slot->type == BlockType::Nam;
-        fileList.getHeader().setColumnName (1, isNam ? "Name" : "Filename");
-        fileList.getHeader().setColumnVisible (3, isNam);
+        rowsType = slot->type;
+        namList.setVisible (isNam);
+        irList.setVisible (! isNam);
 
         title.setText ("Block #" + juce::String (model.getSelectedIndex() + 1) + "  -  " + displayName (slot->type),
                        juce::dontSendNotification);
 
         // 파일 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일
-        folderHint.setText ("Files are listed from " + folderFor (slot->type).getFullPathName(), juce::dontSendNotification);
-
         rows = isNam ? namEntries : irEntries;
 
         const auto findRow = [this] (const juce::File& f)
@@ -121,58 +144,31 @@ namespace rig
         if (slot->file != juce::File() && findRow (slot->file) < 0)
         {
             if (outsideEntry.file != slot->file)
-                outsideEntry = makeEntry (slot->file, slot->file.getFullPathName(), isNam);
+                outsideEntry = makeEntry (slot->file, isNam);
 
             rows.push_back (outsideEntry);
         }
 
-        fileList.updateContent();
+        sortRows();
+        auto& list = activeList();
+        list.updateContent();
+
+        // 행 수가 바뀌면 세로 스크롤바가 생기거나 사라지는데, JUCE 는 열 폭을 resized() 에서만 맞춘다.
+        // 그대로 두면 머리글 오른쪽에 스크롤바 폭만큼 빈 열이 남으므로 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
+        list.resized();
 
         if (slot->id != shownSlotId || slot->file != shownFile)
         {
             shownSlotId = slot->id;
             shownFile = slot->file;
 
-            fileList.deselectAllRows();
+            list.deselectAllRows();
             const int current = findRow (slot->file);
             if (current >= 0)
-                fileList.selectRow (current);
+                list.selectRow (current);
         }
 
-        fileList.repaint();
-
-        // 상태 표시
-        juce::String text;
-
-        if (slot->file == juce::File())
-            text = "No file assigned. The block passes audio through unchanged.";
-        else if (slot->loading)
-            text = "Loading...";
-        else if (slot->error.isNotEmpty())
-            text = "Error: " + slot->error;
-        else if (slot->dsp != nullptr)
-        {
-            text = "Loaded.";
-
-            const auto deviceRate = engine.getSampleRate();
-            const auto wanted = slot->dsp->expectedSampleRate();
-
-            if (wanted > 0.0 && std::abs (wanted - deviceRate) > 1.0)
-                text << "\nWarning: this model was trained at " << juce::String (wanted, 0)
-                     << " Hz but the device runs at " << juce::String (deviceRate, 0)
-                     << " Hz. Resampling is not implemented yet, so the tone will be off.";
-
-            if (auto* ir = dynamic_cast<IrBlock*> (slot->dsp.get()))
-                text << "\nIR: " << juce::String (ir->irLengthSeconds() * 1000.0, 1) << " ms @ "
-                     << juce::String (ir->irSampleRate(), 0) << " Hz";
-        }
-
-        if (slot->bypassed)
-            text << "\n(bypassed)";
-
-        status.setText (text, juce::dontSendNotification);
-        status.setColour (juce::Label::textColourId,
-                          slot->error.isNotEmpty() ? juce::Colours::red.brighter() : juce::Colours::lightgrey);
+        list.repaint();
     }
 
     int BlockEditor::getNumRows()
@@ -199,10 +195,7 @@ namespace rig
         g.setColour (selected ? findColour (juce::TextEditor::highlightedTextColourId)
                               : findColour (juce::ListBox::textColourId));
         g.setFont (14.0f);
-        const auto& entry = rows[(size_t) row];
-        const auto text = columnId == 1 ? entry.displayName
-                        : columnId == 3 ? entry.gearType : entry.path;
-        g.drawText (text, 6, 0, juce::jmax (0, width - 12), height,
+        g.drawText (rows[(size_t) row].get (columnId), 6, 0, juce::jmax (0, width - 12), height,
                     juce::Justification::centredLeft, true);
         g.setColour (juce::Colours::grey.withAlpha (0.25f));
         g.drawVerticalLine (width - 1, 0.0f, (float) height);
@@ -226,6 +219,49 @@ namespace rig
         model.setFile (model.getSelectedIndex(), file);
     }
 
+    void BlockEditor::sortOrderChanged (int, bool)
+    {
+        // 정렬 상태는 보이는 표의 머리글에 있다. 정렬 후에도 같은 파일을 강조
+        auto& list = activeList();
+        const int selected = list.getSelectedRow();
+        const auto selectedFile = juce::isPositiveAndBelow (selected, (int) rows.size()) ? rows[(size_t) selected].file
+                                                                                          : juce::File();
+        sortRows();
+        list.updateContent();
+
+        for (size_t i = 0; i < rows.size(); ++i)
+            if (selectedFile != juce::File() && rows[i].file == selectedFile)
+                list.selectRow ((int) i);
+
+        list.repaint();
+    }
+
+    // 캐시된 목록만 정렬한다 (디스크 읽기 없음).
+    // 대소문자 무시 자연 정렬, 빈 값은 방향과 관계없이 맨 아래, 같으면 파일명 순
+    void BlockEditor::sortRows()
+    {
+        const auto& header = activeList().getHeader();
+        const int column = header.getSortColumnId();
+        const bool forwards = header.isSortedForwards();
+
+        std::stable_sort (rows.begin(), rows.end(), [column, forwards] (const Entry& a, const Entry& b)
+        {
+            const auto& keyA = a.get (column);
+            const auto& keyB = b.get (column);
+
+            if (keyA.isEmpty() != keyB.isEmpty())
+                return keyB.isEmpty();
+
+            if (const int c = keyA.compareNatural (keyB); c != 0)
+                return forwards ? c < 0 : c > 0;
+
+            if (const int c = a.file.getFileName().compareNatural (b.file.getFileName()); c != 0)
+                return c < 0;
+
+            return a.file.getFullPathName() < b.file.getFullPathName();
+        });
+    }
+
     void BlockEditor::showFileNotFound (const juce::File& file)
     {
         // 설정창처럼 버튼으로만 닫히게: ESC 로 닫히지 않고, 닫기(X) 버튼도 없다
@@ -234,10 +270,28 @@ namespace rig
                                                  + "\n\nThe file may have been moved or deleted. "
                                                    "It will disappear from the list after the library is refreshed.",
                                              juce::MessageBoxIconType::WarningIcon,
-                                             this);
+                                             getTopLevelComponent());   // 프로그램 창 가운데에 띄운다
         alert->addButton ("OK", 1);
         alert->setEscapeKeyCancels (false);
         alert->enterModalState (true, nullptr, true);
+    }
+
+    // LookAndFeel_V3::drawTableHeaderBackground 와 같고, 마지막 열의 오른쪽 경계선만 뺐다
+    void BlockEditor::HeaderLookAndFeel::drawTableHeaderBackground (juce::Graphics& g, juce::TableHeaderComponent& header)
+    {
+        auto r = header.getLocalBounds();
+        const auto outlineColour = header.findColour (juce::TableHeaderComponent::outlineColourId);
+
+        g.setColour (outlineColour);
+        g.fillRect (r.removeFromBottom (1));
+
+        g.setColour (header.findColour (juce::TableHeaderComponent::backgroundColourId));
+        g.fillRect (r);
+
+        g.setColour (outlineColour);
+
+        for (int i = header.getNumColumns (true) - 1; --i >= 0;)
+            g.fillRect (header.getColumnPosition (i).removeFromRight (1));
     }
 
     void BlockEditor::paint (juce::Graphics& g)
@@ -249,14 +303,13 @@ namespace rig
 
     void BlockEditor::resized()
     {
-        auto area = getLocalBounds().reduced (12, 10);
+        // 아래 여백 = 좌우 여백 (12)
+        auto area = getLocalBounds().withTrimmedTop (10).reduced (12, 0).withTrimmedBottom (12);
 
         title.setBounds (area.removeFromTop (24));
         area.removeFromTop (6);
 
-        status.setBounds (area.removeFromBottom (60));
-        folderHint.setBounds (area.removeFromBottom (20));
-        area.removeFromBottom (4);
-        fileList.setBounds (area);
+        namList.setBounds (area);
+        irList.setBounds (area);
     }
 }
