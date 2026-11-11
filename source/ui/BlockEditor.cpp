@@ -197,8 +197,14 @@ namespace rig
         g.setFont (14.0f);
         g.drawText (rows[(size_t) row].get (columnId), 6, 0, juce::jmax (0, width - 12), height,
                     juce::Justification::centredLeft, true);
-        g.setColour (juce::Colours::grey.withAlpha (0.25f));
-        g.drawVerticalLine (width - 1, 0.0f, (float) height);
+
+        // 마지막 열의 오른쪽 경계선은 그리지 않는다 (머리글처럼 스크롤바와 이어져 보이게)
+        const auto& header = activeList().getHeader();
+        if (columnId != header.getColumnIdOfIndex (header.getNumColumns (true) - 1, true))
+        {
+            g.setColour (juce::Colours::grey.withAlpha (0.25f));
+            g.drawVerticalLine (width - 1, 0.0f, (float) height);
+        }
     }
 
     void BlockEditor::cellDoubleClicked (int row, int, const juce::MouseEvent&)
