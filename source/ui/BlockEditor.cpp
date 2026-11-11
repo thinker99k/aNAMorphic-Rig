@@ -1,28 +1,44 @@
 #include "BlockEditor.h"
 
 #include "AppPaths.h"
-#include "engine/IrBlock.h"
 
 namespace rig
 {
     namespace
     {
-        constexpr int browseId = 100000;
-
         juce::String patternFor (BlockType t) { return t == BlockType::Nam ? "*.nam" : "*.wav"; }
         juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::namDir() : paths::irDir(); }
     }
 
-    BlockEditor::BlockEditor (RigModel& m, AudioEngine& e) : model (m), engine (e)
+    BlockEditor::BlockEditor (RigModel& m) : model (m)
     {
         title.setFont (juce::FontOptions (16.0f, juce::Font::bold));
-        folderHint.setColour (juce::Label::textColourId, juce::Colours::grey);
-        status.setJustificationType (juce::Justification::topLeft);
 
-        fileBox.onChange = [this] { fileChosen(); };
+        // 기본 열 폭 비율 (NAM 2:2:1:1:1). 사용자가 바꾼 폭은 이 표 객체에 남아 프로그램이 꺼질 때까지 유지된다
+        const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable
+                              | juce::TableHeaderComponent::sortable;
+        const std::tuple<Column, const char*, int> namColumns[] = {
+            { nameColumn, "Name", 2 }, { gearModelColumn, "Gear Model", 2 }, { gearTypeColumn, "Gear Type", 1 },
+            { toneColumn, "Tone", 1 }, { modeledByColumn, "Modeled By", 1 },
+        };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &title, &fileLabel, &fileBox, &folderHint, &status })
-            addAndMakeVisible (c);
+        for (const auto& [id, name, ratio] : namColumns)
+            namList.getHeader().addColumn (name, id, ratio * 100, 60, -1, columnFlags);
+
+        irList.getHeader().addColumn ("Filename", nameColumn, 100, 60, -1, columnFlags);
+
+        for (auto* list : { &namList, &irList })
+        {
+            list->setModel (this);
+            list->setRowHeight (24);
+            list->setOutlineThickness (1);
+            list->getHeader().setStretchToFitActive (true);
+            list->getHeader().setLookAndFeel (&headerLookAndFeel);
+            list->getHeader().setSortColumnId (nameColumn, true);
+            addChildComponent (list);
+        }
+
+        addAndMakeVisible (title);
 
         model.addChangeListener (this);
         refresh();
@@ -31,138 +47,257 @@ namespace rig
     BlockEditor::~BlockEditor()
     {
         model.removeChangeListener (this);
+        namList.setModel (nullptr);
+        irList.setModel (nullptr);
     }
 
     void BlockEditor::changeListenerCallback (juce::ChangeBroadcaster*)
     {
-        refresh();
+        updateFromModel();
     }
 
+    const juce::String& BlockEditor::Entry::get (int columnId) const
+    {
+        switch (columnId)
+        {
+            case gearModelColumn:   return gearModel;
+            case gearTypeColumn:    return gearType;
+            case toneColumn:        return tone;
+            case modeledByColumn:   return modeledBy;
+            default:                return displayName;
+        }
+    }
+
+    BlockEditor::Entry BlockEditor::makeEntry (const juce::File& file, bool readMetadata)
+    {
+        NamMetadata metadata;
+
+        if (readMetadata)
+        {
+            juce::String error;
+            metadata = readNamMetadata (file, error).value_or (NamMetadata {});
+        }
+
+        return { file,
+                 metadata.name.isNotEmpty() ? metadata.name : file.getFileName(),
+                 metadata.gearModel,
+                 metadata.gearType, metadata.toneType, metadata.modeledBy };
+    }
+
+    // 추후 설정창 refresh library 버튼에서 호출 예정
+    // nam/, ir/ 폴더를 스캔하고 NAM 메타데이터를 읽어 캐시에 둔다 (디스크를 읽는 곳은 여기뿐)
     void BlockEditor::refresh()
+    {
+        for (const auto type : { BlockType::Nam, BlockType::Ir })
+        {
+            const auto folder = folderFor (type);
+            auto& entries = type == BlockType::Nam ? namEntries : irEntries;
+            entries.clear();
+
+            auto found = folder.findChildFiles (juce::File::findFiles, true, patternFor (type));
+            found.sort();
+
+            for (const auto& f : found)
+                entries.push_back (makeEntry (f, type == BlockType::Nam));
+        }
+
+        outsideEntry = {};
+        shownSlotId = 0;   // 목록이 바뀌었으니 강조도 다시 맞춘다
+        updateFromModel();
+    }
+
+    // 모델 변경 알림마다 호출: 캐시에서 선택된 블록 종류의 목록을 고른다 (폴더 스캔 없음)
+    void BlockEditor::updateFromModel()
     {
         const auto* slot = model.getSelectedSlot();
 
-        const bool hasSlot = slot != nullptr;
-        fileLabel.setVisible (hasSlot);
-        fileBox.setVisible (hasSlot);
-        folderHint.setVisible (hasSlot);
-        status.setVisible (hasSlot);
-
-        if (! hasSlot)
+        if (slot == nullptr)
         {
+            namList.setVisible (false);
+            irList.setVisible (false);
             title.setText ("No block selected. Click a block in the chain, or add one with \"+ Add block\".",
                            juce::dontSendNotification);
+            shownSlotId = 0;
             return;
         }
+
+        const bool isNam = slot->type == BlockType::Nam;
+        rowsType = slot->type;
+        namList.setVisible (isNam);
+        irList.setVisible (! isNam);
 
         title.setText ("Block #" + juce::String (model.getSelectedIndex() + 1) + "  -  " + displayName (slot->type),
                        juce::dontSendNotification);
 
-        // 콤보박스 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일 + Browse...
-        const auto folder = folderFor (slot->type);
-        folderHint.setText ("Files are listed from " + folder.getFullPathName(), juce::dontSendNotification);
+        // 파일 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일
+        rows = isNam ? namEntries : irEntries;
 
-        fileForItem.clearQuick();
-        fileBox.clear (juce::dontSendNotification);
-
-        auto found = folder.findChildFiles (juce::File::findFiles, true, patternFor (slot->type));
-        found.sort();
-
-        for (const auto& f : found)
+        const auto findRow = [this] (const juce::File& f)
         {
-            fileForItem.add (f);
-            fileBox.addItem (f.getRelativePathFrom (folder), fileForItem.size());
+            for (size_t i = 0; i < rows.size(); ++i)
+                if (rows[i].file == f)
+                    return (int) i;
+
+            return -1;
+        };
+
+        if (slot->file != juce::File() && findRow (slot->file) < 0)
+        {
+            if (outsideEntry.file != slot->file)
+                outsideEntry = makeEntry (slot->file, isNam);
+
+            rows.push_back (outsideEntry);
         }
 
-        if (slot->file != juce::File() && ! fileForItem.contains (slot->file))
+        sortRows();
+        auto& list = activeList();
+        list.updateContent();
+
+        // 행 수가 바뀌면 세로 스크롤바가 생기거나 사라지는데, JUCE 는 열 폭을 resized() 에서만 맞춘다.
+        // 그대로 두면 머리글 오른쪽에 스크롤바 폭만큼 빈 열이 남으므로 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
+        list.resized();
+
+        if (slot->id != shownSlotId || slot->file != shownFile)
         {
-            fileForItem.add (slot->file);
-            fileBox.addItem (slot->file.getFullPathName(), fileForItem.size());
+            shownSlotId = slot->id;
+            shownFile = slot->file;
+
+            list.deselectAllRows();
+            const int current = findRow (slot->file);
+            if (current >= 0)
+                list.selectRow (current);
         }
 
-        fileBox.addSeparator();
-        fileBox.addItem ("Browse...", browseId);
-
-        const int current = fileForItem.indexOf (slot->file);
-        if (current >= 0)
-            fileBox.setSelectedId (current + 1, juce::dontSendNotification);
-        else
-            fileBox.setTextWhenNothingSelected ("(choose a " + patternFor (slot->type).fromFirstOccurrenceOf (".", true, false) + " file)");
-
-        // 상태 표시
-        juce::String text;
-
-        if (slot->file == juce::File())
-            text = "No file assigned. The block passes audio through unchanged.";
-        else if (slot->loading)
-            text = "Loading...";
-        else if (slot->error.isNotEmpty())
-            text = "Error: " + slot->error;
-        else if (slot->dsp != nullptr)
-        {
-            text = "Loaded.";
-
-            const auto deviceRate = engine.getSampleRate();
-            const auto wanted = slot->dsp->expectedSampleRate();
-
-            if (wanted > 0.0 && std::abs (wanted - deviceRate) > 1.0)
-                text << "\nWarning: this model was trained at " << juce::String (wanted, 0)
-                     << " Hz but the device runs at " << juce::String (deviceRate, 0)
-                     << " Hz. Resampling is not implemented yet, so the tone will be off.";
-
-            if (auto* ir = dynamic_cast<IrBlock*> (slot->dsp.get()))
-                text << "\nIR: " << juce::String (ir->irLengthSeconds() * 1000.0, 1) << " ms @ "
-                     << juce::String (ir->irSampleRate(), 0) << " Hz";
-        }
-
-        if (slot->bypassed)
-            text << "\n(bypassed)";
-
-        status.setText (text, juce::dontSendNotification);
-        status.setColour (juce::Label::textColourId,
-                          slot->error.isNotEmpty() ? juce::Colours::red.brighter() : juce::Colours::lightgrey);
+        list.repaint();
     }
 
-    void BlockEditor::fileChosen()
+    int BlockEditor::getNumRows()
     {
-        const int id = fileBox.getSelectedId();
+        return (int) rows.size();
+    }
 
-        if (id == browseId)
+    void BlockEditor::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
+    {
+        if (selected)
+            g.fillAll (findColour (juce::TextEditor::highlightColourId));
+        else if (row % 2 != 0)
+            g.fillAll (juce::Colours::white.withAlpha (0.04f));
+
+        g.setColour (juce::Colours::grey.withAlpha (0.25f));
+        g.drawHorizontalLine (height - 1, 0.0f, (float) width);
+    }
+
+    void BlockEditor::paintCell (juce::Graphics& g, int row, int columnId, int width, int height, bool selected)
+    {
+        if (! juce::isPositiveAndBelow (row, (int) rows.size()))
+            return;
+
+        g.setColour (selected ? findColour (juce::TextEditor::highlightedTextColourId)
+                              : findColour (juce::ListBox::textColourId));
+        g.setFont (14.0f);
+        g.drawText (rows[(size_t) row].get (columnId), 6, 0, juce::jmax (0, width - 12), height,
+                    juce::Justification::centredLeft, true);
+
+        // 마지막 열의 오른쪽 경계선은 그리지 않는다 (머리글처럼 스크롤바와 이어져 보이게)
+        const auto& header = activeList().getHeader();
+        if (columnId != header.getColumnIdOfIndex (header.getNumColumns (true) - 1, true))
         {
-            browse();
+            g.setColour (juce::Colours::grey.withAlpha (0.25f));
+            g.drawVerticalLine (width - 1, 0.0f, (float) height);
+        }
+    }
+
+    void BlockEditor::cellDoubleClicked (int row, int, const juce::MouseEvent&)
+    {
+        if (model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) rows.size()))
+            return;
+
+        const auto file = rows[(size_t) row].file;
+
+        // 목록은 다시 스캔하지 않으므로, 그 사이 지워졌거나 옮겨진 파일일 수 있다
+        if (! file.existsAsFile())
+        {
+            showFileNotFound (file);
             return;
         }
 
-        if (juce::isPositiveAndBelow (id - 1, fileForItem.size()))
-            model.setFile (model.getSelectedIndex(), fileForItem[id - 1]);
+        // 같은 파일이어도 막지 않는다 (로딩 실패 후 다시 시도). 중복 로딩은 RigModel::setFile 이 막는다
+        model.setFile (model.getSelectedIndex(), file);
     }
 
-    void BlockEditor::browse()
+    void BlockEditor::sortOrderChanged (int, bool)
     {
-        const auto* slot = model.getSelectedSlot();
-        if (slot == nullptr)
-            return;
+        // 정렬 상태는 보이는 표의 머리글에 있다. 정렬 후에도 같은 파일을 강조
+        auto& list = activeList();
+        const int selected = list.getSelectedRow();
+        const auto selectedFile = juce::isPositiveAndBelow (selected, (int) rows.size()) ? rows[(size_t) selected].file
+                                                                                          : juce::File();
+        sortRows();
+        list.updateContent();
 
-        const int index = model.getSelectedIndex();
-        const auto start = slot->file.existsAsFile() ? slot->file : folderFor (slot->type);
+        for (size_t i = 0; i < rows.size(); ++i)
+            if (selectedFile != juce::File() && rows[i].file == selectedFile)
+                list.selectRow ((int) i);
 
-        chooser = std::make_unique<juce::FileChooser> ("Choose " + displayName (slot->type), start, patternFor (slot->type));
+        list.repaint();
+    }
 
-        juce::Component::SafePointer<BlockEditor> safeThis (this);
+    // 캐시된 목록만 정렬한다 (디스크 읽기 없음).
+    // 대소문자 무시 자연 정렬, 빈 값은 방향과 관계없이 맨 아래, 같으면 파일명 순
+    void BlockEditor::sortRows()
+    {
+        const auto& header = activeList().getHeader();
+        const int column = header.getSortColumnId();
+        const bool forwards = header.isSortedForwards();
 
-        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                              [safeThis, index] (const juce::FileChooser& fc)
-                              {
-                                  if (safeThis == nullptr)
-                                      return;
+        std::stable_sort (rows.begin(), rows.end(), [column, forwards] (const Entry& a, const Entry& b)
+        {
+            const auto& keyA = a.get (column);
+            const auto& keyB = b.get (column);
 
-                                  const auto result = fc.getResult();
+            if (keyA.isEmpty() != keyB.isEmpty())
+                return keyB.isEmpty();
 
-                                  if (result.existsAsFile())
-                                      safeThis->model.setFile (index, result);
-                                  else
-                                      safeThis->refresh();   // 취소: 콤보 선택을 원래대로
-                              });
+            if (const int c = keyA.compareNatural (keyB); c != 0)
+                return forwards ? c < 0 : c > 0;
+
+            if (const int c = a.file.getFileName().compareNatural (b.file.getFileName()); c != 0)
+                return c < 0;
+
+            return a.file.getFullPathName() < b.file.getFullPathName();
+        });
+    }
+
+    void BlockEditor::showFileNotFound (const juce::File& file)
+    {
+        // 설정창처럼 버튼으로만 닫히게: ESC 로 닫히지 않고, 닫기(X) 버튼도 없다
+        auto* alert = new juce::AlertWindow ("File not found",
+                                             file.getFullPathName()
+                                                 + "\n\nThe file may have been moved or deleted. "
+                                                   "It will disappear from the list after the library is refreshed.",
+                                             juce::MessageBoxIconType::WarningIcon,
+                                             getTopLevelComponent());   // 프로그램 창 가운데에 띄운다
+        alert->addButton ("OK", 1);
+        alert->setEscapeKeyCancels (false);
+        alert->enterModalState (true, nullptr, true);
+    }
+
+    // LookAndFeel_V3::drawTableHeaderBackground 와 같고, 마지막 열의 오른쪽 경계선만 뺐다
+    void BlockEditor::HeaderLookAndFeel::drawTableHeaderBackground (juce::Graphics& g, juce::TableHeaderComponent& header)
+    {
+        auto r = header.getLocalBounds();
+        const auto outlineColour = header.findColour (juce::TableHeaderComponent::outlineColourId);
+
+        g.setColour (outlineColour);
+        g.fillRect (r.removeFromBottom (1));
+
+        g.setColour (header.findColour (juce::TableHeaderComponent::backgroundColourId));
+        g.fillRect (r);
+
+        g.setColour (outlineColour);
+
+        for (int i = header.getNumColumns (true) - 1; --i >= 0;)
+            g.fillRect (header.getColumnPosition (i).removeFromRight (1));
     }
 
     void BlockEditor::paint (juce::Graphics& g)
@@ -174,17 +309,13 @@ namespace rig
 
     void BlockEditor::resized()
     {
-        auto area = getLocalBounds().reduced (12, 10);
+        // 아래 여백 = 좌우 여백 (12)
+        auto area = getLocalBounds().withTrimmedTop (10).reduced (12, 0).withTrimmedBottom (12);
 
         title.setBounds (area.removeFromTop (24));
         area.removeFromTop (6);
 
-        auto row = area.removeFromTop (28);
-        fileLabel.setBounds (row.removeFromLeft (40));
-        fileBox.setBounds (row.removeFromLeft (juce::jmin (520, row.getWidth())));
-
-        folderHint.setBounds (area.removeFromTop (20).withTrimmedLeft (40));
-        area.removeFromTop (4);
-        status.setBounds (area.withTrimmedLeft (40));
+        namList.setBounds (area);
+        irList.setBounds (area);
     }
 }

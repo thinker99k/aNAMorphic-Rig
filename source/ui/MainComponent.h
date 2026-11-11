@@ -18,9 +18,7 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ ChainView (본문 상단 절반)                     │
     //  ├──────────────────────────────────────────────┤
-    //  │ BlockEditor (본문 하단 절반의 위쪽 절반)        │
-    //  ├──────────────────────────────────────────────┤
-    //  │ (예약 영역: 이후 기능용)                       │
+    //  │ BlockEditor (본문 하단 절반 전체)        │
     //  ├──────────────────────────────────────────────┤
     //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
@@ -50,8 +48,6 @@ namespace rig
         ChainView chainView;
         BlockEditor blockEditor;
         StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
-
-        juce::Rectangle<int> reservedArea;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
     };

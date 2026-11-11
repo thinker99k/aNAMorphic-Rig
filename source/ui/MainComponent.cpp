@@ -10,7 +10,7 @@ namespace rig
           model (m),
           topBar (RigModel::numPatches),
           chainView (m),
-          blockEditor (m, e)
+          blockEditor (m)
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());
@@ -112,7 +112,6 @@ namespace rig
 
         const int half = area.getHeight() / 2;
         chainView.setBounds (area.removeFromTop (half));
-        blockEditor.setBounds (area.removeFromTop (area.getHeight() / 2));
-        reservedArea = area;
+        blockEditor.setBounds (area);
     }
 }
