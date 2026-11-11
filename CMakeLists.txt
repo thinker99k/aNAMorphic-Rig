@@ -132,7 +132,7 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/engine/NamBlock.cpp
         source/engine/IrBlock.cpp
         source/model/RigModel.cpp
-        source/model/NamMetadata.cpp
+        source/library/NamMetadata.cpp
         source/ui/MainComponent.cpp
         source/ui/TopBar.cpp
         source/ui/SettingsDialog.cpp
