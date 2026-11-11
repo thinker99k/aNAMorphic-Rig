@@ -112,7 +112,6 @@ namespace rig
 
         const int half = area.getHeight() / 2;
         chainView.setBounds (area.removeFromTop (half));
-        blockEditor.setBounds (area.removeFromTop (area.getHeight() / 2));
-        reservedArea = area;
+        blockEditor.setBounds (area);
     }
 }

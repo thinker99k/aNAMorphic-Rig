@@ -7,8 +7,6 @@ namespace rig
 {
     namespace
     {
-        constexpr int browseId = 100000;
-
         juce::String patternFor (BlockType t) { return t == BlockType::Nam ? "*.nam" : "*.wav"; }
         juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::namDir() : paths::irDir(); }
     }
@@ -19,9 +17,15 @@ namespace rig
         folderHint.setColour (juce::Label::textColourId, juce::Colours::grey);
         status.setJustificationType (juce::Justification::topLeft);
 
-        fileBox.onChange = [this] { fileChosen(); };
+        fileList.setModel (this);
+        fileList.setRowHeight (24);
+        fileList.setOutlineThickness (1);
+        const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable;
+        fileList.getHeader().addColumn ("File", 1, 360, 120, -1, columnFlags);
+        fileList.getHeader().addColumn ("Path", 2, 600, 160, -1, columnFlags);
+        fileList.getHeader().setStretchToFitActive (true);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &title, &fileLabel, &fileBox, &folderHint, &status })
+        for (auto* c : std::initializer_list<juce::Component*> { &title, &fileList, &folderHint, &status })
             addAndMakeVisible (c);
 
         model.addChangeListener (this);
@@ -31,6 +35,7 @@ namespace rig
     BlockEditor::~BlockEditor()
     {
         model.removeChangeListener (this);
+        fileList.setModel (nullptr);
     }
 
     void BlockEditor::changeListenerCallback (juce::ChangeBroadcaster*)
@@ -40,11 +45,11 @@ namespace rig
 
     void BlockEditor::refresh()
     {
+        const juce::ScopedValueSetter<bool> updating (refreshing, true);
         const auto* slot = model.getSelectedSlot();
 
         const bool hasSlot = slot != nullptr;
-        fileLabel.setVisible (hasSlot);
-        fileBox.setVisible (hasSlot);
+        fileList.setVisible (hasSlot);
         folderHint.setVisible (hasSlot);
         status.setVisible (hasSlot);
 
@@ -58,12 +63,12 @@ namespace rig
         title.setText ("Block #" + juce::String (model.getSelectedIndex() + 1) + "  -  " + displayName (slot->type),
                        juce::dontSendNotification);
 
-        // 콤보박스 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일 + Browse...
+        // 파일 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일
         const auto folder = folderFor (slot->type);
         folderHint.setText ("Files are listed from " + folder.getFullPathName(), juce::dontSendNotification);
 
         fileForItem.clearQuick();
-        fileBox.clear (juce::dontSendNotification);
+        fileNames.clear();
 
         auto found = folder.findChildFiles (juce::File::findFiles, true, patternFor (slot->type));
         found.sort();
@@ -71,23 +76,21 @@ namespace rig
         for (const auto& f : found)
         {
             fileForItem.add (f);
-            fileBox.addItem (f.getRelativePathFrom (folder), fileForItem.size());
+            fileNames.add (f.getRelativePathFrom (folder));
         }
 
         if (slot->file != juce::File() && ! fileForItem.contains (slot->file))
         {
             fileForItem.add (slot->file);
-            fileBox.addItem (slot->file.getFullPathName(), fileForItem.size());
+            fileNames.add (slot->file.getFullPathName());
         }
 
-        fileBox.addSeparator();
-        fileBox.addItem ("Browse...", browseId);
-
+        fileList.updateContent();
+        fileList.deselectAllRows();
         const int current = fileForItem.indexOf (slot->file);
         if (current >= 0)
-            fileBox.setSelectedId (current + 1, juce::dontSendNotification);
-        else
-            fileBox.setTextWhenNothingSelected ("(choose a " + patternFor (slot->type).fromFirstOccurrenceOf (".", true, false) + " file)");
+            fileList.selectRow (current);
+        fileList.repaint();
 
         // 상태 표시
         juce::String text;
@@ -123,46 +126,45 @@ namespace rig
                           slot->error.isNotEmpty() ? juce::Colours::red.brighter() : juce::Colours::lightgrey);
     }
 
-    void BlockEditor::fileChosen()
+    int BlockEditor::getNumRows()
     {
-        const int id = fileBox.getSelectedId();
-
-        if (id == browseId)
-        {
-            browse();
-            return;
-        }
-
-        if (juce::isPositiveAndBelow (id - 1, fileForItem.size()))
-            model.setFile (model.getSelectedIndex(), fileForItem[id - 1]);
+        return fileForItem.size();
     }
 
-    void BlockEditor::browse()
+    void BlockEditor::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
     {
-        const auto* slot = model.getSelectedSlot();
-        if (slot == nullptr)
+        if (selected)
+            g.fillAll (findColour (juce::TextEditor::highlightColourId));
+        else if (row % 2 != 0)
+            g.fillAll (juce::Colours::white.withAlpha (0.04f));
+
+        g.setColour (juce::Colours::grey.withAlpha (0.25f));
+        g.drawHorizontalLine (height - 1, 0.0f, (float) width);
+    }
+
+    void BlockEditor::paintCell (juce::Graphics& g, int row, int columnId, int width, int height, bool selected)
+    {
+        if (! juce::isPositiveAndBelow (row, fileForItem.size()))
             return;
 
-        const int index = model.getSelectedIndex();
-        const auto start = slot->file.existsAsFile() ? slot->file : folderFor (slot->type);
+        g.setColour (selected ? findColour (juce::TextEditor::highlightedTextColourId)
+                              : findColour (juce::ListBox::textColourId));
+        g.setFont (14.0f);
+        const auto text = columnId == 1 ? fileForItem[row].getFileName() : fileNames[row];
+        g.drawText (text, 6, 0, juce::jmax (0, width - 12), height,
+                    juce::Justification::centredLeft, true);
+        g.setColour (juce::Colours::grey.withAlpha (0.25f));
+        g.drawVerticalLine (width - 1, 0.0f, (float) height);
+    }
 
-        chooser = std::make_unique<juce::FileChooser> ("Choose " + displayName (slot->type), start, patternFor (slot->type));
+    void BlockEditor::selectedRowsChanged (int row)
+    {
+        if (refreshing || ! juce::isPositiveAndBelow (row, fileForItem.size()))
+            return;
 
-        juce::Component::SafePointer<BlockEditor> safeThis (this);
-
-        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                              [safeThis, index] (const juce::FileChooser& fc)
-                              {
-                                  if (safeThis == nullptr)
-                                      return;
-
-                                  const auto result = fc.getResult();
-
-                                  if (result.existsAsFile())
-                                      safeThis->model.setFile (index, result);
-                                  else
-                                      safeThis->refresh();   // 취소: 콤보 선택을 원래대로
-                              });
+        const auto* slot = model.getSelectedSlot();
+        if (slot != nullptr && slot->file != fileForItem[row])
+            model.setFile (model.getSelectedIndex(), fileForItem[row]);
     }
 
     void BlockEditor::paint (juce::Graphics& g)
@@ -179,12 +181,9 @@ namespace rig
         title.setBounds (area.removeFromTop (24));
         area.removeFromTop (6);
 
-        auto row = area.removeFromTop (28);
-        fileLabel.setBounds (row.removeFromLeft (40));
-        fileBox.setBounds (row.removeFromLeft (juce::jmin (520, row.getWidth())));
-
-        folderHint.setBounds (area.removeFromTop (20).withTrimmedLeft (40));
-        area.removeFromTop (4);
-        status.setBounds (area.withTrimmedLeft (40));
+        status.setBounds (area.removeFromBottom (60));
+        folderHint.setBounds (area.removeFromBottom (20));
+        area.removeFromBottom (4);
+        fileList.setBounds (area);
     }
 }
