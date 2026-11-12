@@ -55,6 +55,7 @@ namespace rig
         addAndMakeVisible (topBar);
         addAndMakeVisible (chainView);
         addAndMakeVisible (blockEditor);
+        addAndMakeVisible (sceneBar);
         addAndMakeVisible (statusBar);
 
         statusBar.inputKnob.setValueDb (model.getInputGainDb());
@@ -110,8 +111,10 @@ namespace rig
         topBar.setBounds (area.removeFromTop (40));
         statusBar.setBounds (area.removeFromBottom (statusBarHeight));
 
-        const int half = area.getHeight() / 2;
-        chainView.setBounds (area.removeFromTop (half));
+        // 패치 맵 : 블록 선택기 : 씬 바 = 4 : 3 : 1
+        const int unit = area.getHeight() / 8;
+        chainView.setBounds (area.removeFromTop (unit * 4));
+        sceneBar.setBounds (area.removeFromBottom (unit));
         blockEditor.setBounds (area);
     }
 }

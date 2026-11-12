@@ -52,13 +52,14 @@ namespace rig
 
     //==============================================================================
     // 패치 저장/불러오기 : ~/Documents/aNAMorphic-Rig/patch/config<NN>  (JSON)
-    //  "file" 이 "" 이면 파일 미지정 슬롯 (기본 패치가 이렇게 만들어진다)
+    //  "type": "none" 은 미지정 블록 (통과), "file" 은 "". "on" 이 없거나 bool 이 아니면 On. 기본 패치는 블록 없음
     //
     //  {
     //    "version": 1,
     //    "name": "config01",
-    //    "blocks": [ { "type": "nam", "file": "/path/amp.nam", "bypass": false },
-    //                { "type": "ir",  "file": "/path/cab.wav", "bypass": false } ]
+    //    "blocks": [ { "type": "nam",  "file": "/path/amp.nam", "on": true },
+    //                { "type": "none", "file": "",              "on": true },
+    //                { "type": "ir",   "file": "/path/cab.wav", "on": false } ]
     //  }
 
     juce::String RigModel::sanitizePatchName (const juce::var& value, const juce::String& fallback)
@@ -104,12 +105,16 @@ namespace rig
                 {
                     Slot slot;
                     slot.id = nextSlotId++;
-                    slot.type = blockTypeFromString (b.getProperty ("type", "nam").toString());
-                    slot.bypassed = (bool) b.getProperty ("bypass", false);
+                    slot.type = blockTypeFromString (b.getProperty ("type", {}).toString());
+                    const auto on = b.getProperty ("on", {});
+                    slot.on = on.isBool() ? (bool) on : true;
 
+                    // 파일이 필요한 종류인데 파일이 없으면 미지정 블록으로 (None / 파일 지정된 NAM·IR 만 존재)
                     const auto path = b.getProperty ("file", {}).toString();
-                    if (path.isNotEmpty())
+                    if (usesFile (slot.type) && path.isNotEmpty())
                         slot.file = juce::File (path);
+                    else
+                        slot.type = BlockType::None;
 
                     slots.push_back (std::move (slot));
                 }
@@ -164,7 +169,7 @@ namespace rig
             auto obj = std::make_unique<juce::DynamicObject>();
             obj->setProperty ("type", toString (slot.type));
             obj->setProperty ("file", slot.file.getFullPathName());
-            obj->setProperty ("bypass", slot.bypassed);
+            obj->setProperty ("on", slot.on);
             blocks.add (juce::var (obj.release()));
         }
 
@@ -188,13 +193,14 @@ namespace rig
         sendChangeMessage();
     }
 
-    void RigModel::addBlock (BlockType type)
+    void RigModel::insertBlock (int index)
     {
+        index = juce::jlimit (0, (int) slots.size(), index);
+
         Slot slot;
         slot.id = nextSlotId++;
-        slot.type = type;
-        slots.push_back (std::move (slot));
-        selectedIndex = (int) slots.size() - 1;
+        slots.insert (slots.begin() + index, std::move (slot));
+        selectedIndex = index;
         changed();
     }
 
@@ -221,26 +227,34 @@ namespace rig
         changed();
     }
 
-    void RigModel::setBypassed (int index, bool shouldBeBypassed)
+    void RigModel::setOn (int index, bool shouldBeOn)
     {
         if (! juce::isPositiveAndBelow (index, (int) slots.size()))
             return;
 
-        slots[(size_t) index].bypassed = shouldBeBypassed;
+        slots[(size_t) index].on = shouldBeOn;
         changed();
     }
 
-    void RigModel::setFile (int index, const juce::File& file)
+    void RigModel::assignBlock (int index, BlockType type, const juce::File& file)
     {
         if (! juce::isPositiveAndBelow (index, (int) slots.size()))
+            return;
+
+        const auto newFile = usesFile (type) ? file : juce::File();
+
+        if (usesFile (type) && newFile == juce::File())
             return;
 
         auto& slot = slots[(size_t) index];
 
-        if (slot.file == file && (slot.dsp != nullptr || slot.loading))
+        // 같은 지정이면 무시. 단 로딩 실패한 파일은 다시 시도한다
+        if (slot.type == type && slot.file == newFile
+            && (type == BlockType::None || slot.dsp != nullptr || slot.loading))
             return;
 
-        slot.file = file;
+        slot.type = type;
+        slot.file = newFile;
         startLoading (slot);
         changed();
     }
@@ -250,9 +264,9 @@ namespace rig
         const auto sr = engine.getSampleRate();
         const auto bs = engine.getMaxBlockSize();
 
-        // 체인에 들어 있는 블록은 엔진이 이미 다시 준비했으므로, 나머지(바이패스 등)만 처리
+        // 체인에 들어 있는 블록(On)은 엔진이 이미 다시 준비했으므로, 꺼진 블록만 처리
         for (auto& slot : slots)
-            if (slot.dsp != nullptr && slot.bypassed
+            if (slot.dsp != nullptr && ! slot.on
                 && slot.dsp->needsPrepare (sr, bs))
                 slot.dsp->prepare (sr, bs);
 
@@ -267,7 +281,7 @@ namespace rig
         slot.error.clear();
         slot.loading = false;
 
-        if (slot.file == juce::File())
+        if (! usesFile (slot.type) || slot.file == juce::File())
             return;
 
         slot.loading = true;
@@ -327,7 +341,7 @@ namespace rig
 
         for (auto& slot : slots)
         {
-            if (slot.bypassed || slot.dsp == nullptr)
+            if (! slot.on || slot.dsp == nullptr)
                 continue;
 
             // 로딩 중에 장치 설정이 바뀌었다면, 체인에 넣기 전에 다시 준비

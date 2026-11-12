@@ -23,7 +23,7 @@ namespace rig
     public:
         struct Chain
         {
-            // 실제로 처리할 블록만 순서대로 (바이패스/빈 슬롯은 제외된 상태)
+            // 실제로 처리할 블록만 순서대로 (꺼진 블록/미지정·로딩 안 된 블록은 제외된 상태)
             std::vector<std::shared_ptr<Block>> blocks;
         };
 

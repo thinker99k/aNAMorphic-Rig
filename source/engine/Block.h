@@ -9,13 +9,33 @@ namespace rig
     // 지금은 두 종류만. 공간계/다이나믹 등은 나중에 여기에 추가.
     enum class BlockType
     {
+        None,  // 미지정 블록 (통과, 처리 없음)
         Nam,   // .nam 캡처
         Ir     // .wav 임펄스 응답
     };
 
-    inline juce::String toString (BlockType t)    { return t == BlockType::Nam ? "nam" : "ir"; }
-    inline BlockType blockTypeFromString (const juce::String& s) { return s == "ir" ? BlockType::Ir : BlockType::Nam; }
-    inline juce::String displayName (BlockType t) { return t == BlockType::Nam ? "NAM capture" : "Impulse response"; }
+    inline juce::String toString (BlockType t)
+    {
+        switch (t)
+        {
+            case BlockType::Nam:  return "nam";
+            case BlockType::Ir:   return "ir";
+            case BlockType::None: break;
+        }
+
+        return "none";
+    }
+
+    // 모르는 값은 미지정 블록으로
+    inline BlockType blockTypeFromString (const juce::String& s)
+    {
+        if (s == "nam") return BlockType::Nam;
+        if (s == "ir")  return BlockType::Ir;
+        return BlockType::None;
+    }
+
+    // 파일을 지정해야 하는 종류인지 (NAM / IR)
+    inline bool usesFile (BlockType t) { return t == BlockType::Nam || t == BlockType::Ir; }
 
     // 체인에 들어가는 DSP 블록의 공통 인터페이스.
     //

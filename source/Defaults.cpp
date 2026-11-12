@@ -13,24 +13,13 @@ namespace rig::defaults
             return json.getDynamicObject() != nullptr && json.getProperty ("blocks", {}).isArray();
         }
 
-        // 기본 패치: 빈 NAM 블록 + 빈 IR 블록 ("file": "" = 아직 파일 미지정)
+        // 기본 패치: 블록 없음 (IN -> OUT)
         juce::String defaultPatchText (const juce::String& name)
         {
-            juce::Array<juce::var> blocks;
-
-            for (const auto* type : { "nam", "ir" })
-            {
-                auto obj = std::make_unique<juce::DynamicObject>();
-                obj->setProperty ("type", type);
-                obj->setProperty ("file", "");
-                obj->setProperty ("bypass", false);
-                blocks.add (juce::var (obj.release()));
-            }
-
             auto root = std::make_unique<juce::DynamicObject>();
             root->setProperty ("version", 1);
             root->setProperty ("name", name);
-            root->setProperty ("blocks", blocks);
+            root->setProperty ("blocks", juce::Array<juce::var>());
 
             return juce::JSON::toString (juce::var (root.release()));
         }

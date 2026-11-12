@@ -22,9 +22,9 @@ namespace rig
         struct Slot
         {
             juce::uint64 id = 0;                 // 슬롯 고유 번호 (비동기 로딩 결과를 찾을 때 사용)
-            BlockType type = BlockType::Nam;
-            juce::File file;                     // 비어 있으면 아직 파일 미지정
-            bool bypassed = false;
+            BlockType type = BlockType::None;
+            juce::File file;                     // None 이면 비어 있고, NAM / IR 이면 항상 지정되어 있다
+            bool on = true;                      // 블록별 값: 종류가 바뀌어도 블록에 남는다
 
             std::shared_ptr<Block> dsp;          // 로딩 완료된 DSP (없으면 통과)
             bool loading = false;
@@ -64,13 +64,15 @@ namespace rig
         const Slot* getSelectedSlot() const noexcept;
 
         void select (int index);
-        void addBlock (BlockType type);
+        void insertBlock (int index);   // 미지정(None) 블록을 index 자리에 넣고 선택한다
         void removeBlock (int index);
         void moveBlock (int index, int delta);
-        void setBypassed (int index, bool shouldBeBypassed);
-        void setFile (int index, const juce::File& file);
+        void setOn (int index, bool shouldBeOn);
 
-        // 오디오 장치(샘플레이트 등)가 바뀐 뒤 호출: 바이패스된 블록까지 다시 준비
+        // 블록에 장치를 지정한다. None 이면 file 은 무시되고 비워진다. 블록별 값(on)은 그대로
+        void assignBlock (int index, BlockType type, const juce::File& file);
+
+        // 오디오 장치(샘플레이트 등)가 바뀐 뒤 호출: 꺼진(Off) 블록까지 다시 준비
         void deviceChanged();
 
     private:

@@ -5,18 +5,50 @@ namespace rig
     namespace
     {
         constexpr int tileWidth = 150;
-        constexpr int gap = 28;          // 블록 사이 화살표 공간
-        constexpr int endWidth = 44;     // IN / OUT 표시 폭
+        constexpr int tileHeight = 72;
+        constexpr int endWidth = 64;     // IN / OUT 노드 폭
+        constexpr int gap = 44;          // 노드 사이 연결선 공간 ([+] 포함)
+        constexpr int plusSize = 18;
+        constexpr int margin = 8;
+        constexpr float corner = 8.0f;
 
         juce::Colour colourFor (BlockType t)
         {
-            return t == BlockType::Nam ? juce::Colour (0xffd9822b) : juce::Colour (0xff2b9bd9);
+            switch (t)
+            {
+                case BlockType::Nam:  return juce::Colour (0xffd9822b);
+                case BlockType::Ir:   return juce::Colour (0xff2b9bd9);
+                case BlockType::None: break;
+            }
+
+            return juce::Colours::black;
         }
 
-        void drawArrow (juce::Graphics& g, float x1, float x2, float y)
+        juce::String labelFor (BlockType t)
         {
-            g.setColour (juce::Colours::grey);
-            g.drawArrow ({ x1, y, x2, y }, 2.0f, 8.0f, 8.0f);
+            switch (t)
+            {
+                case BlockType::Nam:  return "NAM";
+                case BlockType::Ir:   return "IR";
+                case BlockType::None: break;
+            }
+
+            return {};
+        }
+
+        // 블록 안쪽을 빨간 빗금으로 채운다 (로딩 실패)
+        void drawErrorHatch (juce::Graphics& g, juce::Rectangle<float> bounds)
+        {
+            juce::Graphics::ScopedSaveState save (g);
+            juce::Path clip;
+            clip.addRoundedRectangle (bounds, corner);
+            g.reduceClipRegion (clip);
+
+            g.setColour (juce::Colours::red.withAlpha (0.35f));
+            const float h = bounds.getHeight();
+
+            for (float x = bounds.getX() - h; x < bounds.getRight(); x += 10.0f)
+                g.drawLine (x, bounds.getBottom(), x + h, bounds.getY(), 2.0f);
         }
     }
 
@@ -29,19 +61,20 @@ namespace rig
         {
             const auto& slot = model.getSlots()[(size_t) index];
 
-            bypassButton.setClickingTogglesState (true);
-            bypassButton.setToggleState (! slot.bypassed, juce::dontSendNotification);
-            bypassButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::green.darker());
-            bypassButton.onClick = [this] { model.setBypassed (index, ! bypassButton.getToggleState()); };
+            onButton.setClickingTogglesState (true);
+            onButton.setToggleState (slot.on, juce::dontSendNotification);
+            onButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::green.darker());
+            onButton.onClick = [this] { model.setOn (index, onButton.getToggleState()); };
 
             leftButton.onClick   = [this] { model.moveBlock (index, -1); };
             rightButton.onClick  = [this] { model.moveBlock (index, +1); };
             removeButton.onClick = [this] { model.removeBlock (index); };
 
+            onButton.setEnabled (slot.type != BlockType::None);   // 미지정 블록은 지정할 때까지 끌 수 없다
             leftButton.setEnabled (index > 0);
             rightButton.setEnabled (index < (int) model.getSlots().size() - 1);
 
-            for (auto* b : { &bypassButton, &leftButton, &rightButton, &removeButton })
+            for (auto* b : { &onButton, &leftButton, &rightButton, &removeButton })
                 addAndMakeVisible (b);
         }
 
@@ -51,44 +84,54 @@ namespace rig
         {
             const auto& slot = model.getSlots()[(size_t) index];
             const bool selected = model.getSelectedIndex() == index;
-            auto bounds = getLocalBounds().toFloat().reduced (1.0f);
+            const bool failed = slot.error.isNotEmpty();
+            auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
             auto base = colourFor (slot.type);
-            if (slot.bypassed)
+            if (! slot.on && slot.type != BlockType::None)
                 base = base.withSaturation (0.1f).darker (0.5f);
 
-            g.setColour (base.darker (0.6f));
-            g.fillRoundedRectangle (bounds, 8.0f);
-            g.setColour (selected ? juce::Colours::white : base);
-            g.drawRoundedRectangle (bounds, 8.0f, selected ? 3.0f : 1.5f);
+            g.setColour (slot.type == BlockType::None ? juce::Colours::black : base.darker (0.6f));
+            g.fillRoundedRectangle (bounds, corner);
 
-            auto text = getLocalBounds().reduced (10).withTrimmedBottom (34);
+            if (failed)
+                drawErrorHatch (g, bounds);
 
-            g.setColour (base.brighter (0.4f));
-            g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-            g.drawText ("#" + juce::String (index + 1) + "  " + (slot.type == BlockType::Nam ? "NAM" : "IR"),
-                        text.removeFromTop (18), juce::Justification::centredLeft);
+            // 테두리: 선택 = 흰색, 오류 = 빨강 (둘 다면 흰 테두리 안쪽에 빨강)
+            if (selected)
+                g.setColour (juce::Colours::white);
+            else if (failed)
+                g.setColour (juce::Colours::red);
+            else
+                g.setColour (slot.type == BlockType::None ? juce::Colours::grey.darker() : base);
 
-            g.setColour (juce::Colours::white);
-            g.setFont (juce::FontOptions (14.0f));
-            const auto name = slot.file == juce::File() ? juce::String ("(no file)") : slot.file.getFileNameWithoutExtension();
-            g.drawFittedText (name, text.removeFromTop (40), juce::Justification::topLeft, 2);
+            g.drawRoundedRectangle (bounds, corner, selected || failed ? 2.5f : 1.5f);
 
-            g.setFont (juce::FontOptions (12.0f));
-            g.setColour (slot.error.isNotEmpty() ? juce::Colours::red.brighter() : juce::Colours::lightgrey);
-            const auto status = slot.loading                ? juce::String ("loading...")
-                              : slot.error.isNotEmpty()      ? juce::String ("error")
-                              : slot.dsp != nullptr          ? (slot.bypassed ? juce::String ("bypassed") : juce::String ("active"))
-                                                             : juce::String ("pass-through");
-            g.drawText (status, text.removeFromTop (16), juce::Justification::centredLeft);
+            if (selected && failed)
+            {
+                g.setColour (juce::Colours::red);
+                g.drawRoundedRectangle (bounds.reduced (3.0f), corner - 2.0f, 2.0f);
+            }
+
+            auto text = getLocalBounds().reduced (10, 6).withTrimmedBottom (24);
+
+            g.setColour (slot.type == BlockType::None ? juce::Colours::grey : base.brighter (0.4f));
+            g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+            g.drawText ("#" + juce::String (index + 1) + "  " + labelFor (slot.type),
+                        text.removeFromTop (16), juce::Justification::centredLeft);
+
+            g.setColour (slot.type == BlockType::None ? juce::Colours::grey : juce::Colours::white);
+            g.setFont (juce::FontOptions (13.0f));
+            const auto name = slot.type == BlockType::None ? juce::String ("Empty") : slot.file.getFileNameWithoutExtension();
+            g.drawText (name, text, juce::Justification::centredLeft, true);
         }
 
         void resized() override
         {
-            auto row = getLocalBounds().reduced (8).removeFromBottom (26);
+            auto row = getLocalBounds().reduced (6).removeFromBottom (22);
             const int w = row.getWidth() / 4;
             leftButton.setBounds (row.removeFromLeft (w).reduced (1));
-            bypassButton.setBounds (row.removeFromLeft (w).reduced (1));
+            onButton.setBounds (row.removeFromLeft (w).reduced (1));
             rightButton.setBounds (row.removeFromLeft (w).reduced (1));
             removeButton.setBounds (row.reduced (1));
         }
@@ -96,70 +139,98 @@ namespace rig
     private:
         RigModel& model;
         const int index;
-        juce::TextButton bypassButton { "On" }, leftButton { "<" }, rightButton { ">" }, removeButton { "x" };
+        juce::TextButton onButton { "On" }, leftButton { "<" }, rightButton { ">" }, removeButton { "x" };
     };
 
     //==============================================================================
-    // 뷰포트 안에서 가로로 늘어나는 내용물
+    // 뷰포트 안에서 가로로 늘어나는 내용물: IN, 블록들, OUT 노드와 그 사이 연결선/[+]
     class ChainView::Strip final : public juce::Component
     {
     public:
-        Strip (RigModel& m, std::function<void()> onAdd) : model (m)
+        explicit Strip (RigModel& m) : model (m)
         {
-            addButton.onClick = std::move (onAdd);
-            addAndMakeVisible (addButton);
+            const int numBlocks = (int) model.getSlots().size();
 
-            for (int i = 0; i < (int) model.getSlots().size(); ++i)
+            for (int i = 0; i < numBlocks; ++i)
                 addAndMakeVisible (tiles.add (new Tile (model, i)));
+
+            // 연결선마다 하나: i 번째 [+] 는 블록 i 자리에 넣는다
+            for (int i = 0; i <= numBlocks; ++i)
+            {
+                auto* plus = plusButtons.add (new juce::TextButton ("+"));
+                plus->onClick = [this, i] { model.insertBlock (i); };
+                addAndMakeVisible (plus);
+            }
         }
 
         int idealWidth() const
         {
-            return 8 + endWidth + (tiles.size() + 1) * (gap + tileWidth) + gap + endWidth + 8;
+            return margin + endWidth + tiles.size() * (gap + tileWidth) + gap + endWidth + margin;
+        }
+
+        juce::Rectangle<int> tileBounds (int index) const
+        {
+            return tiles[index] != nullptr ? tiles[index]->getBounds() : juce::Rectangle<int>();
         }
 
         void paint (juce::Graphics& g) override
         {
-            const float midY = (float) getHeight() * 0.5f;
+            const auto y = nodeY();
+            const juce::Rectangle<int> inNode (margin, y, endWidth, tileHeight);
+            const juce::Rectangle<int> outNode (idealWidth() - margin - endWidth, y, endWidth, tileHeight);
 
-            g.setColour (juce::Colours::lightgrey);
-            g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-            g.drawText ("IN", 8, (int) midY - 10, endWidth, 20, juce::Justification::centred);
+            drawEndNode (g, inNode, "IN");
+            drawEndNode (g, outNode, "OUT");
 
-            // IN -> 타일들 -> [+ Add] -> OUT : 각 요소 앞에 화살표
-            float x = 8.0f + endWidth;
+            // 연결선: 각 [+] 의 왼쪽 노드 끝에서 오른쪽 노드 시작까지
+            const float midY = (float) y + tileHeight * 0.5f;
+            g.setColour (juce::Colours::grey);
 
             for (int i = 0; i <= tiles.size(); ++i)
             {
-                drawArrow (g, x + 2.0f, x + gap - 2.0f, midY);
-                x += gap + tileWidth;
+                const float x1 = (float) (margin + endWidth + i * (gap + tileWidth));
+                const float x2 = x1 + gap;
+                g.drawArrow ({ x1 + 2.0f, midY, x2 - 2.0f, midY }, 2.0f, 8.0f, 8.0f);
             }
-
-            drawArrow (g, x + 2.0f, x + gap - 2.0f, midY);
-
-            g.setColour (juce::Colours::lightgrey);
-            g.drawText ("OUT", (int) (x + gap), (int) midY - 10, endWidth, 20, juce::Justification::centred);
         }
 
         void resized() override
         {
-            const int tileHeight = juce::jmin (150, getHeight() - 24);
-            const int y = (getHeight() - tileHeight) / 2;
-            int x = 8 + endWidth + gap;
+            const int y = nodeY();
+            int x = margin + endWidth;
 
-            for (auto* t : tiles)
+            for (int i = 0; i <= tiles.size(); ++i)
             {
-                t->setBounds (x, y, tileWidth, tileHeight);
-                x += tileWidth + gap;
-            }
+                plusButtons[i]->setBounds (x + (gap - plusSize) / 2, y + (tileHeight - plusSize) / 2, plusSize, plusSize);
+                x += gap;
 
-            addButton.setBounds (x, y + tileHeight / 2 - 20, tileWidth, 40);
+                if (auto* t = tiles[i])
+                {
+                    t->setBounds (x, y, tileWidth, tileHeight);
+                    x += tileWidth;
+                }
+            }
         }
 
     private:
+        int nodeY() const { return (getHeight() - tileHeight) / 2; }
+
+        static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text)
+        {
+            const auto bounds = area.toFloat().reduced (1.5f);
+            g.setColour (juce::Colours::darkgrey.darker (0.5f));
+            g.fillRoundedRectangle (bounds, corner);
+            g.setColour (juce::Colours::grey);
+            g.drawRoundedRectangle (bounds, corner, 1.5f);
+
+            g.setColour (juce::Colours::lightgrey);
+            g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+            g.drawText (text, area, juce::Justification::centred);
+        }
+
         RigModel& model;
         juce::OwnedArray<Tile> tiles;
-        juce::TextButton addButton { "+ Add block" };
+        juce::OwnedArray<juce::TextButton> plusButtons;
     };
 
     //==============================================================================
@@ -185,32 +256,24 @@ namespace rig
     {
         // 블록 수가 작으므로 변경 때마다 통째로 다시 만든다 (단순함 우선)
         const auto scroll = viewport.getViewPosition();
-        strip = std::make_unique<Strip> (model, [this] { showAddMenu(); });
+        strip = std::make_unique<Strip> (model);
         viewport.setViewedComponent (strip.get(), false);
         resized();
         viewport.setViewPosition (scroll);
-    }
 
-    void ChainView::showAddMenu()
-    {
-        juce::PopupMenu menu;
-        menu.addSectionHeader ("Add block");
-        menu.addItem (1, "NAM capture (.nam)");
-        menu.addItem (2, "Impulse response (.wav)");
+        // 새로 선택된 블록(방금 넣은 블록 등)이 화면 밖이면 보이도록 스크롤
+        const auto* selected = model.getSelectedSlot();
+        const auto selectedId = selected != nullptr ? selected->id : 0;
 
-        juce::Component::SafePointer<ChainView> safeThis (this);
-
-        menu.showMenuAsync (juce::PopupMenu::Options(), [safeThis] (int result)
+        if (selectedId != shownSelectedId)
         {
-            if (safeThis == nullptr || result == 0)
-                return;
+            shownSelectedId = selectedId;
+            const auto tile = strip->tileBounds (model.getSelectedIndex());
+            const auto view = viewport.getViewArea();
 
-            safeThis->model.addBlock (result == 1 ? BlockType::Nam : BlockType::Ir);
-
-            // 새 블록이 보이도록 오른쪽 끝으로 스크롤
-            auto& vp = safeThis->viewport;
-            vp.setViewPosition (juce::jmax (0, vp.getViewedComponent()->getWidth() - vp.getViewWidth()), 0);
-        });
+            if (! tile.isEmpty() && (tile.getX() < view.getX() || tile.getRight() > view.getRight()))
+                viewport.setViewPosition (juce::jmax (0, tile.getCentreX() - view.getWidth() / 2), 0);
+        }
     }
 
     void ChainView::paint (juce::Graphics& g)
