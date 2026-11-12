@@ -26,7 +26,7 @@ namespace rig
             juce::File file;                     // None 이면 비어 있고, NAM / IR 이면 항상 지정되어 있다
             bool on = true;                      // 블록별 값: 종류가 바뀌어도 블록에 남는다
 
-            std::shared_ptr<Block> dsp;          // 로딩 완료된 DSP (없으면 통과)
+            std::shared_ptr<Block> dsp;          // 소리를 내는 DSP (없으면 통과). 새 파일을 로딩하는 동안은 옛 DSP 를 그대로 둔다
             bool loading = false;
             juce::String error;
             int loadGeneration = 0;              // 늦게 도착한 옛 로딩 결과를 버리기 위함
@@ -93,6 +93,7 @@ namespace rig
         bool outputMuted = false;               // loadPatch() 에서 초기화하지 않는다
         std::vector<Slot> slots;
         int selectedIndex = -1;
+        bool waitingForPatch = false;           // 패치 전환 후 새 패치 블록이 다 로딩될 때까지 옛 소리 유지
         juce::uint64 nextSlotId = 1;
 
         JUCE_DECLARE_WEAK_REFERENCEABLE (RigModel)

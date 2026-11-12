@@ -2,6 +2,8 @@
 
 #include <juce_core/juce_core.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cmath>
 
 namespace rig
@@ -65,10 +67,51 @@ namespace rig
             return std::abs (lastSampleRate - sampleRate) > 0.5 || lastBlockSize != maxBlockSize;
         }
 
+        // On/Off = 블록 출력(wet)과 입력(dry)을 섞는 비율. 꺼져 있어도 블록은 계속 계산한다
+        // (NAM 은 내부 상태가 있어서, 멈췄다 켜면 옛 상태가 잠깐 들린다)
+        //  - setOn() : 메시지 스레드. immediately 는 오디오 스레드가 아직 쓰지 않는 블록에만 (새로 로딩된 블록 등)
+        //  - processMixed() : 오디오 스레드. 목표가 바뀌면 rampSamples 동안 등전력(sin/cos) 곡선으로 넘어간다
+        void setOn (bool shouldBeOn, bool immediately = false) noexcept
+        {
+            onTarget.store (shouldBeOn, std::memory_order_relaxed);
+            if (immediately)
+                mix = shouldBeOn ? 1.0f : 0.0f;
+        }
+
+        void processMixed (const float* in, float* out, int numSamples, int rampSamples) noexcept
+        {
+            process (in, out, numSamples);
+
+            const bool on = onTarget.load (std::memory_order_relaxed);
+
+            if (on && mix >= 1.0f)
+                return;
+
+            if (! on && mix <= 0.0f)
+            {
+                std::copy (in, in + numSamples, out);   // 꺼진 상태 유지: 계산은 했고 출력은 dry
+                return;
+            }
+
+            const float target = on ? 1.0f : 0.0f;
+
+            const float step = 1.0f / (float) (rampSamples > 0 ? rampSamples : 1);
+            constexpr float halfPi = 1.57079632679489661923f;
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+                mix = target > mix ? std::fmin (target, mix + step) : std::fmax (target, mix - step);
+                out[i] = out[i] * std::sin (mix * halfPi) + in[i] * std::cos (mix * halfPi);
+            }
+        }
+
     protected:
         void rememberPrepare (double sr, int bs) noexcept { lastSampleRate = sr; lastBlockSize = bs; }
 
     private:
+        std::atomic<bool> onTarget { true };
+        float mix = 1.0f;   // 오디오 스레드 전용: 0 = dry, 1 = wet
+
         double lastSampleRate = 0.0;
         int lastBlockSize = 0;
     };

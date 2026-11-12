@@ -131,6 +131,8 @@ namespace rig
         engine.setInputGainDb (inputGainDb);
         engine.setOutputGainDb (outputMuted ? AudioEngine::outputMinDb : outputGainDb);
 
+        // 새 패치의 블록이 모두 준비(또는 실패)될 때까지 옛 패치 소리를 유지했다가 한 번에 크로스페이드
+        waitingForPatch = true;
         rebuildChain();
         sendChangeMessage();
     }
@@ -224,6 +226,11 @@ namespace rig
 
         std::swap (slots[(size_t) index], slots[(size_t) target]);
         selectedIndex = target;
+
+        // 같은 인스턴스를 바뀐 순서로 동시에 처리할 수 없으므로, 두 블록을 새로 로딩해 크로스페이드한다.
+        // 로딩되는 동안은 옛 순서 그대로 소리가 난다
+        startLoading (slots[(size_t) index]);
+        startLoading (slots[(size_t) target]);
         changed();
     }
 
@@ -232,8 +239,15 @@ namespace rig
         if (! juce::isPositiveAndBelow (index, (int) slots.size()))
             return;
 
-        slots[(size_t) index].on = shouldBeOn;
-        changed();
+        // 프로그램은 그대로 두고 블록의 wet/dry 목표만 바꾼다 (오디오 스레드가 크로스페이드)
+        auto& slot = slots[(size_t) index];
+        slot.on = shouldBeOn;
+
+        if (slot.dsp != nullptr)
+            slot.dsp->setOn (shouldBeOn);
+
+        savePatch();
+        sendChangeMessage();
     }
 
     void RigModel::assignBlock (int index, BlockType type, const juce::File& file)
@@ -264,9 +278,9 @@ namespace rig
         const auto sr = engine.getSampleRate();
         const auto bs = engine.getMaxBlockSize();
 
-        // 체인에 들어 있는 블록(On)은 엔진이 이미 다시 준비했으므로, 꺼진 블록만 처리
+        // 엔진이 처리 중인 블록은 엔진이 이미 다시 준비했으므로, 나머지(아직 엔진에 넘기지 않은 블록)만 처리
         for (auto& slot : slots)
-            if (slot.dsp != nullptr && ! slot.on
+            if (slot.dsp != nullptr && ! engine.isInUse (slot.dsp.get())
                 && slot.dsp->needsPrepare (sr, bs))
                 slot.dsp->prepare (sr, bs);
 
@@ -277,12 +291,16 @@ namespace rig
     void RigModel::startLoading (Slot& slot)
     {
         ++slot.loadGeneration;
-        slot.dsp.reset();
         slot.error.clear();
         slot.loading = false;
 
         if (! usesFile (slot.type) || slot.file == juce::File())
+        {
+            slot.dsp.reset();
             return;
+        }
+
+        // slot.dsp(옛 DSP)는 새 DSP 가 준비될 때까지 그대로 소리를 낸다 (onLoaded 에서 크로스페이드로 교체)
 
         slot.loading = true;
 
@@ -328,30 +346,33 @@ namespace rig
         it->dsp = block;
         it->error = error;
 
+        // 아직 오디오 스레드가 쓰지 않는 새 블록이므로 On/Off 를 바로 맞춘다
+        if (block != nullptr)
+            block->setOn (it->on, true);
+
         rebuildChain();
         sendChangeMessage();
     }
 
     void RigModel::rebuildChain()
     {
-        const auto sr = engine.getSampleRate();
-        const auto bs = engine.getMaxBlockSize();
-
-        auto chain = std::make_unique<AudioEngine::Chain>();
-
-        for (auto& slot : slots)
+        if (waitingForPatch)
         {
-            if (! slot.on || slot.dsp == nullptr)
-                continue;
+            if (std::any_of (slots.begin(), slots.end(), [] (const Slot& s) { return s.loading; }))
+                return;
 
-            // 로딩 중에 장치 설정이 바뀌었다면, 체인에 넣기 전에 다시 준비
-            if (slot.dsp->needsPrepare (sr, bs))
-                slot.dsp->prepare (sr, bs);
-
-            chain->blocks.push_back (slot.dsp);
+            waitingForPatch = false;
         }
 
-        engine.setChain (std::move (chain));
+        // 엔진이 지금 소리와 비교해 바뀐 구간만 크로스페이드한다 (장치 설정에 맞춘 준비도 엔진에서).
+        // 꺼진 블록도 계속 계산하므로 프로그램에 넣는다 (On/Off 는 블록의 wet/dry)
+        AudioEngine::Program program;
+
+        for (auto& slot : slots)
+            if (slot.dsp != nullptr)
+                program.push_back (slot.dsp);
+
+        engine.setProgram (std::move (program));
     }
 
     void RigModel::changed()
