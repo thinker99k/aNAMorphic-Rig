@@ -12,7 +12,27 @@ namespace rig
 
     BlockEditor::BlockEditor (RigModel& m) : model (m)
     {
-        title.setFont (juce::FontOptions (16.0f, juce::Font::bold));
+        // 탭 순서 = 이 순서. 파일 없는 카테고리는 장치 목록만 채우면 된다
+        categories = {
+            { "Empty", false, BlockType::None, { { "Empty (pass-through)", BlockType::None } } },
+            { "NAM",   true,  BlockType::Nam,  {} },
+            { "IR",    true,  BlockType::Ir,   {} },
+        };
+
+        for (int i = 0; i < (int) categories.size(); ++i)
+        {
+            auto* tab = tabs.add (new juce::TextButton (categories[(size_t) i].name));
+            tab->setColour (juce::TextButton::buttonOnColourId, findColour (juce::TextEditor::highlightColourId));
+
+            // 둘러보기만: 블록 지정은 목록에서 더블클릭할 때
+            tab->onClick = [this, i]
+            {
+                shownCategoryIndex = i;
+                showCategory (true);
+            };
+
+            addAndMakeVisible (tab);
+        }
 
         // 기본 열 폭 비율 (NAM 2:2:1:1:1). 사용자가 바꾼 폭은 이 표 객체에 남아 프로그램이 꺼질 때까지 유지된다
         const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable
@@ -38,7 +58,10 @@ namespace rig
             addChildComponent (list);
         }
 
-        addAndMakeVisible (title);
+        deviceList.setModel (&deviceListModel);
+        deviceList.setRowHeight (24);
+        deviceList.setOutlineThickness (1);
+        addChildComponent (deviceList);
 
         model.addChangeListener (this);
         refresh();
@@ -49,6 +72,7 @@ namespace rig
         model.removeChangeListener (this);
         namList.setModel (nullptr);
         irList.setModel (nullptr);
+        deviceList.setModel (nullptr);
     }
 
     void BlockEditor::changeListenerCallback (juce::ChangeBroadcaster*)
@@ -106,28 +130,92 @@ namespace rig
         updateFromModel();
     }
 
-    // 모델 변경 알림마다 호출: 캐시에서 선택된 블록 종류의 목록을 고른다 (폴더 스캔 없음)
+    int BlockEditor::categoryFor (BlockType type) const
+    {
+        for (size_t i = 0; i < categories.size(); ++i)
+        {
+            const auto& c = categories[i];
+
+            if (c.usesFiles ? c.fileType == type
+                            : std::any_of (c.devices.begin(), c.devices.end(), [type] (const Device& d) { return d.type == type; }))
+                return (int) i;
+        }
+
+        return 0;
+    }
+
+    // 모델 변경 알림마다 호출. 둘러보던 탭은 선택 블록이나 그 종류/파일이 바뀌었을 때만 블록의 카테고리로 되돌린다
     void BlockEditor::updateFromModel()
     {
         const auto* slot = model.getSelectedSlot();
+        const bool enabled = slot != nullptr;
+
+        for (auto* c : std::initializer_list<juce::Component*> { &namList, &irList, &deviceList })
+        {
+            c->setEnabled (enabled);
+            c->setAlpha (enabled ? 1.0f : 0.4f);
+        }
+
+        for (auto* tab : tabs)
+        {
+            tab->setEnabled (enabled);
+            tab->setAlpha (enabled ? 1.0f : 0.4f);
+        }
 
         if (slot == nullptr)
         {
-            namList.setVisible (false);
-            irList.setVisible (false);
-            title.setText ("No block selected. Click a block in the chain, or add one with \"+ Add block\".",
-                           juce::dontSendNotification);
             shownSlotId = 0;
+            shownCategoryIndex = categoryFor (BlockType::None);
+            showCategory (true);
             return;
         }
 
-        const bool isNam = slot->type == BlockType::Nam;
-        rowsType = slot->type;
-        namList.setVisible (isNam);
-        irList.setVisible (! isNam);
+        const bool reset = slot->id != shownSlotId || slot->type != shownType || slot->file != shownFile;
 
-        title.setText ("Block #" + juce::String (model.getSelectedIndex() + 1) + "  -  " + displayName (slot->type),
-                       juce::dontSendNotification);
+        if (reset)
+        {
+            shownSlotId = slot->id;
+            shownType = slot->type;
+            shownFile = slot->file;
+            shownCategoryIndex = categoryFor (slot->type);
+        }
+
+        showCategory (reset);
+    }
+
+    // shownCategoryIndex 의 탭과 목록을 보여준다 (파일 표는 캐시에서 다시 고른다, 폴더 스캔 없음).
+    // resetHighlight 면 강조를 선택 블록의 현재 장치/파일로 (이 카테고리에 없으면 강조 없음)
+    void BlockEditor::showCategory (bool resetHighlight)
+    {
+        const auto* slot = model.getSelectedSlot();
+        const auto& category = shownCategory();
+        const bool slotInCategory = slot != nullptr && categoryFor (slot->type) == shownCategoryIndex;
+
+        for (int i = 0; i < tabs.size(); ++i)
+            tabs[i]->setToggleState (i == shownCategoryIndex, juce::dontSendNotification);
+
+        namList.setVisible (category.usesFiles && category.fileType == BlockType::Nam);
+        irList.setVisible (category.usesFiles && category.fileType == BlockType::Ir);
+        deviceList.setVisible (! category.usesFiles);
+
+        if (! category.usesFiles)
+        {
+            deviceList.updateContent();
+
+            if (resetHighlight)
+            {
+                deviceList.deselectAllRows();
+
+                for (size_t i = 0; i < category.devices.size(); ++i)
+                    if (slotInCategory && category.devices[i].type == slot->type)
+                        deviceList.selectRow ((int) i);
+            }
+
+            deviceList.repaint();
+            return;
+        }
+
+        const bool isNam = category.fileType == BlockType::Nam;
 
         // 파일 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일
         rows = isNam ? namEntries : irEntries;
@@ -141,7 +229,7 @@ namespace rig
             return -1;
         };
 
-        if (slot->file != juce::File() && findRow (slot->file) < 0)
+        if (slotInCategory && findRow (slot->file) < 0)
         {
             if (outsideEntry.file != slot->file)
                 outsideEntry = makeEntry (slot->file, isNam);
@@ -157,13 +245,10 @@ namespace rig
         // 그대로 두면 머리글 오른쪽에 스크롤바 폭만큼 빈 열이 남으므로 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
         list.resized();
 
-        if (slot->id != shownSlotId || slot->file != shownFile)
+        if (resetHighlight)
         {
-            shownSlotId = slot->id;
-            shownFile = slot->file;
-
             list.deselectAllRows();
-            const int current = findRow (slot->file);
+            const int current = slotInCategory ? findRow (slot->file) : -1;
             if (current >= 0)
                 list.selectRow (current);
         }
@@ -185,6 +270,37 @@ namespace rig
 
         g.setColour (juce::Colours::grey.withAlpha (0.25f));
         g.drawHorizontalLine (height - 1, 0.0f, (float) width);
+    }
+
+    int BlockEditor::DeviceListModel::getNumRows()
+    {
+        return (int) owner.shownCategory().devices.size();
+    }
+
+    void BlockEditor::DeviceListModel::paintListBoxItem (int row, juce::Graphics& g, int width, int height, bool selected)
+    {
+        const auto& devices = owner.shownCategory().devices;
+
+        if (! juce::isPositiveAndBelow (row, (int) devices.size()))
+            return;
+
+        owner.paintRowBackground (g, row, width, height, selected);
+
+        g.setColour (selected ? owner.findColour (juce::TextEditor::highlightedTextColourId)
+                              : owner.findColour (juce::ListBox::textColourId));
+        g.setFont (14.0f);
+        g.drawText (devices[(size_t) row].name, 6, 0, juce::jmax (0, width - 12), height,
+                    juce::Justification::centredLeft, true);
+    }
+
+    void BlockEditor::DeviceListModel::listBoxItemDoubleClicked (int row, const juce::MouseEvent&)
+    {
+        const auto& devices = owner.shownCategory().devices;
+
+        if (owner.model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) devices.size()))
+            return;
+
+        owner.model.assignBlock (owner.model.getSelectedIndex(), devices[(size_t) row].type, {});
     }
 
     void BlockEditor::paintCell (juce::Graphics& g, int row, int columnId, int width, int height, bool selected)
@@ -221,8 +337,8 @@ namespace rig
             return;
         }
 
-        // 같은 파일이어도 막지 않는다 (로딩 실패 후 다시 시도). 중복 로딩은 RigModel::setFile 이 막는다
-        model.setFile (model.getSelectedIndex(), file);
+        // 같은 파일이어도 막지 않는다 (로딩 실패 후 다시 시도). 중복 로딩은 RigModel::assignBlock 이 막는다
+        model.assignBlock (model.getSelectedIndex(), shownCategory().fileType, file);
     }
 
     void BlockEditor::sortOrderChanged (int, bool)
@@ -309,13 +425,28 @@ namespace rig
 
     void BlockEditor::resized()
     {
-        // 아래 여백 = 좌우 여백 (12)
-        auto area = getLocalBounds().withTrimmedTop (10).reduced (12, 0).withTrimmedBottom (12);
+        // 눈에 보이는 간격을 위쪽 빈 공간(구분선 1 px 아래 11 px)에 맞춘다:
+        //  - 위: 12 = 구분선 1 + 빈 공간 11
+        //  - 왼쪽/오른쪽 끝: 10 + 창 테두리 1 px(배경과 같은 색) = 11
+        //  - 탭-목록: 11
+        constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
+        auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        title.setBounds (area.removeFromTop (24));
-        area.removeFromTop (6);
+        // 탭 열은 가장 긴 탭 이름이 들어갈 만큼만
+        constexpr int tabHeight = 28;
+        int tabWidth = 0;
+
+        for (auto* tab : tabs)
+            tabWidth = juce::jmax (tabWidth, tab->getBestWidthForHeight (tabHeight));
+
+        auto tabColumn = area.removeFromLeft (tabWidth);
+        area.removeFromLeft (middleGap);
+
+        for (auto* tab : tabs)
+            tab->setBounds (tabColumn.removeFromTop (tabHeight).withTrimmedBottom (2));
 
         namList.setBounds (area);
         irList.setBounds (area);
+        deviceList.setBounds (area);
     }
 }
