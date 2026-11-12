@@ -9,7 +9,8 @@ namespace rig
           engine (e),
           model (m),
           topBar (RigModel::numPatches),
-          chainView (m),
+          chainView (m, dm),
+          paramBar (m),
           blockEditor (m)
     {
         topBar.setPatchNumber (model.getPatchNumber());
@@ -54,6 +55,7 @@ namespace rig
 
         addAndMakeVisible (topBar);
         addAndMakeVisible (chainView);
+        addAndMakeVisible (paramBar);
         addAndMakeVisible (blockEditor);
         addAndMakeVisible (sceneBar);
         addAndMakeVisible (statusBar);
@@ -111,9 +113,10 @@ namespace rig
         topBar.setBounds (area.removeFromTop (40));
         statusBar.setBounds (area.removeFromBottom (statusBarHeight));
 
-        // 패치 맵 : 블록 선택기 : 씬 바 = 4 : 3 : 1
+        // 패치 맵 : 파라미터 바 : 블록 선택기 : 씬 바 = 3 : 1 : 3 : 1
         const int unit = area.getHeight() / 8;
-        chainView.setBounds (area.removeFromTop (unit * 4));
+        chainView.setBounds (area.removeFromTop (unit * 3));
+        paramBar.setBounds (area.removeFromTop (unit));
         sceneBar.setBounds (area.removeFromBottom (unit));
         blockEditor.setBounds (area);
     }

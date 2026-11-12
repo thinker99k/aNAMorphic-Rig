@@ -137,6 +137,7 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/TopBar.cpp
         source/ui/SettingsDialog.cpp
         source/ui/ChainView.cpp
+        source/ui/ParamBar.cpp
         source/ui/BlockEditor.cpp
         source/ui/StatusBar.cpp
         source/ui/GainKnob.cpp)

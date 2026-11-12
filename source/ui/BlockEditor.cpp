@@ -23,7 +23,6 @@ namespace rig
         {
             auto* tab = tabs.add (new juce::TextButton (categories[(size_t) i].name));
             tab->setColour (juce::TextButton::buttonOnColourId, findColour (juce::TextEditor::highlightColourId));
-            tab->setConnectedEdges (juce::Button::ConnectedOnRight);
 
             // 둘러보기만: 블록 지정은 목록에서 더블클릭할 때
             tab->onClick = [this, i]
@@ -426,8 +425,12 @@ namespace rig
 
     void BlockEditor::resized()
     {
-        // 아래 여백 = 좌우 여백 (12)
-        auto area = getLocalBounds().withTrimmedTop (10).reduced (12, 0).withTrimmedBottom (12);
+        // 눈에 보이는 간격을 위쪽 빈 공간(구분선 1 px 아래 11 px)에 맞춘다:
+        //  - 위: 12 = 구분선 1 + 빈 공간 11
+        //  - 왼쪽/오른쪽 끝: 10 + 창 테두리 1 px(배경과 같은 색) = 11
+        //  - 탭-목록: 11
+        constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
+        auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
         // 탭 열은 가장 긴 탭 이름이 들어갈 만큼만
         constexpr int tabHeight = 28;
@@ -437,7 +440,7 @@ namespace rig
             tabWidth = juce::jmax (tabWidth, tab->getBestWidthForHeight (tabHeight));
 
         auto tabColumn = area.removeFromLeft (tabWidth);
-        area.removeFromLeft (6);
+        area.removeFromLeft (middleGap);
 
         for (auto* tab : tabs)
             tab->setBounds (tabColumn.removeFromTop (tabHeight).withTrimmedBottom (2));

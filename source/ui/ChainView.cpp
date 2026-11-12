@@ -6,7 +6,7 @@ namespace rig
     {
         constexpr int tileWidth = 150;
         constexpr int tileHeight = 72;
-        constexpr int endWidth = 64;     // IN / OUT 노드 폭
+        constexpr int endWidth = 76;     // IN / OUT 노드 폭 (채널 번호 포함)
         constexpr int gap = 44;          // 노드 사이 연결선 공간 ([+] 포함)
         constexpr int plusSize = 18;
         constexpr int margin = 8;
@@ -36,6 +36,56 @@ namespace rig
             return {};
         }
 
+        // 쓰고 있는 채널 번호 (1부터): 연속 2개 = "1+2", 3개 이상 = "1-4", 떨어져 있으면 ", " 로 구분
+        juce::String formatChannels (const juce::BigInteger& channels)
+        {
+            juce::StringArray parts;
+
+            for (int first = channels.findNextSetBit (0); first >= 0;)
+            {
+                const int end = channels.findNextClearBit (first);   // 연속 구간 끝 (포함 안 함)
+                const int count = end - first;
+
+                parts.add (count == 1 ? juce::String (first + 1)
+                         : count == 2 ? juce::String (first + 1) + "+" + juce::String (first + 2)
+                                      : juce::String (first + 1) + "-" + juce::String (end));
+
+                first = channels.findNextSetBit (end);
+            }
+
+            return parts.isEmpty() ? juce::String ("-") : parts.joinIntoString (", ");
+        }
+
+        // 블록 오른쪽 위 귀퉁이에 박힌 삭제 칸: 블록의 바깥 테두리와 둥근 귀퉁이를 같이 쓰고,
+        // 왼쪽/아래에만 구분선이 있다. 블록 테두리는 Tile::paintOverChildren 에서 이 위에 그린다
+        struct CornerDeleteButton final : public juce::Button
+        {
+            CornerDeleteButton() : juce::Button ("X") {}
+
+            void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+            {
+                // 블록 테두리 선(타일 가장자리에서 1.5 px 안쪽)에 맞춘 영역
+                const auto area = getLocalBounds().toFloat().withTrimmedTop (1.5f).withTrimmedRight (1.5f);
+
+                juce::Path shape;
+                shape.addRoundedRectangle (area.getX(), area.getY(), area.getWidth(), area.getHeight(),
+                                           corner, corner, false, true, false, false);
+
+                g.setColour (down        ? juce::Colours::red.darker (0.3f)
+                           : highlighted ? juce::Colours::red.darker (0.1f)
+                                         : juce::Colours::black.withAlpha (0.35f));
+                g.fillPath (shape);
+
+                g.setColour (juce::Colours::grey.withAlpha (0.7f));
+                g.drawVerticalLine (0, area.getY(), area.getBottom());
+                g.drawHorizontalLine (getHeight() - 1, 0.0f, area.getRight());
+
+                g.setColour (juce::Colours::white.withAlpha (highlighted || down ? 1.0f : 0.8f));
+                g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+                g.drawText ("X", area.toNearestInt(), juce::Justification::centred);
+            }
+        };
+
         // 블록 안쪽을 빨간 빗금으로 채운다 (로딩 실패)
         void drawErrorHatch (juce::Graphics& g, juce::Rectangle<float> bounds)
         {
@@ -59,22 +109,14 @@ namespace rig
     public:
         Tile (RigModel& m, int i) : model (m), index (i)
         {
-            const auto& slot = model.getSlots()[(size_t) index];
-
-            onButton.setClickingTogglesState (true);
-            onButton.setToggleState (slot.on, juce::dontSendNotification);
-            onButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::green.darker());
-            onButton.onClick = [this] { model.setOn (index, onButton.getToggleState()); };
-
             leftButton.onClick   = [this] { model.moveBlock (index, -1); };
             rightButton.onClick  = [this] { model.moveBlock (index, +1); };
             removeButton.onClick = [this] { model.removeBlock (index); };
 
-            onButton.setEnabled (slot.type != BlockType::None);   // 미지정 블록은 지정할 때까지 끌 수 없다
             leftButton.setEnabled (index > 0);
             rightButton.setEnabled (index < (int) model.getSlots().size() - 1);
 
-            for (auto* b : { &onButton, &leftButton, &rightButton, &removeButton })
+            for (auto* b : std::initializer_list<juce::Component*> { &leftButton, &rightButton, &removeButton })
                 addAndMakeVisible (b);
         }
 
@@ -83,7 +125,6 @@ namespace rig
         void paint (juce::Graphics& g) override
         {
             const auto& slot = model.getSlots()[(size_t) index];
-            const bool selected = model.getSelectedIndex() == index;
             const bool failed = slot.error.isNotEmpty();
             auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
@@ -96,6 +137,32 @@ namespace rig
 
             if (failed)
                 drawErrorHatch (g, bounds);
+
+            auto text = getLocalBounds().reduced (10, 6).withTrimmedBottom (24);
+
+            g.setColour (slot.type == BlockType::None ? juce::Colours::grey : base.brighter (0.4f));
+            g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+            g.drawText ("#" + juce::String (index + 1) + "  " + labelFor (slot.type),
+                        text.removeFromTop (16).withTrimmedRight (removeWidth),   // 윗줄 오른쪽 = 삭제 칸
+                        juce::Justification::centredLeft);
+
+            g.setColour (slot.type == BlockType::None ? juce::Colours::grey : juce::Colours::white);
+            g.setFont (juce::FontOptions (13.0f));
+            const auto name = slot.type == BlockType::None ? juce::String ("Empty") : slot.file.getFileNameWithoutExtension();
+            g.drawText (name, text, juce::Justification::centredLeft, true);
+        }
+
+        // 테두리는 버튼(삭제 칸) 위에 그려야 귀퉁이 칸이 블록 테두리를 같이 쓰는 것처럼 보인다
+        void paintOverChildren (juce::Graphics& g) override
+        {
+            const auto& slot = model.getSlots()[(size_t) index];
+            const bool selected = model.getSelectedIndex() == index;
+            const bool failed = slot.error.isNotEmpty();
+            const auto bounds = getLocalBounds().toFloat().reduced (1.5f);
+
+            auto base = colourFor (slot.type);
+            if (! slot.on && slot.type != BlockType::None)
+                base = base.withSaturation (0.1f).darker (0.5f);
 
             // 테두리: 선택 = 흰색, 오류 = 빨강 (둘 다면 흰 테두리 안쪽에 빨강)
             if (selected)
@@ -112,34 +179,24 @@ namespace rig
                 g.setColour (juce::Colours::red);
                 g.drawRoundedRectangle (bounds.reduced (3.0f), corner - 2.0f, 2.0f);
             }
-
-            auto text = getLocalBounds().reduced (10, 6).withTrimmedBottom (24);
-
-            g.setColour (slot.type == BlockType::None ? juce::Colours::grey : base.brighter (0.4f));
-            g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-            g.drawText ("#" + juce::String (index + 1) + "  " + labelFor (slot.type),
-                        text.removeFromTop (16), juce::Justification::centredLeft);
-
-            g.setColour (slot.type == BlockType::None ? juce::Colours::grey : juce::Colours::white);
-            g.setFont (juce::FontOptions (13.0f));
-            const auto name = slot.type == BlockType::None ? juce::String ("Empty") : slot.file.getFileNameWithoutExtension();
-            g.drawText (name, text, juce::Justification::centredLeft, true);
         }
 
         void resized() override
         {
+            // 삭제 칸은 블록 오른쪽 위 귀퉁이에 딱 붙인다
+            removeButton.setBounds (getWidth() - removeWidth, 0, removeWidth, removeHeight);
+
             auto row = getLocalBounds().reduced (6).removeFromBottom (22);
-            const int w = row.getWidth() / 4;
-            leftButton.setBounds (row.removeFromLeft (w).reduced (1));
-            onButton.setBounds (row.removeFromLeft (w).reduced (1));
-            rightButton.setBounds (row.removeFromLeft (w).reduced (1));
-            removeButton.setBounds (row.reduced (1));
+            leftButton.setBounds (row.removeFromLeft (row.getWidth() / 2).reduced (1));
+            rightButton.setBounds (row.reduced (1));
         }
 
     private:
         RigModel& model;
         const int index;
-        juce::TextButton onButton { "On" }, leftButton { "<" }, rightButton { ">" }, removeButton { "x" };
+        static constexpr int removeWidth = 36, removeHeight = 20;
+        juce::TextButton leftButton { "<" }, rightButton { ">" };
+        CornerDeleteButton removeButton;
     };
 
     //==============================================================================
@@ -147,7 +204,8 @@ namespace rig
     class ChainView::Strip final : public juce::Component
     {
     public:
-        explicit Strip (RigModel& m) : model (m)
+        Strip (RigModel& m, juce::String inChannels, juce::String outChannels)
+            : model (m), inText (std::move (inChannels)), outText (std::move (outChannels))
         {
             const int numBlocks = (int) model.getSlots().size();
 
@@ -179,8 +237,8 @@ namespace rig
             const juce::Rectangle<int> inNode (margin, y, endWidth, tileHeight);
             const juce::Rectangle<int> outNode (idealWidth() - margin - endWidth, y, endWidth, tileHeight);
 
-            drawEndNode (g, inNode, "IN");
-            drawEndNode (g, outNode, "OUT");
+            drawEndNode (g, inNode, "IN", inText);
+            drawEndNode (g, outNode, "OUT", outText);
 
             // 연결선: 각 [+] 의 왼쪽 노드 끝에서 오른쪽 노드 시작까지
             const float midY = (float) y + tileHeight * 0.5f;
@@ -215,7 +273,7 @@ namespace rig
     private:
         int nodeY() const { return (getHeight() - tileHeight) / 2; }
 
-        static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text)
+        static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& title, const juce::String& channels)
         {
             const auto bounds = area.toFloat().reduced (1.5f);
             g.setColour (juce::Colours::darkgrey.darker (0.5f));
@@ -223,27 +281,34 @@ namespace rig
             g.setColour (juce::Colours::grey);
             g.drawRoundedRectangle (bounds, corner, 1.5f);
 
+            auto text = area.withSizeKeepingCentre (area.getWidth() - 8, 34);
             g.setColour (juce::Colours::lightgrey);
             g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-            g.drawText (text, area, juce::Justification::centred);
+            g.drawText (title, text.removeFromTop (17), juce::Justification::centred);
+            g.setColour (juce::Colours::grey.brighter (0.2f));
+            g.setFont (juce::FontOptions (12.0f));
+            g.drawFittedText (channels, text, juce::Justification::centred, 1, 0.8f);
         }
 
         RigModel& model;
+        const juce::String inText, outText;
         juce::OwnedArray<Tile> tiles;
         juce::OwnedArray<juce::TextButton> plusButtons;
     };
 
     //==============================================================================
-    ChainView::ChainView (RigModel& m) : model (m)
+    ChainView::ChainView (RigModel& m, juce::AudioDeviceManager& dm) : model (m), deviceManager (dm)
     {
         viewport.setScrollBarsShown (false, true);
         addAndMakeVisible (viewport);
         model.addChangeListener (this);
+        deviceManager.addChangeListener (this);
         rebuild();
     }
 
     ChainView::~ChainView()
     {
+        deviceManager.removeChangeListener (this);
         model.removeChangeListener (this);
     }
 
@@ -256,7 +321,15 @@ namespace rig
     {
         // 블록 수가 작으므로 변경 때마다 통째로 다시 만든다 (단순함 우선)
         const auto scroll = viewport.getViewPosition();
-        strip = std::make_unique<Strip> (model);
+        juce::String inChannels ("-"), outChannels ("-");
+
+        if (auto* device = deviceManager.getCurrentAudioDevice())
+        {
+            inChannels = formatChannels (device->getActiveInputChannels());
+            outChannels = formatChannels (device->getActiveOutputChannels());
+        }
+
+        strip = std::make_unique<Strip> (model, inChannels, outChannels);
         viewport.setViewedComponent (strip.get(), false);
         resized();
         viewport.setViewPosition (scroll);
