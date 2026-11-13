@@ -12,27 +12,20 @@ namespace rig
 
     BlockEditor::BlockEditor (RigModel& m) : model (m)
     {
-        // 탭 순서 = 이 순서. 파일 없는 카테고리는 장치 목록만 채우면 된다
+        // 카테고리 목록 순서 = 이 순서. 카테고리 추가는 여기에 한 줄 (파일 없는 카테고리는 장치 목록만 채우면 된다)
         categories = {
             { "Empty", false, BlockType::None, { { "Empty (pass-through)", BlockType::None } } },
             { "NAM",   true,  BlockType::Nam,  {} },
             { "IR",    true,  BlockType::Ir,   {} },
         };
 
-        for (int i = 0; i < (int) categories.size(); ++i)
-        {
-            auto* tab = tabs.add (new juce::TextButton (categories[(size_t) i].name));
-            tab->setColour (juce::TextButton::buttonOnColourId, findColour (juce::TextEditor::highlightColourId));
-
-            // 둘러보기만: 블록 지정은 목록에서 더블클릭할 때
-            tab->onClick = [this, i]
-            {
-                shownCategoryIndex = i;
-                showCategory (true);
-            };
-
-            addAndMakeVisible (tab);
-        }
+        // 둘러보기만: 블록 지정은 오른쪽 목록에서 더블클릭할 때
+        categoryList.setModel (&categoryListModel);
+        categoryList.setRowHeight (categoryRowHeight);
+        categoryList.setColour (juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
+        categoryList.setOutlineThickness (0);
+        categoryList.updateContent();
+        addAndMakeVisible (categoryList);
 
         // 기본 열 폭 비율 (NAM 2:2:1:1:1). 사용자가 바꾼 폭은 이 표 객체에 남아 프로그램이 꺼질 때까지 유지된다
         const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable
@@ -156,11 +149,8 @@ namespace rig
             c->setAlpha (enabled ? 1.0f : 0.4f);
         }
 
-        for (auto* tab : tabs)
-        {
-            tab->setEnabled (enabled);
-            tab->setAlpha (enabled ? 1.0f : 0.4f);
-        }
+        categoryList.setEnabled (enabled);
+        categoryList.setAlpha (enabled ? 1.0f : 0.4f);
 
         if (slot == nullptr)
         {
@@ -191,8 +181,8 @@ namespace rig
         const auto& category = shownCategory();
         const bool slotInCategory = slot != nullptr && categoryFor (slot->type) == shownCategoryIndex;
 
-        for (int i = 0; i < tabs.size(); ++i)
-            tabs[i]->setToggleState (i == shownCategoryIndex, juce::dontSendNotification);
+        if (categoryList.getSelectedRow() != shownCategoryIndex)
+            categoryList.selectRow (shownCategoryIndex);
 
         namList.setVisible (category.usesFiles && category.fileType == BlockType::Nam);
         irList.setVisible (category.usesFiles && category.fileType == BlockType::Ir);
@@ -275,6 +265,58 @@ namespace rig
     int BlockEditor::DeviceListModel::getNumRows()
     {
         return (int) owner.shownCategory().devices.size();
+    }
+
+    int BlockEditor::categoryListWidth() const
+    {
+        // 예전 TextButton::getBestWidthForHeight 와 같은 계산: 글자 폭 + 행 높이
+        const auto font = getLookAndFeel().getTextButtonFont (dummyFontButton, categoryRowHeight);
+        int width = 0;
+
+        for (const auto& c : categories)
+            width = juce::jmax (width, juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, c.name)) + categoryRowHeight);
+
+        return width;
+    }
+
+    int BlockEditor::CategoryListModel::getNumRows()
+    {
+        return (int) owner.categories.size();
+    }
+
+    // 예전 탭 버튼처럼: 둥근 버튼 모양, 선택된 행은 강조색. 이름은 가운데, 넘치면 말줄임
+    void BlockEditor::CategoryListModel::paintListBoxItem (int row, juce::Graphics& g, int width, int height, bool selected)
+    {
+        if (! juce::isPositiveAndBelow (row, getNumRows()))
+            return;
+
+        const auto bounds = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height - 2.0f).reduced (0.5f);
+
+        g.setColour (selected ? owner.findColour (juce::TextEditor::highlightColourId)
+                              : owner.findColour (juce::TextButton::buttonColourId));
+        g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (owner.findColour (juce::ComboBox::outlineColourId));
+        g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+
+        g.setColour (owner.findColour (selected ? juce::TextButton::textColourOnId : juce::TextButton::textColourOffId));
+        g.setFont (owner.getLookAndFeel().getTextButtonFont (owner.dummyFontButton, categoryRowHeight));
+        g.drawText (owner.categories[(size_t) row].name, bounds.reduced (4.0f, 0.0f), juce::Justification::centred, true);
+    }
+
+    void BlockEditor::CategoryListModel::selectedRowsChanged (int lastRowSelected)
+    {
+        // 행을 비우는 클릭이면 지금 카테고리 강조를 되살린다
+        if (lastRowSelected < 0)
+        {
+            owner.categoryList.selectRow (owner.shownCategoryIndex);
+            return;
+        }
+
+        if (lastRowSelected != owner.shownCategoryIndex)
+        {
+            owner.shownCategoryIndex = lastRowSelected;
+            owner.showCategory (true);
+        }
     }
 
     void BlockEditor::DeviceListModel::paintListBoxItem (int row, juce::Graphics& g, int width, int height, bool selected)
@@ -432,18 +474,9 @@ namespace rig
         constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 탭 열은 가장 긴 탭 이름이 들어갈 만큼만
-        constexpr int tabHeight = 28;
-        int tabWidth = 0;
-
-        for (auto* tab : tabs)
-            tabWidth = juce::jmax (tabWidth, tab->getBestWidthForHeight (tabHeight));
-
-        auto tabColumn = area.removeFromLeft (tabWidth);
+        // 카테고리 목록 열은 가장 긴 이름이 들어갈 만큼만 (예전 탭 폭과 같은 계산), 높이는 남은 영역 전체 (넘치면 스크롤)
+        categoryList.setBounds (area.removeFromLeft (categoryListWidth()));
         area.removeFromLeft (middleGap);
-
-        for (auto* tab : tabs)
-            tab->setBounds (tabColumn.removeFromTop (tabHeight).withTrimmedBottom (2));
 
         namList.setBounds (area);
         irList.setBounds (area);

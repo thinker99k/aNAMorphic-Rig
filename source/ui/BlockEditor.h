@@ -83,6 +83,22 @@ namespace rig
             BlockEditor& owner;
         };
 
+        // 카테고리 목록 (왼쪽, 한 줄 = 카테고리 하나, 넘치면 스크롤). 클릭/방향키는 둘러보기만, 더블클릭 동작 없음
+        struct CategoryListModel final : juce::ListBoxModel
+        {
+            explicit CategoryListModel (BlockEditor& e) : owner (e) {}
+
+            int getNumRows() override;
+            void paintListBoxItem (int row, juce::Graphics&, int width, int height, bool selected) override;
+            void selectedRowsChanged (int lastRowSelected) override;
+
+            BlockEditor& owner;
+        };
+
+        static constexpr int categoryRowHeight = 28;   // 예전 탭 버튼 높이
+        int categoryListWidth() const;
+        mutable juce::TextButton dummyFontButton;      // 행 글꼴을 버튼 글꼴과 같게 (getTextButtonFont 에 넘길 버튼)
+
         juce::TableListBox& activeList() { return shownCategory().fileType == BlockType::Ir ? irList : namList; }
 
         // 마지막 열 오른쪽 경계선만 그리지 않아, 스크롤바 위 머리글 빈칸과 이어져 보이게 한다
@@ -94,7 +110,8 @@ namespace rig
         RigModel& model;
 
         std::vector<Category> categories;
-        juce::OwnedArray<juce::TextButton> tabs;   // categories 와 같은 순서
+        CategoryListModel categoryListModel { *this };
+        juce::ListBox categoryList;                // 행 = categories 와 같은 순서
 
         HeaderLookAndFeel headerLookAndFeel;   // 표보다 먼저 선언: 표가 먼저 소멸한다
         juce::TableListBox namList, irList;
