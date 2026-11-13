@@ -64,9 +64,9 @@ namespace rig
 
         // 연결선 가운데의 [+] 버튼. 컴포넌트(= 클릭 영역)는 넓고, 버튼은 가운데 plusSize 정사각형에만 그린다.
         // 바탕은 LookAndFeel_V4::drawButtonBackground 와 같은 모양, + 는 선으로 그려 버튼을 꽉 채운다 (글꼴 크기와 무관)
-        struct PlusButton final : public juce::Button
+        struct PlusButton final : public LeftClickOnly<juce::Button>
         {
-            PlusButton() : juce::Button ("+") {}
+            PlusButton() : LeftClickOnly ("+") {}
 
             void paintButton (juce::Graphics& g, bool highlighted, bool down) override
             {
@@ -148,7 +148,7 @@ namespace rig
                 addAndMakeVisible (b);
         }
 
-        void mouseDown (const juce::MouseEvent&) override { model.select (index); }
+        void mouseDown (const juce::MouseEvent& e) override { if (isLeftClick (e)) model.select (index); }
 
         void paint (juce::Graphics& g) override
         {
@@ -253,7 +253,7 @@ namespace rig
         const int index;
         const juce::uint32& marqueeStart;   // ChainView 소유: 타일을 다시 만들어도 흘러가던 위치가 이어진다
         static constexpr int removeWidth = 36, removeHeight = 20;
-        juce::TextButton leftButton { "<" }, rightButton { ">" };
+        LeftClickOnly<juce::TextButton> leftButton { "<" }, rightButton { ">" };
         CornerDeleteButton removeButton;
     };
 

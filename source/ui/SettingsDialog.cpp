@@ -6,6 +6,29 @@ namespace rig
 {
     namespace
     {
+        // DialogWindow::LaunchOptions::create 가 만드는 창과 같지만, 제목 표시줄 끌기도 왼쪽 클릭만 (마우스 규칙, Widgets.h)
+        struct SettingsWindow final : public LeftClickOnly<juce::DialogWindow>
+        {
+            SettingsWindow (std::unique_ptr<SettingsDialog> content, juce::Component* parent)
+                : LeftClickOnly ("Settings",
+                                 parent != nullptr ? parent->getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId)
+                                                   : juce::Colours::darkgrey,
+                                 false,   // ESC 로 빠져나가지 못하게
+                                 true,
+                                 parent != nullptr ? juce::Component::getApproximateScaleFactorForComponent (parent) : 1.0f)
+            {
+                setContentOwned (content.release(), true);
+                centreAroundComponent (parent, getWidth(), getHeight());
+                setResizable (false, false);
+                setUsingNativeTitleBar (false);   // JUCE 타이틀바를 써야 닫기 버튼을 없앨 수 있음
+            }
+
+            void closeButtonPressed() override { setVisible (false); }
+        };
+    }
+
+    namespace
+    {
         constexpr int noDeviceId = 1;   // deviceBox 의 "(none)" 항목 id
 
         // outputChannelBox 항목 id: 스테레오 쌍은 pairIdBase + 첫 채널(0부터), 단일 채널은 1 + 채널(0부터)
@@ -53,18 +76,7 @@ namespace rig
         auto content = std::make_unique<SettingsDialog> (dm);
         content->onClosed = std::move (onClosed);
 
-        juce::DialogWindow::LaunchOptions options;
-        options.content.setOwned (content.release());
-        options.dialogTitle = "Settings";
-        options.componentToCentreAround = parent;
-        options.escapeKeyTriggersCloseButton = false;   // ESC 로 빠져나가지 못하게
-        options.useNativeTitleBar = false;              // JUCE 타이틀바를 써야 닫기 버튼을 없앨 수 있음
-        options.resizable = false;
-        options.dialogBackgroundColour = parent != nullptr
-            ? parent->getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId)
-            : juce::Colours::darkgrey;
-
-        auto* window = options.create();
+        auto* window = new SettingsWindow (std::move (content), parent);
 
         // X(닫기) 버튼 제거 -> Save/Cancel 로만 종료.
         // 주의: 이 호출은 창(peer)을 다시 만들기 때문에 반드시 모달로 만들기 "전에" 해야 한다.
@@ -347,8 +359,7 @@ namespace rig
         if (error.isNotEmpty())
         {
             // 실패하면 창을 닫지 않고 다시 고르게 한다
-            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
-                                                    "Could not open audio device", error);
+            showAlert (*this, "Could not open audio device", error, { { "OK", 0 } }, true);
             return;
         }
 

@@ -14,7 +14,7 @@ namespace rig
     //    바깥 여백과 묶음 안 간격은 6 px. 씬 버튼: 번호는 왼쪽 위, 이름은 아래 가운데
     //  - Live 는 왼쪽 끝, 씬 버튼 8개는 가로 가운데, [Copy/Swap | All Reset] 는 오른쪽 끝
     //  - Live 는 아직 UI 만 (비활성)
-    //  - Copy / Swap / All Reset 은 왼쪽 클릭에만 반응한다
+    //  - 버튼은 왼쪽 클릭에만 반응한다 (앱 전체 마우스 규칙, Widgets.h LeftClickOnly). 가운데 클릭은 씬 버튼에서도 동작 없음
     //  - 왼쪽 버튼을 누르는 순간 그 씬으로 전환 (더블클릭 기능 없음)
     //  - 오른쪽 클릭: 전환하지 않고 Rename / Reset 메뉴만 (머리글 없음)
     //      Rename : 그 버튼 자리에 입력칸 (글자는 이름처럼 아래 가운데, 오른쪽 위 귀퉁이에 딱 붙은 정사각형 체크 버튼).
@@ -57,7 +57,7 @@ namespace rig
 
         int sceneAt (juce::Point<int> position) const;
         void sceneClicked (int scene);
-        void showSceneMenu (int scene);
+        void showSceneMenu (int scene, const juce::MouseEvent& click);
         void toggleMode (Mode newMode);
         void cancelMode();
         void startRename (int scene);
@@ -69,8 +69,8 @@ namespace rig
         RigModel& model;
 
         std::array<juce::Rectangle<int>, RigModel::numScenes> sceneBounds;
-        juce::TextButton liveButton { "Live" };
-        LeftClickTextButton copyButton { "Copy" }, swapButton { "Swap" }, resetAllButton { "All Reset" };
+        LeftClickOnly<juce::TextButton> liveButton { "Live" };
+        LeftClickOnly<juce::TextButton> copyButton { "Copy" }, swapButton { "Swap" }, resetAllButton { "All Reset" };
 
         Mode mode = Mode::none;
         int sourceScene = -1;                   // 모드 중 고른 src (-1 = 아직)

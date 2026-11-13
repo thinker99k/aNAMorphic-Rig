@@ -155,15 +155,15 @@ namespace rig
     {
         // 패치 이름 오른쪽 클릭만: 메뉴 외 다른 동작 없음
         if (e.eventComponent == &patchNameBox && e.mods.isPopupMenu() && ! patchNameBox.isBeingEdited())
-            showPatchNameMenu();
+            showPatchNameMenu (e);
     }
 
-    void TopBar::showPatchNameMenu()
+    void TopBar::showPatchNameMenu (const juce::MouseEvent& click)
     {
         juce::PopupMenu menu;   // 씬 버튼 메뉴와 같은 모양 (머리글 없음)
         menu.addItem ("Rename", [this] { patchNameBox.showEditor(); });
         menu.addItem ("Reset", [this] { resetPatchWithWarning(); });
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (patchNameBox.getScreenBounds()));
+        showContextMenu (menu, click);
     }
 
     // 블록 전체와 씬 8개를 함께 초기화하는 큰 리셋이므로 경고를 띄운다 (기준은 Widgets.h showResetWarning)

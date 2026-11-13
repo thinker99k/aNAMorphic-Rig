@@ -4,6 +4,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/Widgets.h"
+
 namespace rig
 {
     // 패치 맵 아래: 선택된 블록의 파라미터.
@@ -21,9 +23,9 @@ namespace rig
 
     private:
         // 전원 아이콘 토글 버튼: 켜짐 = 초록, 꺼짐 = 흐린 회색
-        struct PowerButton final : public juce::Button
+        struct PowerButton final : public LeftClickOnly<juce::Button>
         {
-            PowerButton() : juce::Button ("Power") {}
+            PowerButton() : LeftClickOnly ("Power") {}
             void paintButton (juce::Graphics&, bool highlighted, bool down) override;
         };
 
