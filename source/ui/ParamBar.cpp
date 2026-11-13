@@ -76,7 +76,7 @@ namespace rig
     {
         // 오른쪽 끝 = 전원 버튼. 나머지(왼쪽)는 나중에 파라미터 노브 자리
         auto area = getLocalBounds().reduced (12, 0);
-        const int size = juce::jmin (40, getHeight() - 16);
+        const int size = juce::jmin (50, getHeight() - 8);   // 전원 버튼 50 px (예전 40 px 의 1.25 배)
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
     }
 }

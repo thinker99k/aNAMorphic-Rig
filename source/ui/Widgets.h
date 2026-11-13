@@ -51,6 +51,64 @@ namespace rig
         const juce::Colour activeColour;
     };
 
+    // 앱 기본 LookAndFeel (V4 그대로). TextButton 글자는 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 맞춘다.
+    // 한 줄과 "단어마다 한 줄" 중 글꼴을 더 크게 쓸 수 있는 쪽으로 그린다 (예: 좁은 "All Reset" → All / Reset)
+    struct AppLookAndFeel : public juce::LookAndFeel_V4
+    {
+        void drawButtonText (juce::Graphics& g, juce::TextButton& button, bool, bool) override
+        {
+            const auto area = button.getLocalBounds().reduced (3, 2).toFloat();
+            const auto text = button.getButtonText().trim();
+            const auto maxHeight = juce::LookAndFeel_V4::getTextButtonFont (button, button.getHeight()).getHeight();
+
+            const auto bestFont = [&] (const juce::StringArray& lines)
+            {
+                auto font = juce::Font (juce::FontOptions (juce::jmin (maxHeight, area.getHeight() / (float) lines.size())));
+
+                const auto fits = [&]
+                {
+                    for (const auto& line : lines)
+                        if (juce::GlyphArrangement::getStringWidth (font, line) > area.getWidth())
+                            return false;
+                    return true;
+                };
+
+                while (font.getHeight() > 6.0f && ! fits())
+                    font = font.withHeight (font.getHeight() - 0.5f);
+
+                return font;
+            };
+
+            juce::StringArray lines { text };
+            auto font = bestFont (lines);
+
+            const auto words = juce::StringArray::fromTokens (text, " ", {});
+            if (words.size() > 1)
+            {
+                if (const auto wordFont = bestFont (words); wordFont.getHeight() > font.getHeight())
+                {
+                    lines = words;
+                    font = wordFont;
+                }
+            }
+
+            g.setFont (font);
+            g.setColour (button.findColour (button.getToggleState() ? juce::TextButton::textColourOnId
+                                                                    : juce::TextButton::textColourOffId)
+                             .withMultipliedAlpha (button.isEnabled() ? 1.0f : 0.5f));
+
+            const auto lineHeight = font.getHeight();
+            auto y = area.getCentreY() - lineHeight * (float) lines.size() / 2.0f;
+
+            for (const auto& line : lines)
+            {
+                g.drawText (line, juce::Rectangle<float> (area.getX(), y, area.getWidth(), lineHeight),
+                            juce::Justification::centred, false);
+                y += lineHeight;
+            }
+        }
+    };
+
     // 초기화 경고: File not found 창과 같은 모양. [Reset] / [Cancel] 버튼으로만 닫힌다 (ESC, X 없음).
     // Reset 을 누르면 onReset 을 부른다. 프로그램 창 가운데에 띄운다.
     // 기준: 두 개 이상 항목을 동시에 초기화하면 경고 (패치 리셋, All Reset).

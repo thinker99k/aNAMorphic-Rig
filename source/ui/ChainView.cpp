@@ -72,19 +72,18 @@ namespace rig
             }
         };
 
-        // 블록 안쪽을 빨간 빗금으로 채운다 (로딩 실패)
-        void drawErrorHatch (juce::Graphics& g, juce::Rectangle<float> bounds)
+        // 로딩 실패 표시: 블록 위에 굵은 빨간 대각선 하나 (테두리와 같은 굵기)
+        constexpr float errorThickness = 4.0f;
+
+        void drawErrorSlash (juce::Graphics& g, juce::Rectangle<float> bounds)
         {
             juce::Graphics::ScopedSaveState save (g);
             juce::Path clip;
             clip.addRoundedRectangle (bounds, corner);
             g.reduceClipRegion (clip);
 
-            g.setColour (juce::Colours::red.withAlpha (0.35f));
-            const float h = bounds.getHeight();
-
-            for (float x = bounds.getX() - h; x < bounds.getRight(); x += 10.0f)
-                g.drawLine (x, bounds.getBottom(), x + h, bounds.getY(), 2.0f);
+            g.setColour (juce::Colours::red);
+            g.drawLine (bounds.getX(), bounds.getBottom(), bounds.getRight(), bounds.getY(), errorThickness);
         }
     }
 
@@ -111,7 +110,6 @@ namespace rig
         void paint (juce::Graphics& g) override
         {
             const auto& slot = model.getSlots()[(size_t) index];
-            const bool failed = slot.error.isNotEmpty();
             auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
             auto base = colourFor (slot.type);
@@ -120,9 +118,6 @@ namespace rig
 
             g.setColour (slot.type == BlockType::None ? juce::Colours::black : base.darker (0.6f));
             g.fillRoundedRectangle (bounds, corner);
-
-            if (failed)
-                drawErrorHatch (g, bounds);
 
             auto text = getLocalBounds().reduced (10, 6).withTrimmedBottom (24);
 
@@ -150,21 +145,24 @@ namespace rig
             if (! model.isOn (slot) && slot.type != BlockType::None)
                 base = base.withSaturation (0.1f).darker (0.5f);
 
-            // 테두리: 선택 = 흰색, 오류 = 빨강 (둘 다면 흰 테두리 안쪽에 빨강)
+            // 오류: 블록 위(버튼 포함)에 굵은 빨간 대각선 + 같은 굵기의 빨간 테두리.
+            // 선택까지 되어 있으면 빨간 테두리 바깥에 흰 테두리
+            if (failed)
+            {
+                const auto inner = selected ? bounds.reduced (2.5f) : bounds;
+                drawErrorSlash (g, inner);
+                g.setColour (juce::Colours::red);
+                g.drawRoundedRectangle (inner.reduced (errorThickness * 0.5f - 0.75f), corner, errorThickness);
+            }
+
+            // 테두리: 선택 = 흰색
             if (selected)
                 g.setColour (juce::Colours::white);
-            else if (failed)
-                g.setColour (juce::Colours::red);
-            else
+            else if (! failed)
                 g.setColour (slot.type == BlockType::None ? juce::Colours::grey.darker() : base);
 
-            g.drawRoundedRectangle (bounds, corner, selected || failed ? 2.5f : 1.5f);
-
-            if (selected && failed)
-            {
-                g.setColour (juce::Colours::red);
-                g.drawRoundedRectangle (bounds.reduced (3.0f), corner - 2.0f, 2.0f);
-            }
+            if (selected || ! failed)
+                g.drawRoundedRectangle (bounds, corner, selected ? 2.5f : 1.5f);
         }
 
         void resized() override
@@ -273,7 +271,7 @@ namespace rig
             g.drawText (title, text.removeFromTop (17), juce::Justification::centred);
             g.setColour (juce::Colours::grey.brighter (0.2f));
             g.setFont (juce::FontOptions (12.0f));
-            g.drawFittedText (channels, text, juce::Justification::centred, 1, 0.8f);
+            g.drawFittedText (channels, text, juce::Justification::centred, 1, 1.0f);   // 찌그러뜨리지 않고 말줄임
         }
 
         RigModel& model;

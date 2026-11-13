@@ -3,6 +3,7 @@
 #include "engine/AudioEngine.h"
 #include "model/RigModel.h"
 #include "ui/MainComponent.h"
+#include "ui/Widgets.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -87,6 +88,11 @@ namespace rig
 
         void initialise (const juce::String&) override
         {
+            // 글자를 가로로 찌그러뜨리지 않는다: 일반 글자는 자리가 모자라면 말줄임표(...)로 자르고,
+            // 버튼 글자는 글꼴을 줄여 맞춘다 (앱 전체)
+            juce::Font::setDefaultMinimumHorizontalScaleFactor (1.0f);
+            juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
+
             // RigModel 이 패치를 읽기 전에 기본 폴더/파일부터 준비
             defaults::ensureAll();
             mainWindow = std::make_unique<MainWindow> (getApplicationName());
@@ -95,6 +101,7 @@ namespace rig
         void shutdown() override
         {
             mainWindow = nullptr;
+            juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
         }
 
         void systemRequestedQuit() override
@@ -103,6 +110,7 @@ namespace rig
         }
 
     private:
+        AppLookAndFeel lookAndFeel;   // 창보다 먼저 선언: 창이 먼저 소멸한다
         std::unique_ptr<MainWindow> mainWindow;
     };
 }
