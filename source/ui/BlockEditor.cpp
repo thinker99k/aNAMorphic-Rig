@@ -13,20 +13,12 @@ namespace rig
 
     BlockEditor::BlockEditor (RigModel& m) : model (m)
     {
-        // 카테고리 목록 순서 = 이 순서. 카테고리 추가는 여기에 한 줄 (파일 없는 카테고리는 장치 목록만 채우면 된다)
+        // 카테고리 목록 순서 = 이 순서. 카테고리 추가는 여기에 한 줄 (파일 없는 카테고리는 내장 블록 목록만 채우면 된다)
         categories = {
-            { "Empty", false, BlockType::None, { { "Empty (pass-through)", BlockType::None } } },
+            { "Built-in", false, BlockType::None, { { "Empty (pass-through)", BlockType::None } } },
             { "NAM",   true,  BlockType::Nam,  {} },
             { "IR",    true,  BlockType::Ir,   {} },
         };
-
-        // 둘러보기만: 블록 지정은 오른쪽 목록에서 더블클릭할 때
-        categoryList.setModel (&categoryListModel);
-        categoryList.setRowHeight (categoryRowHeight);
-        categoryList.setColour (juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
-        categoryList.setOutlineThickness (0);
-        categoryList.updateContent();
-        addAndMakeVisible (categoryList);
 
         // 기본 열 폭 비율 (NAM 2:2:1:1:1). 사용자가 바꾼 폭은 이 표 객체에 남아 프로그램이 꺼질 때까지 유지된다
         const int columnFlags = juce::TableHeaderComponent::visible | juce::TableHeaderComponent::resizable
@@ -36,9 +28,20 @@ namespace rig
             { toneColumn, "Tone", 1 }, { modeledByColumn, "Modeled By", 1 },
         };
 
-        // 머리글(정렬, 열 폭, 열 숨기기 메뉴)도 왼쪽 클릭만 (마우스 규칙)
-        for (auto* list : { &namList, &irList })
+        // 네 표 공통: 머리글(정렬, 열 폭, 열 숨기기 메뉴)도 왼쪽 클릭만 (마우스 규칙), 같은 머리글 모양, 행 높이, 테두리
+        for (auto* list : { &categoryList, &namList, &irList, &builtInList })
+        {
             list->setHeader (std::make_unique<LeftClickOnly<juce::TableHeaderComponent>>());
+            list->getHeader().setStretchToFitActive (true);
+            list->getHeader().setLookAndFeel (&headerLookAndFeel);
+            list->setRowHeight (24);
+            list->setOutlineThickness (1);
+        }
+
+        // 카테고리 목록: 둘러보기만 (블록 지정은 오른쪽 목록에서 더블클릭할 때). 열 하나라 폭 조절, 정렬 없음
+        categoryList.getHeader().addColumn ("Category", 1, 100, 30, -1, juce::TableHeaderComponent::visible);
+        categoryList.setModel (&categoryListModel);
+        addAndMakeVisible (categoryList);
 
         for (const auto& [id, name, ratio] : namColumns)
             namList.getHeader().addColumn (name, id, ratio * 100, 60, -1, columnFlags);
@@ -48,18 +51,26 @@ namespace rig
         for (auto* list : { &namList, &irList })
         {
             list->setModel (this);
-            list->setRowHeight (24);
-            list->setOutlineThickness (1);
-            list->getHeader().setStretchToFitActive (true);
-            list->getHeader().setLookAndFeel (&headerLookAndFeel);
             list->getHeader().setSortColumnId (nameColumn, true);
             addChildComponent (list);
         }
 
-        deviceList.setModel (&deviceListModel);
-        deviceList.setRowHeight (24);
-        deviceList.setOutlineThickness (1);
-        addChildComponent (deviceList);
+        builtInList.getHeader().addColumn ("Name", 1, 100, 30, -1, juce::TableHeaderComponent::visible);
+        builtInList.setModel (&builtInListModel);
+        addChildComponent (builtInList);
+
+        // 더블클릭(왼쪽)해야 블록에 지정된다
+        fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
+
+        // 행 컨텍스트 메뉴는 파일 표(NAM / IR)만 지원한다. 지금은 임시 항목 (동작 없음)
+        fileRowMouse.fillMenu = [] (juce::PopupMenu& menu, int) { menu.addItem ("Temporary item", [] {}); };
+        builtInRowMouse.onDoubleClick = [this] (int row)
+        {
+            const auto& builtIns = shownCategory().builtIns;
+
+            if (model.getSelectedSlot() != nullptr && juce::isPositiveAndBelow (row, (int) builtIns.size()))
+                model.assignBlock (model.getSelectedIndex(), builtIns[(size_t) row].type, {});
+        };
 
         model.addChangeListener (this);
         refresh();
@@ -70,7 +81,8 @@ namespace rig
         model.removeChangeListener (this);
         namList.setModel (nullptr);
         irList.setModel (nullptr);
-        deviceList.setModel (nullptr);
+        builtInList.setModel (nullptr);
+        categoryList.setModel (nullptr);
     }
 
     void BlockEditor::changeListenerCallback (juce::ChangeBroadcaster*)
@@ -135,7 +147,7 @@ namespace rig
             const auto& c = categories[i];
 
             if (c.usesFiles ? c.fileType == type
-                            : std::any_of (c.devices.begin(), c.devices.end(), [type] (const Device& d) { return d.type == type; }))
+                            : std::any_of (c.builtIns.begin(), c.builtIns.end(), [type] (const BuiltIn& d) { return d.type == type; }))
                 return (int) i;
         }
 
@@ -148,7 +160,7 @@ namespace rig
         const auto* slot = model.getSelectedSlot();
         const bool enabled = slot != nullptr;
 
-        for (auto* c : std::initializer_list<juce::Component*> { &namList, &irList, &deviceList })
+        for (auto* c : std::initializer_list<juce::Component*> { &namList, &irList, &builtInList })
         {
             c->setEnabled (enabled);
             c->setAlpha (enabled ? 1.0f : 0.4f);
@@ -179,7 +191,7 @@ namespace rig
     }
 
     // shownCategoryIndex 의 탭과 목록을 보여준다 (파일 표는 캐시에서 다시 고른다, 폴더 스캔 없음).
-    // resetHighlight 면 강조를 선택 블록의 현재 장치/파일로 (이 카테고리에 없으면 강조 없음)
+    // resetHighlight 면 강조를 선택 블록의 현재 내장 블록/파일로 (이 카테고리에 없으면 강조 없음)
     void BlockEditor::showCategory (bool resetHighlight)
     {
         const auto* slot = model.getSelectedSlot();
@@ -191,22 +203,22 @@ namespace rig
 
         namList.setVisible (category.usesFiles && category.fileType == BlockType::Nam);
         irList.setVisible (category.usesFiles && category.fileType == BlockType::Ir);
-        deviceList.setVisible (! category.usesFiles);
+        builtInList.setVisible (! category.usesFiles);
 
         if (! category.usesFiles)
         {
-            deviceList.updateContent();
+            builtInList.updateContent();
 
             if (resetHighlight)
             {
-                deviceList.deselectAllRows();
+                builtInList.deselectAllRows();
 
-                for (size_t i = 0; i < category.devices.size(); ++i)
-                    if (slotInCategory && category.devices[i].type == slot->type)
-                        deviceList.selectRow ((int) i);
+                for (size_t i = 0; i < category.builtIns.size(); ++i)
+                    if (slotInCategory && category.builtIns[i].type == slot->type)
+                        builtInList.selectRow ((int) i);
             }
 
-            deviceList.repaint();
+            builtInList.repaint();
             return;
         }
 
@@ -258,6 +270,12 @@ namespace rig
 
     void BlockEditor::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
     {
+        drawRowBackground (g, row, width, height, selected, fileRowMouse.isMenuRow (row));
+    }
+
+    // 선택 = 강조색, 홀수 행은 살짝 밝게, 아래 구분선. 행 메뉴가 열린 행은 선택을 바꾸지 않고 테두리만 두른다
+    void BlockEditor::drawRowBackground (juce::Graphics& g, int row, int width, int height, bool selected, bool menuTarget) const
+    {
         if (selected)
             g.fillAll (findColour (juce::TextEditor::highlightColourId));
         else if (row % 2 != 0)
@@ -265,23 +283,17 @@ namespace rig
 
         g.setColour (juce::Colours::grey.withAlpha (0.25f));
         g.drawHorizontalLine (height - 1, 0.0f, (float) width);
+
+        if (menuTarget)
+        {
+            g.setColour (juce::Colours::white);
+            g.drawRect (0, 0, width, height, 1);
+        }
     }
 
-    int BlockEditor::DeviceListModel::getNumRows()
+    int BlockEditor::BuiltInListModel::getNumRows()
     {
-        return (int) owner.shownCategory().devices.size();
-    }
-
-    int BlockEditor::categoryListWidth() const
-    {
-        // 예전 TextButton::getBestWidthForHeight 와 같은 계산: 글자 폭 + 행 높이
-        const auto font = getLookAndFeel().getTextButtonFont (dummyFontButton, categoryRowHeight);
-        int width = 0;
-
-        for (const auto& c : categories)
-            width = juce::jmax (width, juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, c.name)) + categoryRowHeight);
-
-        return width;
+        return (int) owner.shownCategory().builtIns.size();
     }
 
     int BlockEditor::CategoryListModel::getNumRows()
@@ -289,23 +301,15 @@ namespace rig
         return (int) owner.categories.size();
     }
 
-    // 예전 탭 버튼처럼: 둥근 버튼 모양, 선택된 행은 강조색. 이름은 가운데, 넘치면 말줄임
-    void BlockEditor::CategoryListModel::paintListBoxItem (int row, juce::Graphics& g, int width, int height, bool selected)
+    void BlockEditor::CategoryListModel::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
     {
-        if (! juce::isPositiveAndBelow (row, getNumRows()))
-            return;
+        owner.drawRowBackground (g, row, width, height, selected, owner.categoryRowMouse.isMenuRow (row));
+    }
 
-        const auto bounds = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height - 2.0f).reduced (0.5f);
-
-        g.setColour (selected ? owner.findColour (juce::TextEditor::highlightColourId)
-                              : owner.findColour (juce::TextButton::buttonColourId));
-        g.fillRoundedRectangle (bounds, 4.0f);
-        g.setColour (owner.findColour (juce::ComboBox::outlineColourId));
-        g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
-
-        g.setColour (owner.findColour (selected ? juce::TextButton::textColourOnId : juce::TextButton::textColourOffId));
-        g.setFont (owner.getLookAndFeel().getTextButtonFont (owner.dummyFontButton, categoryRowHeight));
-        g.drawText (owner.categories[(size_t) row].name, bounds.reduced (4.0f, 0.0f), juce::Justification::centred, true);
+    void BlockEditor::CategoryListModel::paintCell (juce::Graphics& g, int row, int, int width, int height, bool selected)
+    {
+        if (juce::isPositiveAndBelow (row, getNumRows()))
+            owner.paintRowText (g, owner.categories[(size_t) row].name, width, height, selected);
     }
 
     void BlockEditor::CategoryListModel::selectedRowsChanged (int lastRowSelected)
@@ -324,33 +328,17 @@ namespace rig
         }
     }
 
-    void BlockEditor::DeviceListModel::paintListBoxItem (int row, juce::Graphics& g, int width, int height, bool selected)
+    void BlockEditor::BuiltInListModel::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
     {
-        const auto& devices = owner.shownCategory().devices;
-
-        if (! juce::isPositiveAndBelow (row, (int) devices.size()))
-            return;
-
-        owner.paintRowBackground (g, row, width, height, selected);
-
-        g.setColour (selected ? owner.findColour (juce::TextEditor::highlightedTextColourId)
-                              : owner.findColour (juce::ListBox::textColourId));
-        g.setFont (14.0f);
-        g.drawText (devices[(size_t) row].name, 6, 0, juce::jmax (0, width - 12), height,
-                    juce::Justification::centredLeft, true);
+        owner.drawRowBackground (g, row, width, height, selected, owner.builtInRowMouse.isMenuRow (row));
     }
 
-    void BlockEditor::DeviceListModel::listBoxItemDoubleClicked (int row, const juce::MouseEvent& e)
+    void BlockEditor::BuiltInListModel::paintCell (juce::Graphics& g, int row, int, int width, int height, bool selected)
     {
-        if (! isLeftClick (e))
-            return;
+        const auto& builtIns = owner.shownCategory().builtIns;
 
-        const auto& devices = owner.shownCategory().devices;
-
-        if (owner.model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) devices.size()))
-            return;
-
-        owner.model.assignBlock (owner.model.getSelectedIndex(), devices[(size_t) row].type, {});
+        if (juce::isPositiveAndBelow (row, (int) builtIns.size()))
+            owner.paintRowText (g, builtIns[(size_t) row].name, width, height, selected);
     }
 
     void BlockEditor::paintCell (juce::Graphics& g, int row, int columnId, int width, int height, bool selected)
@@ -358,11 +346,7 @@ namespace rig
         if (! juce::isPositiveAndBelow (row, (int) rows.size()))
             return;
 
-        g.setColour (selected ? findColour (juce::TextEditor::highlightedTextColourId)
-                              : findColour (juce::ListBox::textColourId));
-        g.setFont (14.0f);
-        g.drawText (rows[(size_t) row].get (columnId), 6, 0, juce::jmax (0, width - 12), height,
-                    juce::Justification::centredLeft, true);
+        paintRowText (g, rows[(size_t) row].get (columnId), width, height, selected);
 
         // 마지막 열의 오른쪽 경계선은 그리지 않는다 (머리글처럼 스크롤바와 이어져 보이게)
         const auto& header = activeList().getHeader();
@@ -373,9 +357,18 @@ namespace rig
         }
     }
 
-    void BlockEditor::cellDoubleClicked (int row, int, const juce::MouseEvent& e)
+    // 칸 글자: 왼쪽 정렬, 좌우 6 px, 넘치면 말줄임 (찌그러뜨리지 않는다)
+    void BlockEditor::paintRowText (juce::Graphics& g, const juce::String& text, int width, int height, bool selected) const
     {
-        if (! isLeftClick (e) || model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) rows.size()))
+        g.setColour (selected ? findColour (juce::TextEditor::highlightedTextColourId)
+                              : findColour (juce::ListBox::textColourId));
+        g.setFont (juce::FontOptions (rowFontSize));
+        g.drawText (text, 6, 0, juce::jmax (0, width - 12), height, juce::Justification::centredLeft, true);
+    }
+
+    void BlockEditor::assignFile (int row)
+    {
+        if (model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) rows.size()))
             return;
 
         const auto file = rows[(size_t) row].file;
@@ -477,12 +470,12 @@ namespace rig
         constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 카테고리 목록 열은 가장 긴 이름이 들어갈 만큼만 (예전 탭 폭과 같은 계산), 높이는 남은 영역 전체 (넘치면 스크롤)
-        categoryList.setBounds (area.removeFromLeft (categoryListWidth()));
+        // 카테고리 목록 열은 고정 폭, 높이는 남은 영역 전체 (넘치면 스크롤)
+        categoryList.setBounds (area.removeFromLeft (categoryListWidth));
         area.removeFromLeft (middleGap);
 
         namList.setBounds (area);
         irList.setBounds (area);
-        deviceList.setBounds (area);
+        builtInList.setBounds (area);
     }
 }

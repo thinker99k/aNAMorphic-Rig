@@ -31,10 +31,112 @@ namespace rig
 
     // 컨텍스트 메뉴는 오른쪽 클릭한 커서 위치에 띄운다: 메뉴의 왼쪽 위 = 클릭 지점, 화면 밖으로 나가면 위/왼쪽으로 붙인다.
     // 영역이 비어 있으면(withMousePosition) JUCE 가 화면 가운데 쪽으로 펼치므로 1 px 영역을 준다
-    inline void showContextMenu (juce::PopupMenu& menu, const juce::MouseEvent& click)
+    inline void showContextMenu (juce::PopupMenu& menu, const juce::MouseEvent& click, std::function<void (int)> onClosed = nullptr)
     {
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea ({ click.getScreenX(), click.getScreenY(), 1, 1 }));
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea ({ click.getScreenX(), click.getScreenY(), 1, 1 }),
+                            std::move (onClosed));
     }
+
+    // 표(TableListBox) 행의 마우스 규칙. JUCE 의 행은 어느 버튼으로 눌러도 선택하므로, 칸마다 투명한 Cell 을 얹어 클릭을 대신 받는다.
+    //  - 왼쪽 클릭: 행 선택 / 왼쪽 더블클릭: onDoubleClick
+    //  - 오른쪽 클릭: fillMenu 가 항목을 채우면 커서 위치에 메뉴. 선택은 바꾸지 않고, 메뉴가 열린 동안 그 행이 isMenuRow (테두리는 모델이 그린다).
+    //      fillMenu 가 없거나 비면 무반응
+    //  - 가운데 클릭: 무반응
+    // 사용: 모델의 refreshComponentForCell 에서 refreshCell 을 그대로 돌려준다. 칸 그림은 모델의 paintCell 을 Cell 이 대신 부른다
+    //      (JUCE 는 커스텀 컴포넌트가 있는 칸을 직접 그리지 않는다). 행 배경(paintRowBackground)은 JUCE 가 그대로 그린다
+    class TableRowMouse
+    {
+    public:
+        std::function<void (int row)> onDoubleClick;
+        std::function<void (juce::PopupMenu&, int row)> fillMenu;
+
+        bool isMenuRow (int row) const { return row >= 0 && row == menuRow; }
+
+        juce::Component* refreshCell (int row, int columnId, juce::Component* existing)
+        {
+            auto* cell = dynamic_cast<Cell*> (existing);
+
+            if (cell == nullptr)
+            {
+                delete existing;
+                cell = new Cell (*this);
+            }
+
+            cell->row = row;
+            cell->columnId = columnId;
+            cell->repaint();
+            return cell;
+        }
+
+    private:
+        struct Cell final : public juce::Component
+        {
+            explicit Cell (TableRowMouse& o) : owner (o) {}
+
+            juce::TableListBox* table() const { return findParentComponentOfClass<juce::TableListBox>(); }
+
+            void paint (juce::Graphics& g) override
+            {
+                if (auto* t = table())
+                    if (auto* model = t->getTableListBoxModel())
+                        model->paintCell (g, row, columnId, getWidth(), getHeight(), t->isRowSelected (row));
+            }
+
+            void mouseDown (const juce::MouseEvent& e) override
+            {
+                if (auto* t = table())
+                    owner.clicked (*t, row, e);
+            }
+
+            void mouseDoubleClick (const juce::MouseEvent& e) override
+            {
+                if (isLeftClick (e) && owner.onDoubleClick != nullptr)
+                    owner.onDoubleClick (row);
+            }
+
+            TableRowMouse& owner;
+            int row = -1, columnId = 0;
+        };
+
+        void clicked (juce::TableListBox& table, int row, const juce::MouseEvent& e)
+        {
+            if (isLeftClick (e))
+            {
+                table.selectRowsBasedOnModifierKeys (row, e.mods, false);
+                return;
+            }
+
+            if (! e.mods.isPopupMenu() || fillMenu == nullptr)
+                return;
+
+            juce::PopupMenu menu;
+            fillMenu (menu, row);
+
+            if (menu.getNumItems() == 0)
+                return;
+
+            menuRow = row;
+            table.repaint();
+
+            // 메뉴가 열린 채로 다른 행을 우클릭하면 새 메뉴가 먼저 뜨고 옛 메뉴가 나중에 닫힌다.
+            // 옛 메뉴의 닫힘이 새 메뉴의 테두리를 지우지 않도록, 가장 최근 메뉴가 닫힐 때만 지운다
+            const auto menuId = ++lastMenuId;
+
+            showContextMenu (menu, e, [this, menuId, safeTable = juce::Component::SafePointer<juce::TableListBox> (&table)] (int)
+            {
+                if (menuId != lastMenuId)
+                    return;
+
+                menuRow = -1;
+
+                if (safeTable != nullptr)
+                    safeTable->repaint();
+            });
+        }
+
+        int menuRow = -1;      // 메뉴가 열린 행 (-1 = 없음)
+        int lastMenuId = 0;    // 가장 최근에 연 메뉴 번호
+    };
 
     // 둥근 버튼(블록, 씬 버튼 등)의 오른쪽 위 귀퉁이에 딱 붙는 작은 칸.
     // 오른쪽 위 모서리만 바깥 버튼과 같은 반지름으로 둥글게 깎고, 왼쪽/아래에만 구분선을 긋는다.
