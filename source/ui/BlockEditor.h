@@ -5,6 +5,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/Widgets.h"
+
 namespace rig
 {
     // 블록 선택기 (화면 중간). 모든 블록이 함께 쓰며, 선택된 블록에 장치를 지정한다.

@@ -135,8 +135,8 @@ namespace rig
             return;
 
         if (e.mods.isPopupMenu())
-            showSceneMenu (scene);
-        else
+            showSceneMenu (scene, e);
+        else if (isLeftClick (e))
             sceneClicked (scene);
     }
 
@@ -176,7 +176,7 @@ namespace rig
         flash (scene);
     }
 
-    void SceneBar::showSceneMenu (int scene)
+    void SceneBar::showSceneMenu (int scene, const juce::MouseEvent& click)
     {
         // 오른쪽 클릭은 전환하지 않는다
         cancelMode();
@@ -184,9 +184,7 @@ namespace rig
         juce::PopupMenu menu;
         menu.addItem ("Rename", [this, scene] { startRename (scene); });
         menu.addItem ("Reset", [this, scene] { model.resetScene (scene); });   // 씬 하나라 경고 없이 바로
-
-        const auto area = localAreaToGlobal (sceneBounds[(size_t) scene]);
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (area));
+        showContextMenu (menu, click);
     }
 
     //==============================================================================

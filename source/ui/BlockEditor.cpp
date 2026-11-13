@@ -1,6 +1,7 @@
 #include "BlockEditor.h"
 
 #include "AppPaths.h"
+#include "ui/Widgets.h"
 
 namespace rig
 {
@@ -34,6 +35,10 @@ namespace rig
             { nameColumn, "Name", 2 }, { gearModelColumn, "Gear Model", 2 }, { gearTypeColumn, "Gear Type", 1 },
             { toneColumn, "Tone", 1 }, { modeledByColumn, "Modeled By", 1 },
         };
+
+        // 머리글(정렬, 열 폭, 열 숨기기 메뉴)도 왼쪽 클릭만 (마우스 규칙)
+        for (auto* list : { &namList, &irList })
+            list->setHeader (std::make_unique<LeftClickOnly<juce::TableHeaderComponent>>());
 
         for (const auto& [id, name, ratio] : namColumns)
             namList.getHeader().addColumn (name, id, ratio * 100, 60, -1, columnFlags);
@@ -335,8 +340,11 @@ namespace rig
                     juce::Justification::centredLeft, true);
     }
 
-    void BlockEditor::DeviceListModel::listBoxItemDoubleClicked (int row, const juce::MouseEvent&)
+    void BlockEditor::DeviceListModel::listBoxItemDoubleClicked (int row, const juce::MouseEvent& e)
     {
+        if (! isLeftClick (e))
+            return;
+
         const auto& devices = owner.shownCategory().devices;
 
         if (owner.model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) devices.size()))
@@ -365,9 +373,9 @@ namespace rig
         }
     }
 
-    void BlockEditor::cellDoubleClicked (int row, int, const juce::MouseEvent&)
+    void BlockEditor::cellDoubleClicked (int row, int, const juce::MouseEvent& e)
     {
-        if (model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) rows.size()))
+        if (! isLeftClick (e) || model.getSelectedSlot() == nullptr || ! juce::isPositiveAndBelow (row, (int) rows.size()))
             return;
 
         const auto file = rows[(size_t) row].file;
@@ -429,15 +437,10 @@ namespace rig
     void BlockEditor::showFileNotFound (const juce::File& file)
     {
         // 설정창처럼 버튼으로만 닫히게: ESC 로 닫히지 않고, 닫기(X) 버튼도 없다
-        auto* alert = new juce::AlertWindow ("File not found",
-                                             file.getFullPathName()
-                                                 + "\n\nThe file may have been moved or deleted. "
-                                                   "It will disappear from the list after the library is refreshed.",
-                                             juce::MessageBoxIconType::WarningIcon,
-                                             getTopLevelComponent());   // 프로그램 창 가운데에 띄운다
-        alert->addButton ("OK", 1);
-        alert->setEscapeKeyCancels (false);
-        alert->enterModalState (true, nullptr, true);
+        showAlert (*this, "File not found",
+                   file.getFullPathName() + "\n\nThe file may have been moved or deleted. "
+                                            "It will disappear from the list after the library is refreshed.",
+                   { { "OK", 1 } }, false);
     }
 
     // LookAndFeel_V3::drawTableHeaderBackground 와 같고, 마지막 열의 오른쪽 경계선만 뺐다

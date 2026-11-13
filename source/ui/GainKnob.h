@@ -2,6 +2,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/Widgets.h"
+
 #include <functional>
 
 namespace rig
@@ -51,7 +53,7 @@ namespace rig
 
         // slider 보다 먼저 선언: 멤버는 역순으로 소멸하므로 slider 가 먼저 사라진다
         KnobLookAndFeel knobLnf;
-        juce::Slider slider;
+        LeftClickOnly<juce::Slider> slider;
         juce::Label nameLabel;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GainKnob)

@@ -32,17 +32,17 @@ namespace rig
 
     private:
         void selectAdjacentPatch (int delta);
-        void showPatchNameMenu();
+        void showPatchNameMenu (const juce::MouseEvent& click);
         void resetPatchWithWarning();
         void updateNavigationButtons();
 
         juce::Label patchLabel { {}, "Patch" };
-        juce::ComboBox patchBox;
-        juce::DrawableButton previousPatchButton { "Previous patch", juce::DrawableButton::ImageOnButtonBackground };
-        juce::DrawableButton nextPatchButton { "Next patch", juce::DrawableButton::ImageOnButtonBackground };
+        LeftClickOnly<juce::ComboBox> patchBox;
+        LeftClickOnly<juce::DrawableButton> previousPatchButton { "Previous patch", juce::DrawableButton::ImageOnButtonBackground };
+        LeftClickOnly<juce::DrawableButton> nextPatchButton { "Next patch", juce::DrawableButton::ImageOnButtonBackground };
         PassThroughLabel patchNameBox;                                        // 이름 편집 (공용, Widgets.h)
         CheckCornerButton saveNameButton { "Save patch name", 0.0f, 0.0f };   // 입력칸 오른쪽 끝, 편집 중에만 보인다
-        juce::TextButton settingsButton { "Settings..." };
+        LeftClickOnly<juce::TextButton> settingsButton { "Settings..." };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TopBar)
     };

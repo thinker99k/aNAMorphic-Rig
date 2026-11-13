@@ -9,14 +9,14 @@
 
 namespace rig
 {
-    class MainWindow final : public juce::DocumentWindow
+    class MainWindow final : public LeftClickOnly<juce::DocumentWindow>   // 제목 표시줄 끌기도 왼쪽 클릭만 (마우스 규칙, Widgets.h)
     {
     public:
         explicit MainWindow (const juce::String& name)
-            : DocumentWindow (name,
-                              juce::Desktop::getInstance().getDefaultLookAndFeel()
-                                  .findColour (juce::ResizableWindow::backgroundColourId),
-                              DocumentWindow::closeButton)
+            : LeftClickOnly (name,
+                             juce::Desktop::getInstance().getDefaultLookAndFeel()
+                                 .findColour (juce::ResizableWindow::backgroundColourId),
+                             DocumentWindow::closeButton)
         {
             // 저장된 장치 설정이 있으면 사용, 없으면 기본 장치 (입력 1채널, 출력 2채널)
             // 마지막 인자 true: 저장된 장치를 못 열면 기본 장치로 대신 연다

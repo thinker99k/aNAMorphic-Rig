@@ -5,6 +5,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/Widgets.h"
+
 namespace rig
 {
     // 가로 막대 게이지 하나 (레벨 미터 / CPU 게이지 공용)
@@ -32,7 +34,7 @@ namespace rig
         // 콜백 연결은 MainComponent 가 한다
         GainKnob inputKnob  { "INPUT",  AudioEngine::inputMinDb,  AudioEngine::inputMaxDb,  false };
         GainKnob outputKnob { "OUTPUT", AudioEngine::outputMinDb, AudioEngine::outputMaxDb, true  };
-        juce::TextButton muteButton { "MUTE" };
+        LeftClickOnly<juce::TextButton> muteButton { "MUTE" };
 
         // 피크 값(선형 0..1+), CPU(0..1) 를 받아 갱신. UI 타이머에서 호출.
         void update (float inputPeak, double cpuUsage, float outputPeak);

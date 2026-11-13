@@ -3,6 +3,8 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/Widgets.h"
+
 #include <functional>
 
 namespace rig
@@ -42,13 +44,13 @@ namespace rig
         juce::Label typeLabel    { {}, "Audio driver" };
         juce::Label deviceLabel  { {}, "Input source" };
         juce::Label channelLabel { {}, "Input channel" };
-        juce::ComboBox typeBox, deviceBox, channelBox;
+        LeftClickOnly<juce::ComboBox> typeBox, deviceBox, channelBox;
         juce::Label outputDeviceLabel  { {}, "Output device" };
         juce::Label outputChannelLabel { {}, "Output channel" };
-        juce::ComboBox outputDeviceBox, outputChannelBox;
+        LeftClickOnly<juce::ComboBox> outputDeviceBox, outputChannelBox;
 
-        juce::TextButton saveButton   { "Save" };
-        juce::TextButton cancelButton { "Cancel" };
+        LeftClickOnly<juce::TextButton> saveButton   { "Save" };
+        LeftClickOnly<juce::TextButton> cancelButton { "Cancel" };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SettingsDialog)
     };
