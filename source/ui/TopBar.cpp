@@ -61,6 +61,11 @@ namespace rig
                 ed->setJustification (juce::Justification::centred);
                 ed->setIndents (0, 0);
                 ed->setBorder (patchNameBox.getBorderSize());
+
+                // 편집기 자체 테두리는 그리지 않는다: 포커스 중 JUCE 는 2 px 테두리를 덧그려 두꺼워 보이므로,
+                // Label 의 1 px 테두리만 평소와 같은 자리에 남긴다
+                ed->setColour (juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+                ed->setColour (juce::TextEditor::focusedOutlineColourId, juce::Colours::transparentBlack);
             }
 
             saveNameButton.setVisible (true);
