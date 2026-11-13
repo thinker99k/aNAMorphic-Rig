@@ -389,21 +389,4 @@ namespace rig
         if (renamingScene >= 0)
             layoutNameEditor();
     }
-
-    //==============================================================================
-    SceneBar::SaveNameButton::SaveNameButton()
-        : CornerButton ("Save scene name", sceneCorner, 0.5f, juce::Colours::limegreen) {}
-
-    void SceneBar::SaveNameButton::drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active)
-    {
-        const auto box = area.reduced (area.getWidth() * 0.22f);
-
-        juce::Path check;
-        check.startNewSubPath (box.getX(), box.getCentreY());
-        check.lineTo (box.getX() + box.getWidth() * 0.38f, box.getBottom());
-        check.lineTo (box.getRight(), box.getY());
-
-        g.setColour (juce::Colours::white.withAlpha (active ? 1.0f : 0.85f));
-        g.strokePath (check, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-    }
 }

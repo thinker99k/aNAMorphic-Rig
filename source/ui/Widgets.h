@@ -51,6 +51,38 @@ namespace rig
         const juce::Colour activeColour;
     };
 
+    // 저장 체크 버튼: 이름 입력칸 오른쪽 위 귀퉁이에 딱 붙는 정사각형 (CornerButton). 누르면 초록
+    struct CheckCornerButton final : public CornerButton
+    {
+        CheckCornerButton (const juce::String& name, float cornerSize, float edgeInset)
+            : CornerButton (name, cornerSize, edgeInset, juce::Colours::limegreen) {}
+
+        void drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active) override
+        {
+            const auto box = area.reduced (area.getWidth() * 0.22f);
+
+            juce::Path check;
+            check.startNewSubPath (box.getX(), box.getCentreY());
+            check.lineTo (box.getX() + box.getWidth() * 0.38f, box.getBottom());
+            check.lineTo (box.getRight(), box.getY());
+
+            g.setColour (juce::Colours::white.withAlpha (active ? 1.0f : 0.85f));
+            g.strokePath (check, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    };
+
+    // 이름 편집용 Label. 편집 중에는 모달이 되어 바깥 클릭이 컴포넌트에 닿기 전에 편집을 끝내는데,
+    // allowWhileEditing 이 허락한 컴포넌트(저장 체크 버튼)의 클릭만은 그대로 통과시킨다 (그래야 체크로 저장할 수 있다)
+    struct PassThroughLabel final : public juce::Label
+    {
+        std::function<bool (const juce::Component*)> allowWhileEditing;
+
+        bool canModalEventBeSentToComponent (const juce::Component* target) override
+        {
+            return allowWhileEditing != nullptr && allowWhileEditing (target);
+        }
+    };
+
     // 앱 기본 LookAndFeel (V4 그대로). TextButton 글자는 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 맞춘다.
     // 한 줄과 "단어마다 한 줄" 중 글꼴을 더 크게 쓸 수 있는 쪽으로 그린다 (예: 좁은 "All Reset" → All / Reset)
     struct AppLookAndFeel : public juce::LookAndFeel_V4

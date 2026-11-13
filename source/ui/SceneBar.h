@@ -44,18 +44,6 @@ namespace rig
     private:
         enum class Mode { none, copy, swap };
 
-        // Label 은 편집 중에 모달이 되어, 바깥 클릭은 컴포넌트에 닿기 전에 편집을 끝내 버린다 (TopBar 와 같은 방식).
-        // 체크 버튼 클릭만은 그대로 통과시켜야 저장할 수 있다
-        struct SceneNameLabel final : public juce::Label
-        {
-            std::function<bool (const juce::Component*)> allowWhileEditing;
-
-            bool canModalEventBeSentToComponent (const juce::Component* target) override
-            {
-                return allowWhileEditing != nullptr && allowWhileEditing (target);
-            }
-        };
-
         // Copy / Swap 모드 중 씬 바 바깥 클릭을 알아차린다 (클릭 자체는 막지 않는다)
         struct OutsideClickWatcher final : public juce::MouseListener
         {
@@ -89,15 +77,8 @@ namespace rig
         std::array<juce::uint32, RigModel::numScenes> flashStart {};   // 실행 뒤 테두리 강조 시작 시각 (0 = 없음)
         OutsideClickWatcher outsideClickWatcher { *this };
 
-        SceneNameLabel nameEditor;
-        // 이름 입력칸의 저장 버튼: 씬 버튼 오른쪽 위 귀퉁이에 딱 붙은 정사각형 (블록 삭제 X 와 같은 공용 CornerButton)
-        struct SaveNameButton final : public CornerButton
-        {
-            SaveNameButton();
-            void drawContent (juce::Graphics&, juce::Rectangle<float> area, bool active) override;
-        };
-
-        SaveNameButton saveNameButton;
+        PassThroughLabel nameEditor;                       // 이름 편집 (공용, Widgets.h)
+        CheckCornerButton saveNameButton { "Save scene name", 5.0f, 0.5f };   // 씬 버튼 오른쪽 위 귀퉁이 (반지름 5 = sceneCorner)
         int renamingScene = -1;                 // 입력칸이 덮고 있는 씬 (-1 = 편집 중 아님)
         int nameTargetScene = -1;               // 입력칸 내용을 저장할 씬. 편집기가 닫힌 뒤에 저장 알림이 오므로 따로 둔다
 

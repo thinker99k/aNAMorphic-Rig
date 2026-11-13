@@ -56,89 +56,37 @@ namespace rig
         {
             if (auto* ed = patchNameBox.getCurrentTextEditor())
             {
+                // 평소 표시와 같은 자리에 글자가 오도록: Label 과 같은 가운데 정렬, 같은 테두리 여백
                 ed->setInputRestrictions (RigModel::maxPatchNameLength);
                 ed->setJustification (juce::Justification::centred);
+                ed->setIndents (0, 0);
+                ed->setBorder (patchNameBox.getBorderSize());
             }
 
-            editNameButton.setImages (&checkImage);
-            editNameButton.setTooltip ("Save patch name (Enter to save, Escape to cancel)");
+            saveNameButton.setVisible (true);
+            resized();
         };
-        patchNameBox.onEditorHide = [this]
-        {
-            editNameButton.setImages (&pencilImage);
-            editNameButton.setTooltip ("Edit patch name");
-        };
+        patchNameBox.onEditorHide = [this] { saveNameButton.setVisible (false); };
         patchNameBox.onTextChange = [this]
         {
             if (onPatchNameChanged)
                 onPatchNameChanged (patchNameBox.getText());
         };
 
-        juce::Path pencil;
-        pencil.startNewSubPath (3.0f, 14.0f);
-        pencil.lineTo (13.0f, 4.0f);
-        pencil.lineTo (17.0f, 8.0f);
-        pencil.lineTo (7.0f, 18.0f);
-        pencil.lineTo (2.0f, 19.0f);
-        pencil.closeSubPath();
-        pencil.startNewSubPath (14.0f, 3.0f);
-        pencil.lineTo (16.0f, 1.0f);
-        pencil.lineTo (20.0f, 5.0f);
-        pencil.lineTo (18.0f, 7.0f);
-        pencil.closeSubPath();
-        pencilImage.setPath (pencil);
-        pencilImage.setFill (juce::Colours::lightgrey);
-
-        juce::Path check;
-        check.startNewSubPath (3.0f, 11.0f);
-        check.lineTo (8.0f, 16.0f);
-        check.lineTo (18.0f, 5.0f);
-        checkImage.setPath (check);
-        checkImage.setFill (juce::FillType());
-        checkImage.setStrokeFill (juce::Colours::lightgrey);
-        checkImage.setStrokeType (juce::PathStrokeType (2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-        editNameButton.setImages (&pencilImage);
-        editNameButton.setEdgeIndent (6);
-        editNameButton.setTooltip ("Edit patch name");
-
-        // 체크 버튼을 눌러도 편집기의 키보드 포커스를 빼앗지 않아야 저장된다 (포커스를 잃으면 취소되므로)
-        editNameButton.setWantsKeyboardFocus (false);
-        editNameButton.setMouseClickGrabsKeyboardFocus (false);
-        editNameButton.setInterceptsMouseClicks (true, false);   // 안쪽 아이콘 컴포넌트가 클릭을 받으면 포커스가 다른 곳으로 넘어간다
-        patchNameBox.allowWhileEditing = [this] (const juce::Component* target) { return target == &editNameButton; };
-        editNameButton.onClick = [this]
-        {
-            if (patchNameBox.isBeingEdited())
-                patchNameBox.hideEditor (false);
-            else
-                patchNameBox.showEditor();
-        };
-
-        // 패치 초기화 (글자 버튼, 왼쪽 클릭만)
-        resetPatchButton.setTooltip ("Reset this patch to the default (no blocks, default scenes and name)");
-        // 블록 전체와 씬 8개를 함께 초기화하는 큰 리셋이므로 경고를 띄운다 (기준은 Widgets.h showResetWarning)
-        resetPatchButton.onClick = [this]
-        {
-            juce::Component::SafePointer<TopBar> safeThis (this);
-            showResetWarning (*this, "Reset patch",
-                              "Reset patch " + juce::String (patchBox.getSelectedId()).paddedLeft ('0', 2) + " (\""
-                                  + patchNameBox.getText() + "\")?\n\nAll blocks are removed, the 8 scenes go back to "
-                                  "their defaults and the name goes back to the file name.",
-                              [safeThis]
-                              {
-                                  if (safeThis != nullptr && safeThis->onPatchReset)
-                                      safeThis->onPatchReset();
-                              });
-        };
+        // 체크 버튼을 눌러도 입력칸의 키보드 포커스를 빼앗지 않아야 저장된다 (포커스를 잃으면 취소되므로)
+        saveNameButton.setTooltip ("Save patch name (Enter to save, Escape to cancel)");
+        saveNameButton.setWantsKeyboardFocus (false);
+        saveNameButton.setMouseClickGrabsKeyboardFocus (false);
+        saveNameButton.onClick = [this] { patchNameBox.hideEditor (false); };
+        patchNameBox.allowWhileEditing = [this] (const juce::Component* target) { return target == &saveNameButton; };
+        patchNameBox.addMouseListener (this, false);   // 오른쪽 클릭 메뉴는 TopBar::mouseDown 에서
 
         addAndMakeVisible (patchLabel);
         addAndMakeVisible (patchBox);
         addAndMakeVisible (previousPatchButton);
         addAndMakeVisible (nextPatchButton);
         addAndMakeVisible (patchNameBox);
-        addAndMakeVisible (editNameButton);
-        addAndMakeVisible (resetPatchButton);
+        addChildComponent (saveNameButton);
         addAndMakeVisible (settingsButton);
 
         updateNavigationButtons();
@@ -191,7 +139,40 @@ namespace rig
         const int sideMargin = juce::jmax (area.getX(), getWidth() - area.getRight()) + 48;
         const int nameWidth = juce::jlimit (0, 420, getWidth() - 2 * sideMargin);
         patchNameBox.setBounds ((getWidth() - nameWidth) / 2, area.getY(), nameWidth, area.getHeight());
-        editNameButton.setBounds (patchNameBox.getRight() + 6, area.getY(), 28, area.getHeight());
-        resetPatchButton.setBounds (editNameButton.getRight() + 6, area.getY(), 56, area.getHeight());
+
+        // 체크 버튼: 입력칸 오른쪽 끝, 입력칸 높이의 정사각형 (세로 가운데)
+        const auto nameBounds = patchNameBox.getBounds();
+        const int checkSize = nameBounds.getHeight();
+        saveNameButton.setBounds (nameBounds.getRight() - checkSize, nameBounds.getCentreY() - checkSize / 2, checkSize, checkSize);
+    }
+
+    void TopBar::mouseDown (const juce::MouseEvent& e)
+    {
+        // 패치 이름 오른쪽 클릭만: 메뉴 외 다른 동작 없음
+        if (e.eventComponent == &patchNameBox && e.mods.isPopupMenu() && ! patchNameBox.isBeingEdited())
+            showPatchNameMenu();
+    }
+
+    void TopBar::showPatchNameMenu()
+    {
+        juce::PopupMenu menu;   // 씬 버튼 메뉴와 같은 모양 (머리글 없음)
+        menu.addItem ("Rename", [this] { patchNameBox.showEditor(); });
+        menu.addItem ("Reset", [this] { resetPatchWithWarning(); });
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea (patchNameBox.getScreenBounds()));
+    }
+
+    // 블록 전체와 씬 8개를 함께 초기화하는 큰 리셋이므로 경고를 띄운다 (기준은 Widgets.h showResetWarning)
+    void TopBar::resetPatchWithWarning()
+    {
+        juce::Component::SafePointer<TopBar> safeThis (this);
+        showResetWarning (*this, "Reset patch",
+                          "Reset patch " + juce::String (patchBox.getSelectedId()).paddedLeft ('0', 2) + " (\""
+                              + patchNameBox.getText() + "\")?\n\nAll blocks are removed, the 8 scenes go back to "
+                              "their defaults and the name goes back to the file name.",
+                          [safeThis]
+                          {
+                              if (safeThis != nullptr && safeThis->onPatchReset)
+                                  safeThis->onPatchReset();
+                          });
     }
 }
