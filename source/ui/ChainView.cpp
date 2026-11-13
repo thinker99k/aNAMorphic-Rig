@@ -1,5 +1,7 @@
 #include "ChainView.h"
 
+#include "ui/Widgets.h"
+
 namespace rig
 {
     namespace
@@ -56,49 +58,32 @@ namespace rig
             return parts.isEmpty() ? juce::String ("-") : parts.joinIntoString (", ");
         }
 
-        // 블록 오른쪽 위 귀퉁이에 박힌 삭제 칸: 블록의 바깥 테두리와 둥근 귀퉁이를 같이 쓰고,
-        // 왼쪽/아래에만 구분선이 있다. 블록 테두리는 Tile::paintOverChildren 에서 이 위에 그린다
-        struct CornerDeleteButton final : public juce::Button
+        // 블록 오른쪽 위 귀퉁이에 박힌 삭제 칸 (공용 CornerButton). 블록 테두리 선(1.5 px 안쪽)에 맞춰 붙고,
+        // 블록 테두리는 Tile::paintOverChildren 에서 이 위에 그린다
+        struct CornerDeleteButton final : public CornerButton
         {
-            CornerDeleteButton() : juce::Button ("X") {}
+            CornerDeleteButton() : CornerButton ("X", corner, 1.5f, juce::Colours::red) {}
 
-            void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+            void drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active) override
             {
-                // 블록 테두리 선(타일 가장자리에서 1.5 px 안쪽)에 맞춘 영역
-                const auto area = getLocalBounds().toFloat().withTrimmedTop (1.5f).withTrimmedRight (1.5f);
-
-                juce::Path shape;
-                shape.addRoundedRectangle (area.getX(), area.getY(), area.getWidth(), area.getHeight(),
-                                           corner, corner, false, true, false, false);
-
-                g.setColour (down        ? juce::Colours::red.darker (0.3f)
-                           : highlighted ? juce::Colours::red.darker (0.1f)
-                                         : juce::Colours::black.withAlpha (0.35f));
-                g.fillPath (shape);
-
-                g.setColour (juce::Colours::grey.withAlpha (0.7f));
-                g.drawVerticalLine (0, area.getY(), area.getBottom());
-                g.drawHorizontalLine (getHeight() - 1, 0.0f, area.getRight());
-
-                g.setColour (juce::Colours::white.withAlpha (highlighted || down ? 1.0f : 0.8f));
+                g.setColour (juce::Colours::white.withAlpha (active ? 1.0f : 0.8f));
                 g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
                 g.drawText ("X", area.toNearestInt(), juce::Justification::centred);
             }
         };
 
-        // 블록 안쪽을 빨간 빗금으로 채운다 (로딩 실패)
-        void drawErrorHatch (juce::Graphics& g, juce::Rectangle<float> bounds)
+        // 로딩 실패 표시: 블록 위에 굵은 빨간 대각선 하나 (테두리와 같은 굵기)
+        constexpr float errorThickness = 4.0f;
+
+        void drawErrorSlash (juce::Graphics& g, juce::Rectangle<float> bounds)
         {
             juce::Graphics::ScopedSaveState save (g);
             juce::Path clip;
             clip.addRoundedRectangle (bounds, corner);
             g.reduceClipRegion (clip);
 
-            g.setColour (juce::Colours::red.withAlpha (0.35f));
-            const float h = bounds.getHeight();
-
-            for (float x = bounds.getX() - h; x < bounds.getRight(); x += 10.0f)
-                g.drawLine (x, bounds.getBottom(), x + h, bounds.getY(), 2.0f);
+            g.setColour (juce::Colours::red);
+            g.drawLine (bounds.getX(), bounds.getBottom(), bounds.getRight(), bounds.getY(), errorThickness);
         }
     }
 
@@ -125,18 +110,14 @@ namespace rig
         void paint (juce::Graphics& g) override
         {
             const auto& slot = model.getSlots()[(size_t) index];
-            const bool failed = slot.error.isNotEmpty();
             auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
             auto base = colourFor (slot.type);
-            if (! slot.on && slot.type != BlockType::None)
+            if (! model.isOn (slot) && slot.type != BlockType::None)
                 base = base.withSaturation (0.1f).darker (0.5f);
 
             g.setColour (slot.type == BlockType::None ? juce::Colours::black : base.darker (0.6f));
             g.fillRoundedRectangle (bounds, corner);
-
-            if (failed)
-                drawErrorHatch (g, bounds);
 
             auto text = getLocalBounds().reduced (10, 6).withTrimmedBottom (24);
 
@@ -161,24 +142,27 @@ namespace rig
             const auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
             auto base = colourFor (slot.type);
-            if (! slot.on && slot.type != BlockType::None)
+            if (! model.isOn (slot) && slot.type != BlockType::None)
                 base = base.withSaturation (0.1f).darker (0.5f);
 
-            // 테두리: 선택 = 흰색, 오류 = 빨강 (둘 다면 흰 테두리 안쪽에 빨강)
+            // 오류: 블록 위(버튼 포함)에 굵은 빨간 대각선 + 같은 굵기의 빨간 테두리.
+            // 선택까지 되어 있으면 빨간 테두리 바깥에 흰 테두리
+            if (failed)
+            {
+                const auto inner = selected ? bounds.reduced (2.5f) : bounds;
+                drawErrorSlash (g, inner);
+                g.setColour (juce::Colours::red);
+                g.drawRoundedRectangle (inner.reduced (errorThickness * 0.5f - 0.75f), corner, errorThickness);
+            }
+
+            // 테두리: 선택 = 흰색
             if (selected)
                 g.setColour (juce::Colours::white);
-            else if (failed)
-                g.setColour (juce::Colours::red);
-            else
+            else if (! failed)
                 g.setColour (slot.type == BlockType::None ? juce::Colours::grey.darker() : base);
 
-            g.drawRoundedRectangle (bounds, corner, selected || failed ? 2.5f : 1.5f);
-
-            if (selected && failed)
-            {
-                g.setColour (juce::Colours::red);
-                g.drawRoundedRectangle (bounds.reduced (3.0f), corner - 2.0f, 2.0f);
-            }
+            if (selected || ! failed)
+                g.drawRoundedRectangle (bounds, corner, selected ? 2.5f : 1.5f);
         }
 
         void resized() override
@@ -287,7 +271,7 @@ namespace rig
             g.drawText (title, text.removeFromTop (17), juce::Justification::centred);
             g.setColour (juce::Colours::grey.brighter (0.2f));
             g.setFont (juce::FontOptions (12.0f));
-            g.drawFittedText (channels, text, juce::Justification::centred, 1, 0.8f);
+            g.drawFittedText (channels, text, juce::Justification::centred, 1, 1.0f);   // 찌그러뜨리지 않고 말줄임
         }
 
         RigModel& model;

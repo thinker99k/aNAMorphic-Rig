@@ -8,6 +8,9 @@ namespace rig
 {
     RigModel::RigModel (AudioEngine& e) : engine (e)
     {
+        for (int i = 0; i < numScenes; ++i)
+            sceneNames[(size_t) i] = defaultSceneName (i);
+
         loadSettings();
     }
 
@@ -52,14 +55,18 @@ namespace rig
 
     //==============================================================================
     // 패치 저장/불러오기 : ~/Documents/aNAMorphic-Rig/patch/config<NN>  (JSON)
-    //  "type": "none" 은 미지정 블록 (통과), "file" 은 "". "on" 이 없거나 bool 이 아니면 On. 기본 패치는 블록 없음
+    //  "type": "none" 은 미지정 블록 (통과), "file" 은 "". 기본 패치는 블록 없음
+    //  "scenes" : 씬 8개의 이름. 이름이 없거나 문자열이 아니거나 비면 "Scene n", 16자까지
+    //  "on"     : 블록의 씬별 On/Off 8개. 없거나 bool 이 아닌 값은 On
+    //  현재 씬 번호는 저장하지 않는다 (항상 씬 1 로 열린다)
     //
     //  {
     //    "version": 1,
     //    "name": "config01",
-    //    "blocks": [ { "type": "nam",  "file": "/path/amp.nam", "on": true },
-    //                { "type": "none", "file": "",              "on": true },
-    //                { "type": "ir",   "file": "/path/cab.wav", "on": false } ]
+    //    "scenes": [ { "name": "Clean" }, { "name": "Scene 2" }, ... 8개 ],
+    //    "blocks": [ { "type": "nam",  "file": "/path/amp.nam", "on": [ true, false, true, true, true, true, true, true ] },
+    //                { "type": "none", "file": "",              "on": [ true, true, true, true, true, true, true, true ] },
+    //                { "type": "ir",   "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ] } ]
     //  }
 
     juce::String RigModel::sanitizePatchName (const juce::var& value, const juce::String& fallback)
@@ -72,6 +79,13 @@ namespace rig
             return fallback;
 
         return name.substring (0, maxPatchNameLength).trimEnd();
+    }
+
+    juce::String RigModel::sanitizeSceneName (const juce::var& value, int scene)
+    {
+        const auto name = value.isString() ? value.toString().trim().substring (0, maxSceneNameLength).trimEnd()
+                                           : juce::String();
+        return name.isNotEmpty() ? name : defaultSceneName (scene);
     }
 
     void RigModel::setPatchName (const juce::String& name)
@@ -89,15 +103,24 @@ namespace rig
         patchNumber = juce::jlimit (1, numPatches, number);
         slots.clear();
         selectedIndex = -1;
+        currentScene = 0;
 
         const auto file = paths::patchFile (patchNumber);
         patchName = file.getFileName();
+
+        for (int i = 0; i < numScenes; ++i)
+            sceneNames[(size_t) i] = defaultSceneName (i);
 
         if (file.existsAsFile())
         {
             const auto json = juce::JSON::parse (file);
 
             patchName = sanitizePatchName (json.getProperty ("name", {}), file.getFileName());
+
+            const auto* scenes = json.getProperty ("scenes", {}).getArray();
+
+            for (int i = 0; i < numScenes; ++i)
+                sceneNames[(size_t) i] = sanitizeSceneName (scenes != nullptr ? (*scenes)[i].getProperty ("name", {}) : juce::var(), i);
 
             if (auto* blocks = json.getProperty ("blocks", {}).getArray())
             {
@@ -106,8 +129,10 @@ namespace rig
                     Slot slot;
                     slot.id = nextSlotId++;
                     slot.type = blockTypeFromString (b.getProperty ("type", {}).toString());
-                    const auto on = b.getProperty ("on", {});
-                    slot.on = on.isBool() ? (bool) on : true;
+                    const auto* on = b.getProperty ("on", {}).getArray();
+
+                    for (int i = 0; i < numScenes; ++i)
+                        slot.on[(size_t) i] = on == nullptr || ! (*on)[i].isBool() || (bool) (*on)[i];
 
                     // 파일이 필요한 종류인데 파일이 없으면 미지정 블록으로 (None / 파일 지정된 NAM·IR 만 존재)
                     const auto path = b.getProperty ("file", {}).toString();
@@ -135,6 +160,20 @@ namespace rig
         waitingForPatch = true;
         rebuildChain();
         sendChangeMessage();
+    }
+
+    void RigModel::resetPatch()
+    {
+        slots.clear();
+        selectedIndex = -1;
+        currentScene = 0;
+        patchName = paths::patchFile (patchNumber).getFileName();
+
+        for (int i = 0; i < numScenes; ++i)
+            sceneNames[(size_t) i] = defaultSceneName (i);
+
+        waitingForPatch = false;
+        changed();   // 저장 + 빈 체인으로 크로스페이드 + UI 알림
     }
 
     void RigModel::setInputGainDb (float db)
@@ -171,13 +210,28 @@ namespace rig
             auto obj = std::make_unique<juce::DynamicObject>();
             obj->setProperty ("type", toString (slot.type));
             obj->setProperty ("file", slot.file.getFullPathName());
-            obj->setProperty ("on", slot.on);
+
+            juce::Array<juce::var> on;
+            for (const bool b : slot.on)
+                on.add (b);
+
+            obj->setProperty ("on", on);
             blocks.add (juce::var (obj.release()));
+        }
+
+        juce::Array<juce::var> scenes;
+
+        for (const auto& name : sceneNames)
+        {
+            auto obj = std::make_unique<juce::DynamicObject>();
+            obj->setProperty ("name", name);
+            scenes.add (juce::var (obj.release()));
         }
 
         auto root = std::make_unique<juce::DynamicObject>();
         root->setProperty ("version", 1);
         root->setProperty ("name", patchName);
+        root->setProperty ("scenes", scenes);
         root->setProperty ("blocks", blocks);
 
         paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release())));
@@ -241,13 +295,102 @@ namespace rig
 
         // 프로그램은 그대로 두고 블록의 wet/dry 목표만 바꾼다 (오디오 스레드가 크로스페이드)
         auto& slot = slots[(size_t) index];
-        slot.on = shouldBeOn;
+        slot.on[(size_t) currentScene] = shouldBeOn;
 
         if (slot.dsp != nullptr)
             slot.dsp->setOn (shouldBeOn);
 
         savePatch();
         sendChangeMessage();
+    }
+
+    //==============================================================================
+    void RigModel::selectScene (int scene)
+    {
+        if (! juce::isPositiveAndBelow (scene, numScenes))
+            return;
+
+        currentScene = scene;
+        applyCurrentScene();
+        sendChangeMessage();
+    }
+
+    void RigModel::copyScene (int source, int destination)
+    {
+        if (! juce::isPositiveAndBelow (source, numScenes) || ! juce::isPositiveAndBelow (destination, numScenes)
+            || source == destination)
+            return;
+
+        sceneNames[(size_t) destination] = sceneNames[(size_t) source];
+
+        for (auto& slot : slots)
+            slot.on[(size_t) destination] = slot.on[(size_t) source];
+
+        sceneEdited (destination);
+    }
+
+    void RigModel::swapScene (int source, int destination)
+    {
+        if (! juce::isPositiveAndBelow (source, numScenes) || ! juce::isPositiveAndBelow (destination, numScenes)
+            || source == destination)
+            return;
+
+        std::swap (sceneNames[(size_t) source], sceneNames[(size_t) destination]);
+
+        for (auto& slot : slots)
+            std::swap (slot.on[(size_t) source], slot.on[(size_t) destination]);
+
+        sceneEdited (source == currentScene ? source : destination);
+    }
+
+    void RigModel::resetScene (int scene)
+    {
+        if (! juce::isPositiveAndBelow (scene, numScenes))
+            return;
+
+        sceneNames[(size_t) scene] = defaultSceneName (scene);
+
+        for (auto& slot : slots)
+            slot.on[(size_t) scene] = true;
+
+        sceneEdited (scene);
+    }
+
+    void RigModel::resetAllScenes()
+    {
+        for (int i = 0; i < numScenes; ++i)
+            sceneNames[(size_t) i] = defaultSceneName (i);
+
+        for (auto& slot : slots)
+            slot.on = allScenesOn();
+
+        sceneEdited (currentScene);
+    }
+
+        void RigModel::renameScene (int scene, const juce::String& name)
+    {
+        if (! juce::isPositiveAndBelow (scene, numScenes))
+            return;
+
+        sceneNames[(size_t) scene] = sanitizeSceneName (name, scene);
+        savePatch();
+        sendChangeMessage();
+    }
+
+    void RigModel::sceneEdited (int scene)
+    {
+        if (scene == currentScene)
+            applyCurrentScene();
+
+        savePatch();
+        sendChangeMessage();
+    }
+
+    void RigModel::applyCurrentScene()
+    {
+        for (auto& slot : slots)
+            if (slot.dsp != nullptr)
+                slot.dsp->setOn (isOn (slot));
     }
 
     void RigModel::assignBlock (int index, BlockType type, const juce::File& file)
@@ -348,7 +491,7 @@ namespace rig
 
         // 아직 오디오 스레드가 쓰지 않는 새 블록이므로 On/Off 를 바로 맞춘다
         if (block != nullptr)
-            block->setOn (it->on, true);
+            block->setOn (isOn (*it), true);
 
         rebuildChain();
         sendChangeMessage();

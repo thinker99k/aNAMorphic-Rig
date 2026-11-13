@@ -28,7 +28,7 @@ namespace rig
 
         // 미지정 블록은 지정할 때까지 끌 수 없다
         powerButton.setEnabled (slot != nullptr && slot->type != BlockType::None);
-        powerButton.setToggleState (slot == nullptr || slot->on, juce::dontSendNotification);
+        powerButton.setToggleState (slot == nullptr || model.isOn (*slot), juce::dontSendNotification);
     }
 
     void ParamBar::PowerButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
@@ -76,7 +76,7 @@ namespace rig
     {
         // 오른쪽 끝 = 전원 버튼. 나머지(왼쪽)는 나중에 파라미터 노브 자리
         auto area = getLocalBounds().reduced (12, 0);
-        const int size = juce::jmin (40, getHeight() - 16);
+        const int size = juce::jmin (50, getHeight() - 8);   // 전원 버튼 50 px (예전 40 px 의 1.25 배)
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
     }
 }

@@ -11,7 +11,8 @@ namespace rig
           topBar (RigModel::numPatches),
           chainView (m, dm),
           paramBar (m),
-          blockEditor (m)
+          blockEditor (m),
+          sceneBar (m)
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());
@@ -31,6 +32,11 @@ namespace rig
             statusBar.outputKnob.setValueDb (model.isOutputMuted() ? AudioEngine::outputMinDb
                                                                    : model.getOutputGainDb());
             updateMuteButton();
+        };
+        topBar.onPatchReset = [this]
+        {
+            model.resetPatch();
+            topBar.setPatchName (model.getPatchName());
         };
         topBar.onSettingsClicked = [this] { openSettings(); };
 

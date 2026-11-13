@@ -5,6 +5,7 @@
 #include "ui/BlockEditor.h"
 #include "ui/ChainView.h"
 #include "ui/ParamBar.h"
+#include "ui/SceneBar.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
 
@@ -23,7 +24,7 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ BlockEditor : 블록 선택기 (본문의 3/8)        │
     //  ├──────────────────────────────────────────────┤
-    //  │ 씬 바 (본문의 1/8, 아직 비어 있음)             │
+    //  │ SceneBar    : [1]…[8] [Copy/Swap] (본문의 1/8) │
     //  ├──────────────────────────────────────────────┤
     //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
@@ -53,7 +54,7 @@ namespace rig
         ChainView chainView;
         ParamBar paramBar;
         BlockEditor blockEditor;
-        juce::Component sceneBar;   // 씬 버튼 자리 (나중에 채운다)
+        SceneBar sceneBar;
         StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)

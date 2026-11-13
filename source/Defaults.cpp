@@ -13,12 +13,22 @@ namespace rig::defaults
             return json.getDynamicObject() != nullptr && json.getProperty ("blocks", {}).isArray();
         }
 
-        // 기본 패치: 블록 없음 (IN -> OUT)
+        // 기본 패치: 기본 이름의 씬 8개, 블록 없음 (IN -> OUT)
         juce::String defaultPatchText (const juce::String& name)
         {
+            juce::Array<juce::var> scenes;
+
+            for (int i = 1; i <= RigModel::numScenes; ++i)
+            {
+                auto scene = std::make_unique<juce::DynamicObject>();
+                scene->setProperty ("name", "Scene " + juce::String (i));
+                scenes.add (juce::var (scene.release()));
+            }
+
             auto root = std::make_unique<juce::DynamicObject>();
             root->setProperty ("version", 1);
             root->setProperty ("name", name);
+            root->setProperty ("scenes", scenes);
             root->setProperty ("blocks", juce::Array<juce::var>());
 
             return juce::JSON::toString (juce::var (root.release()));
