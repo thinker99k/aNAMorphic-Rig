@@ -61,6 +61,7 @@ namespace rig
         const juce::String& getPatchName() const noexcept { return patchName; }
         void setPatchName (const juce::String& name);
         void loadPatch (int number);
+        void resetPatch();   // 지금 패치를 기본 패치로 (블록 없음, 기본 씬, 이름 = 파일명). 번호 유지, 저장, 크로스페이드
 
         // 입력/출력 볼륨 (dB, 앱 전역, settings.json 에 저장). UI 재구성을 막기 위해 변경 알림은 보내지 않는다
         float getInputGainDb() const noexcept  { return inputGainDb; }

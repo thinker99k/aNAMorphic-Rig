@@ -1,6 +1,7 @@
 #include "TopBar.h"
 
 #include "model/RigModel.h"
+#include "ui/Widgets.h"
 
 namespace rig
 {
@@ -114,12 +115,30 @@ namespace rig
                 patchNameBox.showEditor();
         };
 
+        // 패치 초기화 (글자 버튼, 왼쪽 클릭만)
+        resetPatchButton.setTooltip ("Reset this patch to the default (no blocks, default scenes and name)");
+        // 블록 전체와 씬 8개를 함께 초기화하는 큰 리셋이므로 경고를 띄운다 (기준은 Widgets.h showResetWarning)
+        resetPatchButton.onClick = [this]
+        {
+            juce::Component::SafePointer<TopBar> safeThis (this);
+            showResetWarning (*this, "Reset patch",
+                              "Reset patch " + juce::String (patchBox.getSelectedId()).paddedLeft ('0', 2) + " (\""
+                                  + patchNameBox.getText() + "\")?\n\nAll blocks are removed, the 8 scenes go back to "
+                                  "their defaults and the name goes back to the file name.",
+                              [safeThis]
+                              {
+                                  if (safeThis != nullptr && safeThis->onPatchReset)
+                                      safeThis->onPatchReset();
+                              });
+        };
+
         addAndMakeVisible (patchLabel);
         addAndMakeVisible (patchBox);
         addAndMakeVisible (previousPatchButton);
         addAndMakeVisible (nextPatchButton);
         addAndMakeVisible (patchNameBox);
         addAndMakeVisible (editNameButton);
+        addAndMakeVisible (resetPatchButton);
         addAndMakeVisible (settingsButton);
 
         updateNavigationButtons();
@@ -173,5 +192,6 @@ namespace rig
         const int nameWidth = juce::jlimit (0, 420, getWidth() - 2 * sideMargin);
         patchNameBox.setBounds ((getWidth() - nameWidth) / 2, area.getY(), nameWidth, area.getHeight());
         editNameButton.setBounds (patchNameBox.getRight() + 6, area.getY(), 28, area.getHeight());
+        resetPatchButton.setBounds (editNameButton.getRight() + 6, area.getY(), 56, area.getHeight());
     }
 }

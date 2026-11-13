@@ -33,6 +33,11 @@ namespace rig
                                                                    : model.getOutputGainDb());
             updateMuteButton();
         };
+        topBar.onPatchReset = [this]
+        {
+            model.resetPatch();
+            topBar.setPatchName (model.getPatchName());
+        };
         topBar.onSettingsClicked = [this] { openSettings(); };
 
         statusBar.inputKnob.onValueChanged  = [this] (float db) { model.setInputGainDb (db); };

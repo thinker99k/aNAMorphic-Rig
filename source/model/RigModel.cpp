@@ -162,6 +162,20 @@ namespace rig
         sendChangeMessage();
     }
 
+    void RigModel::resetPatch()
+    {
+        slots.clear();
+        selectedIndex = -1;
+        currentScene = 0;
+        patchName = paths::patchFile (patchNumber).getFileName();
+
+        for (int i = 0; i < numScenes; ++i)
+            sceneNames[(size_t) i] = defaultSceneName (i);
+
+        waitingForPatch = false;
+        changed();   // 저장 + 빈 체인으로 크로스페이드 + UI 알림
+    }
+
     void RigModel::setInputGainDb (float db)
     {
         inputGainDb = juce::jlimit (AudioEngine::inputMinDb, AudioEngine::inputMaxDb, db);
