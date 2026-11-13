@@ -5,12 +5,17 @@
 
 #include <juce_events/juce_events.h>
 
+#include <array>
 #include <memory>
 #include <vector>
 
 namespace rig
 {
     // 체인 편집 상태 (메시지 스레드 전용).
+    //
+    // 씬: 패치마다 8개. 씬은 블록별 On/Off 와 이름만 가진다.
+    //  - 현재 씬 번호는 저장하지 않는다 (패치는 항상 씬 1 로 열린다). 씬 전환은 디스크에 쓰지 않는다
+    //  - 씬 편집(On/Off, 복사/교환/초기화/이름)은 패치에 저장한다
     //
     // UI 는 RigModel 만 보고 편집하고, RigModel 은 변경될 때마다
     //  1) 현재 패치를 ~/Documents/aNAMorphic-Rig/patch/config<NN> 에 자동 저장하고
@@ -19,12 +24,22 @@ namespace rig
     class RigModel final : public juce::ChangeBroadcaster
     {
     public:
+        static constexpr int numScenes = 8;
+        static constexpr int maxSceneNameLength = 16;   // 글자(코드 포인트) 수
+
+        static constexpr std::array<bool, numScenes> allScenesOn()
+        {
+            std::array<bool, numScenes> on {};
+            on.fill (true);
+            return on;
+        }
+
         struct Slot
         {
             juce::uint64 id = 0;                 // 슬롯 고유 번호 (비동기 로딩 결과를 찾을 때 사용)
             BlockType type = BlockType::None;
             juce::File file;                     // None 이면 비어 있고, NAM / IR 이면 항상 지정되어 있다
-            bool on = true;                      // 블록별 값: 종류가 바뀌어도 블록에 남는다
+            std::array<bool, numScenes> on = allScenesOn();   // 씬별 On/Off: 블록을 옮기거나 종류가 바뀌어도 블록에 남는다
 
             std::shared_ptr<Block> dsp;          // 소리를 내는 DSP (없으면 통과). 새 파일을 로딩하는 동안은 옛 DSP 를 그대로 둔다
             bool loading = false;
@@ -67,7 +82,18 @@ namespace rig
         void insertBlock (int index);   // 미지정(None) 블록을 index 자리에 넣고 선택한다
         void removeBlock (int index);
         void moveBlock (int index, int delta);
-        void setOn (int index, bool shouldBeOn);
+        void setOn (int index, bool shouldBeOn);   // 현재 씬의 값만 바꾼다
+        bool isOn (const Slot& slot) const noexcept { return slot.on[(size_t) currentScene]; }
+
+        // 씬 (index 0~7). 범위를 벗어나면 무시
+        int getCurrentScene() const noexcept { return currentScene; }
+        const juce::String& getSceneName (int scene) const { return sceneNames[(size_t) scene]; }
+        void selectScene (int scene);                  // 저장하지 않는다
+        void copyScene (int source, int destination);  // 이름까지 모두 복사
+        void swapScene (int source, int destination);  // 이름과 On/Off 를 맞바꾼다
+        void resetScene (int scene);                   // 모두 On, 기본 이름
+        void resetAllScenes();                         // 8개 씬 모두 resetScene
+        void renameScene (int scene, const juce::String& name);
 
         // 블록에 장치를 지정한다. None 이면 file 은 무시되고 비워진다. 블록별 값(on)은 그대로
         void assignBlock (int index, BlockType type, const juce::File& file);
@@ -83,6 +109,11 @@ namespace rig
         void loadSettings();
         void saveSettings() const;
         void changed();   // 저장 + 체인 재구성 + UI 알림
+        void applyCurrentScene();   // 모든 DSP 의 On/Off 를 현재 씬 값으로
+        void sceneEdited (int scene);   // 씬 편집 후: 현재 씬이면 DSP 반영, 저장, UI 알림
+
+        static juce::String defaultSceneName (int scene) { return "Scene " + juce::String (scene + 1); }
+        static juce::String sanitizeSceneName (const juce::var& value, int scene);
 
         AudioEngine& engine;
         juce::ThreadPool loader { 1 };          // 모델/IR 로딩 전용 스레드
@@ -93,6 +124,8 @@ namespace rig
         bool outputMuted = false;               // loadPatch() 에서 초기화하지 않는다
         std::vector<Slot> slots;
         int selectedIndex = -1;
+        int currentScene = 0;                   // 저장하지 않는다
+        std::array<juce::String, numScenes> sceneNames;
         bool waitingForPatch = false;           // 패치 전환 후 새 패치 블록이 다 로딩될 때까지 옛 소리 유지
         juce::uint64 nextSlotId = 1;
 

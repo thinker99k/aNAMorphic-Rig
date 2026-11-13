@@ -11,7 +11,8 @@ namespace rig
           topBar (RigModel::numPatches),
           chainView (m, dm),
           paramBar (m),
-          blockEditor (m)
+          blockEditor (m),
+          sceneBar (m)
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());

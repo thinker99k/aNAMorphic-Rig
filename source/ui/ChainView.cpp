@@ -1,5 +1,7 @@
 #include "ChainView.h"
 
+#include "ui/Widgets.h"
+
 namespace rig
 {
     namespace
@@ -56,31 +58,15 @@ namespace rig
             return parts.isEmpty() ? juce::String ("-") : parts.joinIntoString (", ");
         }
 
-        // 블록 오른쪽 위 귀퉁이에 박힌 삭제 칸: 블록의 바깥 테두리와 둥근 귀퉁이를 같이 쓰고,
-        // 왼쪽/아래에만 구분선이 있다. 블록 테두리는 Tile::paintOverChildren 에서 이 위에 그린다
-        struct CornerDeleteButton final : public juce::Button
+        // 블록 오른쪽 위 귀퉁이에 박힌 삭제 칸 (공용 CornerButton). 블록 테두리 선(1.5 px 안쪽)에 맞춰 붙고,
+        // 블록 테두리는 Tile::paintOverChildren 에서 이 위에 그린다
+        struct CornerDeleteButton final : public CornerButton
         {
-            CornerDeleteButton() : juce::Button ("X") {}
+            CornerDeleteButton() : CornerButton ("X", corner, 1.5f, juce::Colours::red) {}
 
-            void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+            void drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active) override
             {
-                // 블록 테두리 선(타일 가장자리에서 1.5 px 안쪽)에 맞춘 영역
-                const auto area = getLocalBounds().toFloat().withTrimmedTop (1.5f).withTrimmedRight (1.5f);
-
-                juce::Path shape;
-                shape.addRoundedRectangle (area.getX(), area.getY(), area.getWidth(), area.getHeight(),
-                                           corner, corner, false, true, false, false);
-
-                g.setColour (down        ? juce::Colours::red.darker (0.3f)
-                           : highlighted ? juce::Colours::red.darker (0.1f)
-                                         : juce::Colours::black.withAlpha (0.35f));
-                g.fillPath (shape);
-
-                g.setColour (juce::Colours::grey.withAlpha (0.7f));
-                g.drawVerticalLine (0, area.getY(), area.getBottom());
-                g.drawHorizontalLine (getHeight() - 1, 0.0f, area.getRight());
-
-                g.setColour (juce::Colours::white.withAlpha (highlighted || down ? 1.0f : 0.8f));
+                g.setColour (juce::Colours::white.withAlpha (active ? 1.0f : 0.8f));
                 g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
                 g.drawText ("X", area.toNearestInt(), juce::Justification::centred);
             }
@@ -129,7 +115,7 @@ namespace rig
             auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
             auto base = colourFor (slot.type);
-            if (! slot.on && slot.type != BlockType::None)
+            if (! model.isOn (slot) && slot.type != BlockType::None)
                 base = base.withSaturation (0.1f).darker (0.5f);
 
             g.setColour (slot.type == BlockType::None ? juce::Colours::black : base.darker (0.6f));
@@ -161,7 +147,7 @@ namespace rig
             const auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
             auto base = colourFor (slot.type);
-            if (! slot.on && slot.type != BlockType::None)
+            if (! model.isOn (slot) && slot.type != BlockType::None)
                 base = base.withSaturation (0.1f).darker (0.5f);
 
             // 테두리: 선택 = 흰색, 오류 = 빨강 (둘 다면 흰 테두리 안쪽에 빨강)

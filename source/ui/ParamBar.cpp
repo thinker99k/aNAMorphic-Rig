@@ -28,7 +28,7 @@ namespace rig
 
         // 미지정 블록은 지정할 때까지 끌 수 없다
         powerButton.setEnabled (slot != nullptr && slot->type != BlockType::None);
-        powerButton.setToggleState (slot == nullptr || slot->on, juce::dontSendNotification);
+        powerButton.setToggleState (slot == nullptr || model.isOn (*slot), juce::dontSendNotification);
     }
 
     void ParamBar::PowerButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
