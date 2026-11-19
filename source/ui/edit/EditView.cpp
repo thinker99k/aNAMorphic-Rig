@@ -27,4 +27,13 @@ namespace rig
         sceneBar.setBounds (area.removeFromBottom (unit));
         blockEditor.setBounds (area);
     }
+
+    // 자식에게는 visibilityChanged 가 오지 않으므로 (setVisible 은 EditView 에 불린다) 여기서 넘겨준다.
+    // ParamBar, SceneBar 는 갱신이 가벼워 그대로 둔다
+    void EditView::visibilityChanged()
+    {
+        const bool hidden = ! isVisible();
+        chainView.setUpdatesPaused (hidden);
+        blockEditor.setUpdatesPaused (hidden);
+    }
 }

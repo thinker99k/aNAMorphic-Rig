@@ -33,6 +33,7 @@ namespace rig
         void cancelEditing() { sceneBar.cancelEditing(); }   // 씬 바의 Copy / Swap 모드와 씬 이름 편집을 끝낸다
 
         void resized() override;
+        void visibilityChanged() override;   // 숨겨진 동안(Live 모드) 무거운 갱신을 멈추고, 다시 보이면 한 번 맞춘다
 
     private:
         ChainView chainView;

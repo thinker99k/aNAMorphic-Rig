@@ -21,6 +21,9 @@ namespace rig
         ChainView (RigModel& model, juce::AudioDeviceManager& deviceManager);
         ~ChainView() override;
 
+        // 편집 화면이 숨겨진 동안(Live 모드) 변경 알림으로 다시 만들지 않는다. 다시 켜면 한 번 다시 만든다
+        void setUpdatesPaused (bool paused);
+
         void paint (juce::Graphics&) override;
         void resized() override;
 
@@ -52,6 +55,7 @@ namespace rig
         juce::uint64 shownSelectedId = 0;   // 선택이 바뀌었을 때만 그 블록이 보이도록 스크롤
         MarqueeKey marqueeKey;
         juce::uint32 marqueeStartMs = 0;
+        bool updatesPaused = false;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChainView)
     };

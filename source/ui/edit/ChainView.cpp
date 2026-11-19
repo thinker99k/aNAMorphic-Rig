@@ -387,7 +387,21 @@ namespace rig
 
     void ChainView::changeListenerCallback (juce::ChangeBroadcaster*)
     {
-        rebuild();
+        if (! updatesPaused)
+            rebuild();
+    }
+
+    void ChainView::setUpdatesPaused (bool paused)
+    {
+        if (paused == updatesPaused)
+            return;
+
+        updatesPaused = paused;
+
+        if (paused)
+            stopTimer();   // 숨겨진 동안 흘러가는 이름을 다시 그릴 필요가 없다
+        else
+            rebuild();     // 숨겨진 동안 쌓인 변경을 한 번에 반영 (타이머도 필요하면 다시 켠다)
     }
 
     void ChainView::rebuild()
