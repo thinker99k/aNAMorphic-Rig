@@ -95,7 +95,6 @@ namespace rig
     PatchBar::PatchBar (RigModel& m) : model (m)
     {
         model.addChangeListener (this);
-        refreshNeighbors();
     }
 
     PatchBar::~PatchBar()
@@ -105,15 +104,16 @@ namespace rig
 
     void PatchBar::changeListenerCallback (juce::ChangeBroadcaster*)
     {
+        // 파일은 여기서 읽지 않는다: 숨겨져 있으면 repaint 는 무시되고, 다시 보일 때 paint 에서 읽는다
         if (model.getPatchNumber() != shownPatch)
-        {
-            refreshNeighbors();
             repaint();
-        }
     }
 
     void PatchBar::refreshNeighbors()
     {
+        if (model.getPatchNumber() == shownPatch)
+            return;
+
         shownPatch = model.getPatchNumber();
         hasPrev = shownPatch > 1;
         hasNext = shownPatch < RigModel::numPatches;
@@ -135,6 +135,8 @@ namespace rig
 
     void PatchBar::paint (juce::Graphics& g)
     {
+        refreshNeighbors();   // 패치가 바뀐 뒤 처음 그릴 때만 파일을 읽는다
+
         g.fillAll (barFill);
         g.setColour (border);
         g.drawRect (getLocalBounds(), 1);
@@ -164,6 +166,8 @@ namespace rig
     {
         if (! isLeftClick (e))
             return;
+
+        refreshNeighbors();   // 다시 그리기 전에 눌려도 hasPrev / hasNext 가 지금 패치 기준이도록
 
         const auto pos = e.getPosition();
 

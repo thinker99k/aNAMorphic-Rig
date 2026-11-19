@@ -30,7 +30,7 @@ namespace rig
 
     private:
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
-        void refreshNeighbors();   // 이웃 패치 이름은 파일에서 읽으므로 패치가 바뀔 때만 부른다
+        void refreshNeighbors();   // 패치 번호가 shownPatch 와 다를 때만 이웃 패치 이름을 파일에서 읽는다 (그 외에는 바로 반환)
 
         RigModel& model;
         juce::Rectangle<int> liveBounds, prevBounds, nextBounds;
