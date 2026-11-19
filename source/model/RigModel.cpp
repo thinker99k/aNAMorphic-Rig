@@ -81,6 +81,16 @@ namespace rig
         return name.substring (0, maxPatchNameLength).trimEnd();
     }
 
+    juce::String RigModel::readPatchName (int number)
+    {
+        const auto file = paths::patchFile (juce::jlimit (1, numPatches, number));
+
+        if (! file.existsAsFile())
+            return file.getFileName();                      // 예: "config02"
+
+        return sanitizePatchName (juce::JSON::parse (file).getProperty ("name", {}), file.getFileName());
+    }
+
     juce::String RigModel::sanitizeSceneName (const juce::var& value, int scene)
     {
         const auto name = value.isString() ? value.toString().trim().substring (0, maxSceneNameLength).trimEnd()
