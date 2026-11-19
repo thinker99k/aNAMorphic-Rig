@@ -2,10 +2,7 @@
 
 #include "engine/AudioEngine.h"
 #include "model/RigModel.h"
-#include "ui/edit/BlockEditor.h"
-#include "ui/edit/ChainView.h"
-#include "ui/edit/ParamBar.h"
-#include "ui/edit/SceneBar.h"
+#include "ui/edit/EditView.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
 
@@ -18,13 +15,8 @@ namespace rig
     //  ┌──────────────────────────────────────────────┐
     //  │ TopBar   : Patch [콤보] [◀][▶]  [패치명]  [Settings] │
     //  ├──────────────────────────────────────────────┤
-    //  │ ChainView   : 패치 맵 (본문의 3/8)            │
-    //  ├──────────────────────────────────────────────┤
-    //  │ ParamBar    : 선택 블록 파라미터 (본문의 1/8)  │
-    //  ├──────────────────────────────────────────────┤
-    //  │ BlockEditor : 블록 선택기 (본문의 3/8)        │
-    //  ├──────────────────────────────────────────────┤
-    //  │ SceneBar    : [1]…[8] [Copy/Swap] (본문의 1/8) │
+    //  │ EditView : 본문 (패치 맵, 파라미터 바,         │
+    //  │            블록 선택기, 씬 바. EditView.h 참고) │
     //  ├──────────────────────────────────────────────┤
     //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
@@ -51,10 +43,7 @@ namespace rig
         RigModel& model;
 
         TopBar topBar;
-        ChainView chainView;
-        ParamBar paramBar;
-        BlockEditor blockEditor;
-        SceneBar sceneBar;
+        EditView editView;
         StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
