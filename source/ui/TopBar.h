@@ -30,8 +30,9 @@ namespace rig
         void resized() override;
         void mouseDown (const juce::MouseEvent&) override;   // 패치 이름의 오른쪽 클릭 (patchNameBox 의 마우스 이벤트를 받는다)
 
-    private:
         void selectAdjacentPatch (int delta);
+
+    private:
         void showPatchNameMenu (const juce::MouseEvent& click);
         void resetPatchWithWarning();
         void updateNavigationButtons();
