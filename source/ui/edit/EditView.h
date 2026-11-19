@@ -9,6 +9,8 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <functional>
+
 namespace rig
 {
     // 편집 화면 (TopBar 와 StatusBar 사이)
@@ -25,6 +27,10 @@ namespace rig
     {
     public:
         EditView (RigModel& model, juce::AudioDeviceManager& deviceManager);
+
+        std::function<void()> onLiveClicked;   // 씬 바의 Live 버튼
+
+        void cancelEditing() { sceneBar.cancelEditing(); }   // 씬 바의 Copy / Swap 모드와 씬 이름 편집을 끝낸다
 
         void resized() override;
 

@@ -6,6 +6,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <array>
+#include <functional>
 
 namespace rig
 {
@@ -13,7 +14,7 @@ namespace rig
     //  - 씬 버튼과 Live 는 정사각형. 오른쪽 묶음은 씬 버튼의 1.75 배 폭 (씬 묶음과 겹치지 않는 만큼까지).
     //    바깥 여백과 묶음 안 간격은 6 px. 씬 버튼: 번호는 왼쪽 위, 이름은 아래 가운데
     //  - Live 는 왼쪽 끝, 씬 버튼 8개는 가로 가운데, [Copy/Swap | All Reset] 는 오른쪽 끝
-    //  - Live 는 아직 UI 만 (비활성)
+    //  - Live 를 누르면 onLiveClicked (Live 화면으로 전환)
     //  - 버튼은 왼쪽 클릭에만 반응한다 (앱 전체 마우스 규칙, Widgets.h LeftClickOnly). 가운데 클릭은 씬 버튼에서도 동작 없음
     //  - 왼쪽 버튼을 누르는 순간 그 씬으로 전환 (더블클릭 기능 없음)
     //  - 오른쪽 클릭: 전환하지 않고 Rename / Reset 메뉴만 (머리글 없음)
@@ -35,6 +36,10 @@ namespace rig
     public:
         explicit SceneBar (RigModel& model);
         ~SceneBar() override;
+
+        std::function<void()> onLiveClicked;   // Live 버튼
+
+        void cancelEditing();   // 진행 중인 Copy / Swap 모드와 씬 이름 편집을 끝낸다
 
         void paint (juce::Graphics&) override;
         void resized() override;

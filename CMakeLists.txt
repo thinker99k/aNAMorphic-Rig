@@ -141,6 +141,9 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/edit/SceneBar.cpp
         source/ui/edit/BlockEditor.cpp
         source/ui/edit/EditView.cpp
+        source/ui/live/LiveView.cpp
+        source/ui/live/ScenePads.cpp
+        source/ui/live/PatchBar.cpp
         source/ui/StatusBar.cpp
         source/ui/GainKnob.cpp)
 

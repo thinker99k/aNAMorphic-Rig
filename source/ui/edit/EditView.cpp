@@ -8,6 +8,8 @@ namespace rig
           blockEditor (m),
           sceneBar (m)
     {
+        sceneBar.onLiveClicked = [this] { if (onLiveClicked) onLiveClicked(); };
+
         addAndMakeVisible (chainView);
         addAndMakeVisible (paramBar);
         addAndMakeVisible (blockEditor);

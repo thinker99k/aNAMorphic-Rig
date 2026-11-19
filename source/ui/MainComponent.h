@@ -3,6 +3,7 @@
 #include "engine/AudioEngine.h"
 #include "model/RigModel.h"
 #include "ui/edit/EditView.h"
+#include "ui/live/LiveView.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
 
@@ -20,6 +21,7 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
+    //  Live 모드: 가운데만 EditView 대신 LiveView (씬 패드 + 패치 줄, LiveView.h 참고). TopBar 와 StatusBar 는 그대로
     class MainComponent final : public juce::Component,
                                 private juce::Timer
     {
@@ -34,6 +36,9 @@ namespace rig
         void resized() override;
 
     private:
+        enum class ViewMode { edit, live };
+
+        void setViewMode (ViewMode);   // 가운데만 EditView ↔ LiveView 로 바꾼다 (두 뷰는 파괴하지 않는다)
         void timerCallback() override;
         void openSettings();
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
@@ -44,7 +49,10 @@ namespace rig
 
         TopBar topBar;
         EditView editView;
+        LiveView liveView;
         StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
+
+        ViewMode viewMode = ViewMode::edit;   // 항상 Edit 로 시작, 저장하지 않는다
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
     };

@@ -9,7 +9,8 @@ namespace rig
           engine (e),
           model (m),
           topBar (RigModel::numPatches),
-          editView (m, dm)
+          editView (m, dm),
+          liveView (m)
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());
@@ -56,9 +57,16 @@ namespace rig
             updateMuteButton();
         };
 
+        // 가운데 화면 전환: Live 의 PREV / NEXT 는 TopBar ◀▶ 와 같은 경로 (onPatchChanged)
+        editView.onLiveClicked = [this] { setViewMode (ViewMode::live); };
+        liveView.onLiveOff     = [this] { setViewMode (ViewMode::edit); };
+        liveView.onPatchStep   = [this] (int delta) { topBar.selectAdjacentPatch (delta); };
+
         addAndMakeVisible (topBar);
         addAndMakeVisible (editView);
+        addAndMakeVisible (liveView);
         addAndMakeVisible (statusBar);
+        liveView.setVisible (false);   // 항상 Edit 로 시작
 
         statusBar.inputKnob.setValueDb (model.getInputGainDb());
         statusBar.outputKnob.setValueDb (model.getOutputGainDb());
@@ -114,5 +122,21 @@ namespace rig
         statusBar.setBounds (area.removeFromBottom (statusBarHeight));
 
         editView.setBounds (area);
+        liveView.setBounds (area);   // 보이는 쪽만 그려진다
+    }
+
+    void MainComponent::setViewMode (ViewMode mode)
+    {
+        if (mode == viewMode)
+            return;
+
+        viewMode = mode;
+        const bool live = (mode == ViewMode::live);
+
+        if (live)
+            editView.cancelEditing();   // 열려 있던 Copy/Swap 모드, 이름 편집을 끝낸다
+
+        editView.setVisible (! live);
+        liveView.setVisible (live);
     }
 }
