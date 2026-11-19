@@ -2,10 +2,10 @@
 
 #include "engine/AudioEngine.h"
 #include "model/RigModel.h"
-#include "ui/BlockEditor.h"
-#include "ui/ChainView.h"
-#include "ui/ParamBar.h"
-#include "ui/SceneBar.h"
+#include "ui/edit/BlockEditor.h"
+#include "ui/edit/ChainView.h"
+#include "ui/edit/ParamBar.h"
+#include "ui/edit/SceneBar.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
 
