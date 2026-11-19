@@ -54,7 +54,8 @@ namespace rig
         }
 
         // PREV / NEXT 버튼: [아이콘] [간격] [위 글자 / 아래 글자] 묶음을 버튼 안 가운데에 (NEXT 는 좌우 반대)
-        void drawStepButton (juce::Graphics& g, juce::Rectangle<int> bounds, bool isPrev, bool enabled, const juce::String& bottomText)
+        void drawStepButton (juce::Graphics& g, juce::Rectangle<int> bounds, bool isPrev, bool enabled, const juce::String& bottomText,
+                             const juce::Font& topFont, const juce::Font& bottomFont)
         {
             const auto area = bounds.toFloat();
             g.setColour (stepFill);
@@ -62,8 +63,6 @@ namespace rig
             g.setColour (enabled ? stepBorder : border);
             g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.0f);
 
-            const auto topFont = boldFont (11.0f);
-            const auto bottomFont = semiBoldFont (18.0f);
             const juce::String topText = isPrev ? "PREV PATCH" : "NEXT PATCH";
 
             const float maxLabelWidth = juce::jmax (0.0f, area.getWidth() - (float) (iconSize + iconGap + 2 * textInset));
@@ -158,8 +157,11 @@ namespace rig
         g.drawText ("ON", juce::Rectangle<float> (liveArea.getX(), liveTop + liveFont.getHeight() + (float) textGap, liveArea.getWidth(), onFont.getHeight()),
                     juce::Justification::centred, false);
 
-        drawStepButton (g, prevBounds, true, hasPrev, prevText);
-        drawStepButton (g, nextBounds, false, hasNext, nextText);
+        // 두 버튼이 같은 글꼴을 쓰므로 한 번만 만든다
+        const auto stepTopFont = boldFont (11.0f);
+        const auto stepBottomFont = semiBoldFont (18.0f);
+        drawStepButton (g, prevBounds, true, hasPrev, prevText, stepTopFont, stepBottomFont);
+        drawStepButton (g, nextBounds, false, hasNext, nextText, stepTopFont, stepBottomFont);
     }
 
     void PatchBar::mouseDown (const juce::MouseEvent& e)

@@ -71,6 +71,11 @@ namespace rig
     {
         const int current = model.getCurrentScene();
 
+        // 글꼴은 패드마다 만들지 않고 한 번만
+        const auto numberFont = boldFont (40.0f);
+        const auto nameFont = semiBoldFont (24.0f);
+        const auto pillFont = boldFont (10.0f);
+
         for (int i = 0; i < RigModel::numScenes; ++i)
         {
             const auto pad = padBounds[(size_t) i];
@@ -84,10 +89,10 @@ namespace rig
             g.drawRoundedRectangle (area.reduced (thickness / 2.0f), 8.0f, thickness);
 
             g.setColour (active ? textDark : textLight);
-            g.setFont (boldFont (40.0f));
+            g.setFont (numberFont);
             g.drawText (juce::String (i + 1), pad.withTrimmedLeft (12).withTrimmedTop (4), juce::Justification::topLeft, false);
 
-            g.setFont (semiBoldFont (24.0f));
+            g.setFont (nameFont);
             g.drawText (model.getSceneName (i), pad.reduced (12, 0), juce::Justification::centred, true);
 
             if (active)
@@ -97,7 +102,7 @@ namespace rig
                 g.setColour (textDark);
                 g.fillRoundedRectangle (pill, 10.0f);
                 g.setColour (activeFill);
-                g.setFont (boldFont (10.0f));
+                g.setFont (pillFont);
                 g.drawText ("ACTIVE", pill, juce::Justification::centred, false);
             }
         }
