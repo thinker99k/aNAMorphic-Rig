@@ -2,10 +2,8 @@
 
 #include "engine/AudioEngine.h"
 #include "model/RigModel.h"
-#include "ui/BlockEditor.h"
-#include "ui/ChainView.h"
-#include "ui/ParamBar.h"
-#include "ui/SceneBar.h"
+#include "ui/edit/EditView.h"
+#include "ui/live/LiveView.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
 
@@ -18,16 +16,16 @@ namespace rig
     //  ┌──────────────────────────────────────────────┐
     //  │ TopBar   : Patch [콤보] [◀][▶]  [패치명]  [Settings] │
     //  ├──────────────────────────────────────────────┤
-    //  │ ChainView   : 패치 맵 (본문의 3/8)            │
-    //  ├──────────────────────────────────────────────┤
-    //  │ ParamBar    : 선택 블록 파라미터 (본문의 1/8)  │
-    //  ├──────────────────────────────────────────────┤
-    //  │ BlockEditor : 블록 선택기 (본문의 3/8)        │
-    //  ├──────────────────────────────────────────────┤
-    //  │ SceneBar    : [1]…[8] [Copy/Swap] (본문의 1/8) │
+    //  │ 중앙   : EditView or LiveView                 │
     //  ├──────────────────────────────────────────────┤
     //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
+    //  중앙 = 창에서 TopBar(40) 와 StatusBar(62) 를 뗀 나머지
+    //   - Edit 모드: EditView = 패치 맵 : 파라미터 바 : 블록 선택기 : 씬 바 = 3 : 1 : 3 : 1 (EditView.h 참고)
+    //   - Live 모드: LiveView = 씬 패드 4 x 2 (나머지) + 패치 줄 [Live ON][PREV][NEXT] (1/8) (LiveView.h 참고)
+    //   - 두 뷰는 같은 영역을 받고 setVisible 로 하나만 보인다 (파괴하지 않으므로 편집 상태 유지)
+    //   - 맨 아래 줄은 둘 다 가운데 높이의 1/8 이라, 모드를 바꿔도 Live 버튼이 같은 자리에 있다
+    //  TopBar 와 StatusBar 는 두 모드에서 그대로
     class MainComponent final : public juce::Component,
                                 private juce::Timer
     {
@@ -42,6 +40,9 @@ namespace rig
         void resized() override;
 
     private:
+        enum class ViewMode { edit, live };
+
+        void setViewMode (ViewMode);   // 가운데만 EditView ↔ LiveView 로 바꾼다 (두 뷰는 파괴하지 않는다)
         void timerCallback() override;
         void openSettings();
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
@@ -51,11 +52,11 @@ namespace rig
         RigModel& model;
 
         TopBar topBar;
-        ChainView chainView;
-        ParamBar paramBar;
-        BlockEditor blockEditor;
-        SceneBar sceneBar;
+        EditView editView;
+        LiveView liveView;
         StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
+
+        ViewMode viewMode = ViewMode::edit;   // 항상 Edit 로 시작, 저장하지 않는다
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
     };

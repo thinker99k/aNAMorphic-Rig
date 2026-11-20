@@ -26,6 +26,9 @@ namespace rig
         explicit BlockEditor (RigModel& model);
         ~BlockEditor() override;
 
+        // 편집 화면이 숨겨진 동안(Live 모드) 변경 알림으로 목록을 다시 고르지 않는다. 다시 켜면 한 번 맞춘다
+        void setUpdatesPaused (bool paused);
+
         void paint (juce::Graphics&) override;
         void resized() override;
 
@@ -142,6 +145,8 @@ namespace rig
         juce::uint64 shownSlotId = 0;
         BlockType shownType = BlockType::None;
         juce::File shownFile;
+
+        bool updatesPaused = false;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BlockEditor)
     };

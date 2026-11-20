@@ -22,7 +22,7 @@ namespace rig
         setWantsKeyboardFocus (true);   // 모드 중 ESC 를 받는다
         shownPatch = model.getPatchNumber();
 
-        liveButton.setEnabled (false);   // 아직 기능 없음 (UI 만)
+        liveButton.onClick = [this] { if (onLiveClicked) onLiveClicked(); };
         addAndMakeVisible (liveButton);
 
         for (auto* b : { &copyButton, &swapButton, &resetAllButton })
@@ -267,6 +267,12 @@ namespace rig
     {
         if (renamingScene >= 0)
             nameEditor.hideEditor (true);
+    }
+
+    void SceneBar::cancelEditing()
+    {
+        cancelMode();
+        cancelRename();
     }
 
     //==============================================================================

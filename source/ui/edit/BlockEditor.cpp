@@ -87,7 +87,19 @@ namespace rig
 
     void BlockEditor::changeListenerCallback (juce::ChangeBroadcaster*)
     {
-        updateFromModel();
+        if (! updatesPaused)
+            updateFromModel();
+    }
+
+    void BlockEditor::setUpdatesPaused (bool paused)
+    {
+        if (paused == updatesPaused)
+            return;
+
+        updatesPaused = paused;
+
+        if (! paused)
+            updateFromModel();   // 숨겨진 동안 쌓인 변경을 한 번에 반영
     }
 
     const juce::String& BlockEditor::Entry::get (int columnId) const

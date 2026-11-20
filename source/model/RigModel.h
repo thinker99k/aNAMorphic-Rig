@@ -53,6 +53,9 @@ namespace rig
         // 패치 파일의 "name" 값 검증: 문자열이 아니거나 공백뿐이면 fallback, 길면 앞 32자만
         static juce::String sanitizePatchName (const juce::var& value, const juce::String& fallback);
 
+        // 패치를 불러오지 않고 파일의 이름만 읽는다 (loadPatch 와 같은 규칙: 파일이 없거나 이름이 이상하면 파일명)
+        static juce::String readPatchName (int number);
+
         explicit RigModel (AudioEngine& engine);
         ~RigModel() override;
 

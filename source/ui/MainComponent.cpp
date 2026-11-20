@@ -9,10 +9,8 @@ namespace rig
           engine (e),
           model (m),
           topBar (RigModel::numPatches),
-          chainView (m, dm),
-          paramBar (m),
-          blockEditor (m),
-          sceneBar (m)
+          editView (m, dm),
+          liveView (m)
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());
@@ -59,12 +57,16 @@ namespace rig
             updateMuteButton();
         };
 
+        // 가운데 화면 전환: Live 의 PREV / NEXT 는 TopBar ◀▶ 와 같은 경로 (onPatchChanged)
+        editView.onLiveClicked = [this] { setViewMode (ViewMode::live); };
+        liveView.onLiveOff     = [this] { setViewMode (ViewMode::edit); };
+        liveView.onPatchStep   = [this] (int delta) { topBar.selectAdjacentPatch (delta); };
+
         addAndMakeVisible (topBar);
-        addAndMakeVisible (chainView);
-        addAndMakeVisible (paramBar);
-        addAndMakeVisible (blockEditor);
-        addAndMakeVisible (sceneBar);
+        addAndMakeVisible (editView);
+        addAndMakeVisible (liveView);
         addAndMakeVisible (statusBar);
+        liveView.setVisible (false);   // 항상 Edit 로 시작
 
         statusBar.inputKnob.setValueDb (model.getInputGainDb());
         statusBar.outputKnob.setValueDb (model.getOutputGainDb());
@@ -119,11 +121,22 @@ namespace rig
         topBar.setBounds (area.removeFromTop (40));
         statusBar.setBounds (area.removeFromBottom (statusBarHeight));
 
-        // 패치 맵 : 파라미터 바 : 블록 선택기 : 씬 바 = 3 : 1 : 3 : 1
-        const int unit = area.getHeight() / 8;
-        chainView.setBounds (area.removeFromTop (unit * 3));
-        paramBar.setBounds (area.removeFromTop (unit));
-        sceneBar.setBounds (area.removeFromBottom (unit));
-        blockEditor.setBounds (area);
+        editView.setBounds (area);
+        liveView.setBounds (area);   // 보이는 쪽만 그려진다
+    }
+
+    void MainComponent::setViewMode (ViewMode mode)
+    {
+        if (mode == viewMode)
+            return;
+
+        viewMode = mode;
+        const bool live = (mode == ViewMode::live);
+
+        if (live)
+            editView.cancelEditing();   // 열려 있던 Copy/Swap 모드, 이름 편집을 끝낸다
+
+        editView.setVisible (! live);
+        liveView.setVisible (live);
     }
 }
