@@ -25,10 +25,28 @@ namespace rig
     //  - 같은 인스턴스를 두 번 처리할 수 없으므로, newMiddle 에 oldMiddle 의 블록이 있으면(이동 등) 보내지 않고 기다린다.
     //    (이동은 RigModel 이 새 인스턴스를 로딩해서 해결한다)
     //  - 페이드 중에 온 새 프로그램은 페이드가 끝난 뒤 최신 것 하나만 적용한다.
+    //
+    // 입출력 채널 (Routing, 패치별)
+    //  - 장치는 항상 모든 채널을 열어 두고(openAllChannels), 콜백 배열 번호 = 장치 채널 번호로 읽고 쓴다. 채널을 바꿔도 장치를 다시 열지 않는다
+    //  - 채널이 바뀌면 체인과 같은 페이드 구간에서 입력은 옛/새 채널을 섞고, 출력은 옛 채널을 줄이며 새 채널을 키운다
+    //  - 장치에 없는 채널이면 기본 채널(입력 1, 출력 1+2 / 채널이 하나뿐이면 1)로 대신한다. 패치 값은 그대로 둔다
     class AudioEngine final : public juce::AudioIODeviceCallback
     {
     public:
         using Program = std::vector<std::shared_ptr<Block>>;   // 실제로 처리할 블록만 순서대로
+
+        // 채널 번호는 0부터. 출력은 stereoOutput 이면 output, output + 1 두 채널
+        struct Routing
+        {
+            int input = 0;
+            int output = 0;
+            bool stereoOutput = true;
+
+            bool operator== (const Routing&) const = default;
+        };
+
+        // 장치를 열 때 요청하는 채널 수. 모든 백엔드가 실제 채널 수로 잘라서 열므로 "전부"라는 뜻
+        static constexpr int openAllChannels = 256;
 
         static constexpr double crossfadeSeconds = 0.03;
 
@@ -42,7 +60,7 @@ namespace rig
         ~AudioEngine() override;
 
         // --- 메시지 스레드 전용 ---
-        void setProgram (Program program);
+        void setProgram (Program program, Routing routing);
         void collectGarbage();   // 주기적으로 호출: 옛 Transition 해제 + 기다리던 프로그램 적용
 
         // 오디오 스레드가 지금(또는 방금 전까지) 처리할 수 있는 블록인지
@@ -74,7 +92,8 @@ namespace rig
         struct Transition
         {
             Program prefix, oldMiddle, newMiddle, suffix;
-            bool crossfade = false;   // false 면 oldMiddle 은 처리하지 않는다
+            Routing oldRouting, newRouting;
+            bool crossfade = false;   // false 면 oldMiddle, oldRouting 은 쓰지 않는다
             juce::uint64 id = 0;      // settled 비교용 (주소 재사용과 헷갈리지 않도록)
 
             Program result() const;   // 페이드가 끝난 뒤의 프로그램 = prefix + newMiddle + suffix
@@ -82,6 +101,15 @@ namespace rig
         };
 
         static void storeMax (std::atomic<float>& target, float value) noexcept;
+
+        // 장치에 없는 채널이면 기본 채널로. 입력이 하나도 없으면 input = -1, 출력이 없으면 출력 채널 수 0
+        struct Channels
+        {
+            int input = -1, firstOutput = 0, numOutputs = 0;
+            bool hasOutput (int ch) const noexcept { return ch >= firstOutput && ch < firstOutput + numOutputs; }
+        };
+
+        static Channels resolve (const Routing&, int numInputs, int numOutputs) noexcept;
         void processBlocks (const Program&, float*& a, float*& b, int n) const noexcept;
         void dispatch();   // 기다리던 프로그램을 보낼 수 있으면 보낸다
         void publish (std::unique_ptr<Transition> next);
@@ -92,6 +120,7 @@ namespace rig
         juce::uint64 nextTransitionId = 1;
 
         Program wanted;                           // 가장 최근 setProgram() 값
+        Routing wantedRouting;
         bool hasWanted = false;
 
         struct Retired

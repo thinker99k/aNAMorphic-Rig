@@ -4,7 +4,7 @@ namespace rig
 {
     EditView::EditView (RigModel& m, juce::AudioDeviceManager& dm)
         : chainView (m, dm),
-          paramBar (m),
+          paramBar (m, dm),
           blockEditor (m),
           sceneBar (m)
     {

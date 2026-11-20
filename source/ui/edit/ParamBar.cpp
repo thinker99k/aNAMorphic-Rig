@@ -2,18 +2,31 @@
 
 namespace rig
 {
-    ParamBar::ParamBar (RigModel& m) : model (m)
+    namespace
+    {
+        // channelBox 항목 id: 단일 채널은 1 + 채널(0부터), 출력 스테레오 쌍은 pairIdBase + 첫 채널(0부터)
+        constexpr int pairIdBase = 1000;
+    }
+
+    ParamBar::ParamBar (RigModel& m, juce::AudioDeviceManager& dm) : model (m), deviceManager (dm)
     {
         powerButton.setClickingTogglesState (true);
         powerButton.onClick = [this] { model.setOn (model.getSelectedIndex(), powerButton.getToggleState()); };
         addAndMakeVisible (powerButton);
 
+        channelLabel.setJustificationType (juce::Justification::centredRight);
+        addChildComponent (channelLabel);
+        channelBox.onChange = [this] { channelChosen(); };
+        addChildComponent (channelBox);
+
         model.addChangeListener (this);
+        deviceManager.addChangeListener (this);
         updateFromModel();
     }
 
     ParamBar::~ParamBar()
     {
+        deviceManager.removeChangeListener (this);
         model.removeChangeListener (this);
     }
 
@@ -24,11 +37,88 @@ namespace rig
 
     void ParamBar::updateFromModel()
     {
+        const auto endpoint = model.getSelectedEndpoint();
+        const bool isEndpoint = endpoint != RigModel::Endpoint::none;
+
+        powerButton.setVisible (! isEndpoint);
+        channelLabel.setVisible (isEndpoint);
+        channelBox.setVisible (isEndpoint);
+
+        if (isEndpoint)
+        {
+            fillChannelBox (endpoint);
+            return;
+        }
+
         const auto* slot = model.getSelectedSlot();
 
         // 미지정 블록은 지정할 때까지 끌 수 없다
         powerButton.setEnabled (slot != nullptr && slot->type != BlockType::None);
         powerButton.setToggleState (slot == nullptr || model.isOn (*slot), juce::dontSendNotification);
+    }
+
+    void ParamBar::fillChannelBox (RigModel::Endpoint endpoint)
+    {
+        const bool isInput = endpoint == RigModel::Endpoint::input;
+        const auto& routing = model.getRouting();
+
+        channelLabel.setText (isInput ? "Input channel" : "Output channel", juce::dontSendNotification);
+        channelBox.clear (juce::dontSendNotification);
+
+        juce::StringArray names;
+
+        if (auto* device = deviceManager.getCurrentAudioDevice())
+            names = isInput ? device->getInputChannelNames() : device->getOutputChannelNames();
+
+        // 패치의 다른 곳이 쓰는 채널은 보이되 고를 수 없다
+        const auto used = isInput ? model.getUsedInputChannels (endpoint) : model.getUsedOutputChannels (endpoint);
+
+        if (isInput)
+        {
+            for (int i = 0; i < names.size(); ++i)
+            {
+                channelBox.addItem (channelText (i, 1) + ": " + names[i], i + 1);
+                channelBox.setItemEnabled (i + 1, ! used[i]);
+            }
+        }
+        else
+        {
+            // 엔진은 모노 결과를 고른 채널에 복사하므로, 스테레오 쌍을 먼저 보이고 그다음 단일 채널
+            for (int i = 0; i + 1 < names.size(); i += 2)
+            {
+                channelBox.addItem (channelText (i, 2) + ": " + names[i] + " / " + names[i + 1], pairIdBase + i);
+                channelBox.setItemEnabled (pairIdBase + i, ! used[i] && ! used[i + 1]);
+            }
+
+            for (int i = 0; i < names.size(); ++i)
+            {
+                channelBox.addItem (channelText (i, 1) + ": " + names[i], i + 1);
+                channelBox.setItemEnabled (i + 1, ! used[i]);
+            }
+        }
+
+        // 장치에 없는 채널이면 아무것도 선택하지 않고 패치에 저장된 번호만 보인다 (IN / OUT 노드에는 빗금)
+        const int selectedId = isInput ? routing.input + 1
+                                       : (routing.stereoOutput ? pairIdBase + routing.output : routing.output + 1);
+        channelBox.setTextWhenNothingSelected (isInput ? channelText (routing.input, 1)
+                                                       : channelText (routing.output, routing.stereoOutput ? 2 : 1));
+        channelBox.setSelectedId (channelBox.indexOfItemId (selectedId) >= 0 ? selectedId : 0, juce::dontSendNotification);
+        channelBox.setEnabled (! names.isEmpty());
+    }
+
+    void ParamBar::channelChosen()
+    {
+        const int id = channelBox.getSelectedId();
+
+        if (id <= 0)
+            return;
+
+        if (model.getSelectedEndpoint() == RigModel::Endpoint::input)
+            model.setInputChannel (id - 1);
+        else if (id >= pairIdBase)
+            model.setOutputChannel (id - pairIdBase, true);
+        else
+            model.setOutputChannel (id - 1, false);
     }
 
     void ParamBar::PowerButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
@@ -78,5 +168,11 @@ namespace rig
         auto area = getLocalBounds().reduced (12, 0);
         const int size = juce::jmin (50, getHeight() - 8);   // 전원 버튼 50 px (예전 40 px 의 1.25 배)
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
+
+        // IN / OUT 선택 시: 왼쪽부터 [이름표 110] [채널 목록 320], 높이 28 (설정창 줄과 같은 크기)
+        auto row = getLocalBounds().reduced (12, 0).withSizeKeepingCentre (getWidth() - 24, 28);
+        channelLabel.setBounds (row.removeFromLeft (110));
+        row.removeFromLeft (8);
+        channelBox.setBounds (row.removeFromLeft (320));
     }
 }
