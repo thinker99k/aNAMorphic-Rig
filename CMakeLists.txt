@@ -144,6 +144,9 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/SettingsDialog.cpp
         source/ui/edit/ChainView.cpp
         source/ui/edit/ParamBar.cpp
+        source/ui/edit/ParamPanel.cpp
+        source/ui/edit/NamParamPanel.cpp
+        source/ui/edit/IrParamPanel.cpp
         source/ui/edit/SceneBar.cpp
         source/ui/edit/BlockEditor.cpp
         source/ui/edit/EditView.cpp
@@ -153,6 +156,8 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/StatusBar.cpp
         source/ui/GainKnob.cpp
         source/ui/KnobLookAndFeel.cpp
+        source/ui/ParamKnob.cpp
+        source/ui/ParamSwitch.cpp
         source/ui/SpectrumWindow.cpp   # [SPECTRUM] 테스트용
 )
 
