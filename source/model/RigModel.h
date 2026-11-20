@@ -2,10 +2,12 @@
 
 #include "engine/AudioEngine.h"
 #include "engine/Block.h"
+#include "engine/param/common/BlockParams.h"
 
 #include <juce_events/juce_events.h>
 
 #include <array>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -16,6 +18,8 @@ namespace rig
     // 씬: 패치마다 8개. 씬은 블록별 On/Off 와 이름만 가진다.
     //  - 현재 씬 번호는 저장하지 않는다 (패치는 항상 씬 1 로 열린다). 씬 전환은 디스크에 쓰지 않는다
     //  - 씬 편집(On/Off, 복사/교환/초기화/이름)은 패치에 저장한다
+    //
+    // 블록 종류별 파라미터(BlockParams)는 패치 파일에 저장하고 씬과 무관하다 (종류마다 패치당 1벌, 그 종류의 모든 블록에 적용)
     //
     // UI 는 RigModel 만 보고 편집하고, RigModel 은 변경될 때마다
     //  1) 현재 패치를 ~/Documents/aNAMorphic-Rig/patch/config<NN> 에 자동 저장하고
@@ -105,6 +109,10 @@ namespace rig
         // 오디오 장치(샘플레이트 등)가 바뀐 뒤 호출: 꺼진(Off) 블록까지 다시 준비
         void deviceChanged();
 
+        // 블록 종류별 파라미터 (파라미터가 없는 종류는 nullptr). UI 는 값을 직접 읽고 쓴다 (원자 변수, 변경 알림 없음)
+        BlockParams* getParams (BlockType type) const noexcept;
+        void saveParams();   // 노브 드래그가 끝났을 때, 스위치를 눌렀을 때 -> 패치 파일에 저장
+
     private:
         void startLoading (Slot& slot);
         void onLoaded (juce::uint64 slotId, int generation, std::shared_ptr<Block> block, juce::String error);
@@ -115,6 +123,7 @@ namespace rig
         void changed();   // 저장 + 체인 재구성 + UI 알림
         void applyCurrentScene();   // 모든 DSP 의 On/Off 를 현재 씬 값으로
         void sceneEdited (int scene);   // 씬 편집 후: 현재 씬이면 DSP 반영, 저장, UI 알림
+        void createParams (const juce::var& patchParams);   // 종류마다 새 파라미터 객체 (옛 블록은 옛 객체를 계속 쓴다)
 
         static juce::String defaultSceneName (int scene) { return "Scene " + juce::String (scene + 1); }
         static juce::String sanitizeSceneName (const juce::var& value, int scene);
@@ -130,6 +139,7 @@ namespace rig
         int selectedIndex = -1;
         int currentScene = 0;                   // 저장하지 않는다
         std::array<juce::String, numScenes> sceneNames;
+        std::map<BlockType, std::shared_ptr<BlockParams>> params;   // 블록 종류별, 패치당 1벌
         bool waitingForPatch = false;           // 패치 전환 후 새 패치 블록이 다 로딩될 때까지 옛 소리 유지
         juce::uint64 nextSlotId = 1;
 
