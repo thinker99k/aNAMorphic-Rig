@@ -1,84 +1,64 @@
 # aNAMorphic-Rig
 
-## 1. Build
-0. clone this repo, change directory to project root(`..../aNAMorphic-Rig/`)
+NAM(Neural Amp Modeler) based multi-effector plugin 
 
-1. run setup script
-   - Windows : `powershell -ExecutionPolicy Bypass .\script\setup.ps1` (UAC will appear)
-   - macOS : `./script/setup.zsh` (can ask password to access system area)
-   - linux : `sudo ./script/setup.bash` (package manager require root privilege)
+## 1. Install
 
-2. close and open new terminal window (must be new process)
+> **준비 중** : 아직 배포된 릴리즈가 없습니다. 지금은 [개발 문서](docs/DEVELOPMENT.md) 의 빌드 방법으로 직접 빌드해 주세요.
 
-3. run build script
-   - normal build
-     - Windows : `powershell -ExecutionPolicy Bypass .\build.ps1`
-     - macOS : `./build.zsh`
-     - Linux : `./build.bash`
-   - clean build (use if normal build fail)
-     - Windows : `powershell -ExecutionPolicy Bypass .\build2.ps1`
-     - macOS : `./build2.zsh`
-     - Linux : `./build2.bash`
+[Releases](https://github.com/thinker99k/aNAMorphic-Rig/releases) 에서 OS에 맞는 파일을 받아 실행합니다.
+소스에서 직접 빌드하려면 [개발 문서](docs/DEVELOPMENT.md) 를 보세요.
 
-## 2. Binary Location
+## 2. How to Use
 
-| OS | path (from project root) |
+### 처음 시작하기
+1. 앱을 한 번 실행하면 문서 폴더에 `aNAMorphic-Rig` 폴더가 생깁니다 ([3. User Data](#3-user-data) 참고)
+2. 앰프·페달 캡처(`.nam`)는 `nam` 폴더에, 캐비닛 IR(`.wav`)은 `ir` 폴더에 넣습니다
+3. 오른쪽 위 **Settings** 에서 기타를 연결한 오디오 인터페이스와 입력·출력 채널을 고르고 **Save** 를 누릅니다
+4. 아래쪽 **INPUT / OUTPUT** 노브로 볼륨을 맞춥니다. 소리를 잠깐 끄려면 **MUTE** 를 누릅니다
+
+### 소리 만들기
+화면 위쪽에 `IN → 블록 → … → OUT` 으로 이어진 체인이 보입니다. 기타 소리는 왼쪽에서 오른쪽으로 블록을 차례로 지납니다.
+1. 연결선 가운데의 **+** 를 누르면 그 자리에 빈 블록이 생깁니다
+2. 블록을 선택하고, 가운데 목록에서 **NAM** 또는 **IR** 탭을 고른 뒤 원하는 파일을 **더블클릭** 합니다
+3. 블록을 끄고 켜려면 블록을 선택하고 오른쪽의 전원 버튼을 누릅니다
+4. 앰프 캡처(NAM) 뒤에 캐비닛 IR 을 붙이는 구성이 일반적입니다
+
+바꾼 내용은 바로 자동 저장됩니다. 따로 저장할 필요가 없습니다.
+
+### 패치
+소리 구성 하나를 패치라고 부르며 32개까지 저장할 수 있습니다.
+- 위쪽의 패치 번호 목록이나 **◀ ▶** 버튼으로 패치를 바꿉니다
+- 패치 이름을 **오른쪽 클릭** 하면 이름 바꾸기(Rename)와 초기화(Reset)를 할 수 있습니다
+
+### 씬
+한 패치 안에서 블록의 On/Off 조합을 8개까지 저장해 두고 버튼 하나로 바꿀 수 있습니다. 예를 들어 씬 1 은 클린, 씬 2 는 드라이브 페달을 켠 소리처럼 씁니다.
+- 아래쪽 **1 ~ 8** 버튼을 누르면 그 씬으로 바뀝니다. 그 상태에서 블록을 끄고 켜면 지금 씬에 저장됩니다
+- 씬 버튼을 **오른쪽 클릭** 하면 이름 바꾸기와 초기화를 할 수 있습니다
+- **Copy / Swap** 으로 씬을 다른 자리에 복사하거나 서로 바꿀 수 있습니다
+- 패치를 열면 항상 씬 1 부터 시작합니다
+
+### Live 모드
+왼쪽 아래 **Live** 버튼을 누르면 편집 기능을 숨기고 크게 누를 수 있는 화면으로 바뀝니다.
+- 큰 씬 버튼 8개로 씬을 바꿉니다
+- 아래쪽 **PREV PATCH / NEXT PATCH** 로 이전·다음 패치로 넘어갑니다
+- **Live ON** 을 누르면 편집 화면으로 돌아갑니다
+
+블록, 패치, 씬을 바꿀 때 소리가 튀지 않도록 자연스럽게 이어집니다.
+
+## 3. User Data
+
+앱이 쓰는 파일은 문서 폴더의 `aNAMorphic-Rig` 아래에 있고, 처음 실행할 때 자동으로 만들어집니다.
+
+| OS | 위치 |
 |---|---|
-| Windows | `build\aNAMorphic-Rig_artefacts\Release\aNAMorphic-Rig.exe` |
-| macOS | `build/aNAMorphic-Rig_artefacts/Release/aNAMorphic-Rig.app` |
-| Linux | `build/aNAMorphic-Rig_artefacts/Release/aNAMorphic-Rig` |
+| Windows | `C:\Users\<user>\Documents\aNAMorphic-Rig` |
+| macOS | `/Users/<user>/Documents/aNAMorphic-Rig` |
+| Linux | `/home/<user>/Documents/aNAMorphic-Rig` |
 
-## 3. Directory Structure
+- `nam/` : `.nam` 캡처 파일을 여기에 넣으면 블록 선택기의 NAM 목록에 나타납니다
+- `ir/` : `.wav` IR 파일을 여기에 넣으면 블록 선택기의 IR 목록에 나타납니다
+- `patch/` : 패치 32개가 저장됩니다. 편집하면 자동으로 저장됩니다
+- `settings.json`, `audio-device.xml` : 볼륨과 오디오 장치 설정
 
-```
-~/aNAMorphic-Rig/
-├── library/
-│   ├── JUCE/juce-X.Y.Z-linux/JUCE      <- OS에 맞는 JUCE 프레임워크 폴더를 CMake가 자동 선택
-│   ├── JUCE/juce-X.Y.Z-osx/JUCE
-│   ├── JUCE/juce-X.Y.Z-windows/JUCE
-│   └── NeuralAmpModelerCore-X.Y.Z      <- Dependencies/eigen 서브모듈까지 받아져 있어야 함
-├── script/                             <- 각 플렛폼용 셋업 스크립트
-│   ├── setup.bash                          (Windows - ps1, macOS - zsh, Linux - bash)
-│   ├── setup.ps1          
-│   ├── setup.zsh 
-├── source/                             <- 모든 소스
-│   ├── Main.cpp                        앱 시작, 메인 창, 오디오 장치 초기화
-│   ├── AppPaths.*                      사용자 데이터(~/Documents/aNAMorphic-Rig) 경로 모음
-│   ├── Defaults.*                      처음 실행 시 기본 폴더/패치 파일 생성
-│   ├── engine/                         오디오 처리 (UI 모름)
-│   │   ├── Block.h                     블록 공통 인터페이스
-│   │   ├── NamBlock.*                  .nam 캡처 (NAM Core)
-│   │   ├── IrBlock.*                   .wav IR (juce::dsp::Convolution)
-│   │   └── AudioEngine.*               오디오 콜백 + 직렬 체인 처리
-│   ├── model/ 
-│   │   └── RigModel.*                  체인 편집 상태, 패치 저장/불러오기, 백그라운드 로딩
-│   └── ui/                             화면
-│       ├── MainComponent.*             전체 배치
-│       ├── TopBar.*                    패치 번호 콤보박스 + 설정 버튼
-│       ├── SettingsDialog.*            설정 모달 (입력 소스, 입력 채널, 저장/취소)
-│       ├── ChainView.*                 직렬 체인 (화면 상단 절반)
-│       ├── BlockEditor.*               선택한 블록의 파일 지정 (하단 절반의 위쪽)
-│       └── StatusBar.*                 IN 미터 / CPU / OUT 미터
-├── build.bash                          <- 각 플렛폼용 빌드 스크립트
-├── build.ps1                               (Windows - ps1, macOS - zsh, Linux - bash)
-├── build.zsh 
-├── CMakeLists.txt
-
-(빌드 완료 시)
-└── build/                              <- 빌드 결과물 (git 올리지 말것!!!!)
-```
-
-## 4. User Data
-
-앱이 쓰는 파일은 OS별 문서 폴더 아래에 있습니다. 처음 실행할 때 빠진 폴더와 파일은 자동으로 만들어집니다.
-
-```
-~/Documents/aNAMorphic-Rig/             (Windows: C:\Users\<user>\Documents\aNAMorphic-Rig)
-├── settings.json                       앱 전역 설정: 입력/출력 볼륨 (없거나 깨지면 0 dB 로 생성, 노브 드래그 끝/종료 시 저장)
-├── audio-device.xml                    오디오 장치 설정 (처음 실행 시 기본 장치로 생성, 종료 시 저장)
-├── nam/                                *.nam 캡처를 여기에 넣으면 블록 편집기 목록에 표시
-├── ir/                                 *.wav IR 을 여기에 넣으면 블록 편집기 목록에 표시
-└── patch/
-    ├── config01 ~ config32             패치별 체인 (JSON). 없거나 비었거나 깨지면 기본 패치(NAM + IR)로 다시 만듦
-    └── configNN.bak                    깨진 파일을 다시 만들 때 남기는 백업
-```
+코드 구조와 파일 형식은 [개발 문서](docs/DEVELOPMENT.md) 를 보세요.
