@@ -198,6 +198,34 @@ namespace rig
         while (value > current && ! target.compare_exchange_weak (current, value, std::memory_order_relaxed)) {}
     }
 
+    // [SPECTRUM] begin (테스트용)
+    void AudioEngine::ScopeRing::write (const float* samples, int n) noexcept
+    {
+        const auto pos = writePos.load (std::memory_order_relaxed);   // 쓰는 쪽은 오디오 스레드 하나
+
+        for (int i = 0; i < n; ++i)
+            data[(size_t) ((pos + (juce::uint64) i) & (size - 1))].store (samples[i], std::memory_order_relaxed);
+
+        writePos.store (pos + (juce::uint64) n, std::memory_order_release);
+    }
+
+    bool AudioEngine::ScopeRing::copyLatest (float* dest, int numSamples) const noexcept
+    {
+        const auto end = writePos.load (std::memory_order_acquire);
+
+        if (numSamples <= 0 || numSamples > size / 2 || end < (juce::uint64) numSamples)
+            return false;
+
+        const auto start = end - (juce::uint64) numSamples;
+
+        for (int i = 0; i < numSamples; ++i)
+            dest[i] = data[(size_t) ((start + (juce::uint64) i) & (size - 1))].load (std::memory_order_relaxed);
+
+        // 복사하는 사이 오디오 스레드가 start 구간을 덮어썼다면 이번 프레임은 버린다
+        return writePos.load (std::memory_order_acquire) - start <= (juce::uint64) size;
+    }
+    // [SPECTRUM] end
+
     void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
                                                         int numInputChannels,
                                                         float* const* outputChannelData,
@@ -280,6 +308,11 @@ namespace rig
 
             storeMax (outputPeak, juce::FloatVectorOperations::findMaximum (a, n));
             storeMax (outputPeak, -juce::FloatVectorOperations::findMinimum (a, n));
+
+            // [SPECTRUM] begin (테스트용) 스펙트럼 창용 기록: 게인 뒤, 자르지 않은 값 그대로 (창이 닫혀 있으면 아무것도 안 함)
+            if (scopeEnabled.load (std::memory_order_relaxed))
+                outputScope.write (a, n);
+            // [SPECTRUM] end
 
             // 모노 결과를 열려 있는 모든 출력 채널(보통 L/R)에 복사
             for (int ch = 0; ch < numOutputChannels; ++ch)

@@ -8,13 +8,17 @@ namespace nam { class DSP; }
 
 namespace rig
 {
+    class NamParams;
+
     // .nam 캡처 하나를 감싸는 블록 (NeuralAmpModelerCore 사용)
     class NamBlock final : public Block
     {
     public:
         // 파일을 읽어 모델을 만든다. 무거운 작업이므로 백그라운드 스레드에서 호출할 것.
         // 실패하면 nullptr 을 돌려주고 error 에 이유를 채운다.
-        static std::unique_ptr<NamBlock> load (const juce::File& file, juce::String& error);
+        // params 가 있으면 블록 소리 뒤에 EQ 를 건다
+        static std::unique_ptr<NamBlock> load (const juce::File& file, juce::String& error,
+                                               std::shared_ptr<NamParams> params = nullptr);
 
         ~NamBlock() override;
 
