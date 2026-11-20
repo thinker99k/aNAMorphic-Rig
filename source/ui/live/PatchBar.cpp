@@ -5,10 +5,11 @@ namespace rig
     namespace
     {
         constexpr int gap = 6;          // 바깥 여백, 버튼 사이 (SceneBar 와 같은 값)
-        constexpr int iconSize = 22;
-        constexpr int iconGap = 16;     // 아이콘과 글자 묶음 사이
+        constexpr int iconSize = 34;
+        constexpr int iconGap = 10;     // 아이콘과 번호 사이
         constexpr int textGap = 2;      // 위 글자와 아래 글자 사이
-        constexpr int textInset = 12;   // 글자 묶음이 버튼 가장자리에 닿지 않게
+        constexpr int textInset = 12;   // 아이콘·글자가 버튼(칸) 가장자리에 닿지 않게
+        constexpr float numberShare = 0.25f;   // 버튼 폭 중 아이콘 + 번호 칸 비율 (나머지는 글자 칸)
 
         // 색 (시안)
         const juce::Colour barFill    { 0xff323c44 };
@@ -39,7 +40,7 @@ namespace rig
 
         const juce::String emDash (juce::CharPointer_UTF8 ("\xe2\x80\x94"));   // —
 
-        // 22 x 22 안에 채워진 삼각형 (◀ / ▶)
+        // iconSize x iconSize 안에 채워진 삼각형 (◀ / ▶)
         void drawTriangle (juce::Graphics& g, juce::Rectangle<float> box, bool pointsLeft)
         {
             const auto inner = box.reduced (4.0f);
@@ -53,9 +54,14 @@ namespace rig
             g.fillPath (p);
         }
 
-        // PREV / NEXT 버튼: [아이콘] [간격] [위 글자 / 아래 글자] 묶음을 버튼 안 가운데에 (NEXT 는 좌우 반대)
-        void drawStepButton (juce::Graphics& g, juce::Rectangle<int> bounds, bool isPrev, bool enabled, const juce::String& bottomText,
-                             const juce::Font& topFont, const juce::Font& bottomFont)
+        // PREV / NEXT 버튼: 위치는 버튼 폭으로만 정해진다 (이름 길이와 무관)
+        //  - PREV: [왼쪽 25%: ◀ 번호] [나머지 75%: 위 글자 / 아래 글자]
+        //  - NEXT: [왼쪽 75%: 위 글자 / 아래 글자] [오른쪽 25%: 번호 ▶]
+        //  - 아이콘은 칸의 바깥 가장자리에 붙이고 번호는 그 안쪽 옆. 글자는 두 줄 모두 왼쪽 정렬, 넘치면 "..."
+        //  - 번호가 비어 있으면 (이웃 패치 없음) 아이콘만
+        void drawStepButton (juce::Graphics& g, juce::Rectangle<int> bounds, bool isPrev, bool enabled,
+                             const juce::String& numberText, const juce::String& bottomText,
+                             const juce::Font& numberFont, const juce::Font& topFont, const juce::Font& bottomFont)
         {
             const auto area = bounds.toFloat();
             g.setColour (stepFill);
@@ -63,31 +69,35 @@ namespace rig
             g.setColour (enabled ? stepBorder : border);
             g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.0f);
 
-            const juce::String topText = isPrev ? "PREV PATCH" : "NEXT PATCH";
+            auto labelArea = area;
+            const auto numberArea = isPrev ? labelArea.removeFromLeft (area.getWidth() * numberShare)
+                                           : labelArea.removeFromRight (area.getWidth() * numberShare);
 
-            const float maxLabelWidth = juce::jmax (0.0f, area.getWidth() - (float) (iconSize + iconGap + 2 * textInset));
-            const float labelWidth = juce::jmin (maxLabelWidth, juce::jmax (juce::GlyphArrangement::getStringWidth (topFont, topText),
-                                                                            juce::GlyphArrangement::getStringWidth (bottomFont, bottomText)));
-            const float groupWidth = (float) (iconSize + iconGap) + labelWidth;
-            const float left = area.getCentreX() - groupWidth / 2.0f;
-
-            const juce::Rectangle<float> icon (isPrev ? left : left + labelWidth + (float) iconGap,
-                                               area.getCentreY() - (float) iconSize / 2.0f, (float) iconSize, (float) iconSize);
-            const float labelX = isPrev ? left + (float) (iconSize + iconGap) : left;
-            const float textTop = area.getCentreY() - (topFont.getHeight() + (float) textGap + bottomFont.getHeight()) / 2.0f;
-            const auto justification = isPrev ? juce::Justification::centredLeft : juce::Justification::centredRight;
+            // 아이콘 + 번호 칸
+            const float iconX = isPrev ? numberArea.getX() + (float) textInset : numberArea.getRight() - (float) textInset - (float) iconSize;
+            const juce::Rectangle<float> icon (iconX, area.getCentreY() - (float) iconSize / 2.0f, (float) iconSize, (float) iconSize);
+            const auto numberBox = isPrev ? numberArea.withLeft (icon.getRight() + (float) iconGap)
+                                          : numberArea.withRight (icon.getX() - (float) iconGap);
 
             g.setColour (enabled ? textLight : textMuted);
             drawTriangle (g, icon, isPrev);
 
+            g.setFont (numberFont);
+            g.drawText (numberText, numberBox, isPrev ? juce::Justification::centredLeft : juce::Justification::centredRight, false);
+
+            // 글자 칸
+            const juce::String topText = isPrev ? "PREV PATCH" : "NEXT PATCH";
+            const auto textArea = labelArea.reduced ((float) textInset, 0.0f);
+            const float textTop = area.getCentreY() - (topFont.getHeight() + (float) textGap + bottomFont.getHeight()) / 2.0f;
+
             g.setColour (textMuted);
             g.setFont (topFont);
-            g.drawText (topText, juce::Rectangle<float> (labelX, textTop, labelWidth, topFont.getHeight()), justification, true);
+            g.drawText (topText, textArea.withY (textTop).withHeight (topFont.getHeight()), juce::Justification::centredLeft, true);
 
             g.setColour (enabled ? textLight : textMuted);
             g.setFont (bottomFont);
-            g.drawText (bottomText, juce::Rectangle<float> (labelX, textTop + topFont.getHeight() + (float) textGap, labelWidth, bottomFont.getHeight()),
-                        justification, true);
+            g.drawText (bottomText, textArea.withY (textTop + topFont.getHeight() + (float) textGap).withHeight (bottomFont.getHeight()),
+                        juce::Justification::centredLeft, true);
         }
     }
 
@@ -117,9 +127,10 @@ namespace rig
         hasPrev = shownPatch > 1;
         hasNext = shownPatch < RigModel::numPatches;
 
-        const auto describe = [] (int n) { return juce::String (n).paddedLeft ('0', 2) + "  " + RigModel::readPatchName (n); };
-        prevText = hasPrev ? describe (shownPatch - 1) : emDash;
-        nextText = hasNext ? describe (shownPatch + 1) : emDash;
+        prevNumber = hasPrev ? juce::String (shownPatch - 1).paddedLeft ('0', 2) : juce::String();
+        nextNumber = hasNext ? juce::String (shownPatch + 1).paddedLeft ('0', 2) : juce::String();
+        prevText = hasPrev ? RigModel::readPatchName (shownPatch - 1) : emDash;
+        nextText = hasNext ? RigModel::readPatchName (shownPatch + 1) : emDash;
     }
 
     void PatchBar::resized()
@@ -158,10 +169,11 @@ namespace rig
                     juce::Justification::centred, false);
 
         // 두 버튼이 같은 글꼴을 쓰므로 한 번만 만든다
+        const auto stepNumberFont = boldFont (40.0f);   // ScenePads 의 씬 번호와 같은 글꼴
         const auto stepTopFont = boldFont (11.0f);
-        const auto stepBottomFont = semiBoldFont (18.0f);
-        drawStepButton (g, prevBounds, true, hasPrev, prevText, stepTopFont, stepBottomFont);
-        drawStepButton (g, nextBounds, false, hasNext, nextText, stepTopFont, stepBottomFont);
+        const auto stepBottomFont = semiBoldFont (28.0f);
+        drawStepButton (g, prevBounds, true, hasPrev, prevNumber, prevText, stepNumberFont, stepTopFont, stepBottomFont);
+        drawStepButton (g, nextBounds, false, hasNext, nextNumber, nextText, stepNumberFont, stepTopFont, stepBottomFont);
     }
 
     void PatchBar::mouseDown (const juce::MouseEvent& e)
