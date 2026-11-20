@@ -29,6 +29,12 @@ namespace rig
         void mouseDoubleClick (const juce::MouseEvent& e) override { if (isLeftClick (e)) Base::mouseDoubleClick (e); }
     };
 
+    // 장치 채널 번호 표시 (first 는 0부터, 화면은 1부터): 하나 = "3", 둘 = "1+2"
+    inline juce::String channelText (int first, int count)
+    {
+        return count == 2 ? juce::String (first + 1) + "+" + juce::String (first + 2) : juce::String (first + 1);
+    }
+
     // 컨텍스트 메뉴는 오른쪽 클릭한 커서 위치에 띄운다: 메뉴의 왼쪽 위 = 클릭 지점, 화면 밖으로 나가면 위/왼쪽으로 붙인다.
     // 영역이 비어 있으면(withMousePosition) JUCE 가 화면 가운데 쪽으로 펼치므로 1 px 영역을 준다
     inline void showContextMenu (juce::PopupMenu& menu, const juce::MouseEvent& click, std::function<void (int)> onClosed = nullptr)
