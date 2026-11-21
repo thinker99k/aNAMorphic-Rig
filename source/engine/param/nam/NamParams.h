@@ -11,17 +11,17 @@ namespace rig
     {
     public:
         // 범위·경계선·폭 상수는 여기에만 둔다 (UI 도 이 값을 쓴다)
-        static constexpr double gainMinDb = -12.0, gainMaxDb = 12.0, gainDefaultDb = 0.0;
+        static constexpr double gainMinDb = -18.0, gainMaxDb = 18.0, gainDefaultDb = 0.0;
 
-        static constexpr double bassMinHz   = 40.0,   bassMaxHz   = 200.0,   bassDefaultHz   = 100.0;    // low shelf
-        static constexpr double middleMinHz = 315.0,  middleMaxHz = 2000.0,  middleDefaultHz = 800.0;    // peak
-        static constexpr double trebleMinHz = 3150.0, trebleMaxHz = 12000.0, trebleDefaultHz = 4000.0;   // high shelf
+        // 세 밴드 모두 peak 필터, Freq = 중심 주파수
+        static constexpr double bassMinHz   = 40.0,   bassMaxHz   = 200.0,   bassDefaultHz   = 100.0;
+        static constexpr double middleMinHz = 315.0,  middleMaxHz = 2000.0,  middleDefaultHz = 800.0;
+        static constexpr double trebleMinHz = 3150.0, trebleMaxHz = 12000.0, trebleDefaultHz = 4000.0;
 
         static constexpr double h1Hz = 250.0;    // Bass / Middle 경계
         static constexpr double h2Hz = 2500.0;   // Middle / Treble 경계
 
-        static constexpr double shelfQ = 0.707;
-        static constexpr double peakQ  = 0.8;
+        static constexpr double eqQ = 0.8;       // Bass / Middle / Treble 공통 폭 (약 1.5~2 옥타브)
 
         std::atomic<bool> eqOn { false };
         std::atomic<float> bassDb   { (float) gainDefaultDb }, bassHz   { (float) bassDefaultHz };

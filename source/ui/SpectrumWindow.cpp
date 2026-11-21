@@ -2,6 +2,8 @@
 
 // [SPECTRUM] 테스트용 보조 기능 (제거 방법은 SpectrumWindow.h 맨 위)
 
+#include "engine/param/nam/NamParams.h"   // EQ 대역 경계 (H1, H2) 표시용
+
 #include <cmath>
 
 namespace rig
@@ -14,6 +16,7 @@ namespace rig
         const juce::Colour backgroundColour (0xff141414);
         const juce::Colour gridColour = juce::Colours::darkgrey.darker (0.3f);
         const juce::Colour curveColour = juce::Colours::limegreen;
+        const juce::Colour bandColour = juce::Colours::orange.withAlpha (0.6f);   // EQ 대역 경계선과 이름
     }
 
     SpectrumView::SpectrumView (AudioEngine& e) : engine (e)
@@ -99,8 +102,8 @@ namespace rig
 
         g.setFont (juce::FontOptions (11.0f));
 
-        // 가로 눈금: 0 ~ -60 dB
-        for (float db = topDb; db >= floorDb; db -= 12.0f)
+        // 가로 눈금: 0 ~ floorDb, gridStepDb 간격
+        for (float db = topDb; db >= floorDb; db -= gridStepDb)
         {
             const auto y = yForDb (db);
             g.setColour (gridColour);
@@ -136,6 +139,34 @@ namespace rig
         g.setColour (juce::Colours::lightgrey);
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
         g.drawText ("OUTPUT", plot.reduced (6.0f, 4.0f).removeFromTop (16.0f), juce::Justification::topLeft);
+
+        // EQ 대역 범위: H1 / H2 점선과 각 구간 가운데(로그)에 이름. 노브 범위가 아니라 대역 경계다
+        {
+            const float h1 = (float) NamParams::h1Hz, h2 = (float) NamParams::h2Hz;
+            const float dashes[] = { 4.0f, 4.0f };
+
+            g.setColour (bandColour);
+            for (auto hz : { h1, h2 })
+                g.drawDashedLine ({ xForHz (hz), plot.getY(), xForHz (hz), plot.getBottom() }, dashes, 2, 1.0f);
+
+            g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+            const float labelY = plot.getY() + 22.0f;   // OUTPUT 글자 아래
+
+            struct Band { float lo, hi; const char* name; };
+            for (auto [lo, hi, name] : { Band { minHz, h1, "BASS" }, Band { h1, h2, "MIDDLE" }, Band { h2, maxHz, "TREBLE" } })
+            {
+                const auto x = xForHz (std::sqrt (lo * hi));
+                g.drawText (name, juce::Rectangle<float> (x - 40.0f, labelY, 80.0f, 14.0f), juce::Justification::centred);
+            }
+
+            // 경계선 오른쪽에 주파수 (상수에서 만든다: 250, 2.5k)
+            g.setFont (juce::FontOptions (10.0f));
+            for (auto hz : { h1, h2 })
+            {
+                const auto text = hz >= 1000.0f ? juce::String (hz / 1000.0f, 1) + "k" : juce::String (juce::roundToInt (hz));
+                g.drawText (text, juce::Rectangle<float> (xForHz (hz) + 3.0f, labelY + 14.0f, 40.0f, 12.0f), juce::Justification::centredLeft);
+            }
+        }
 
         // 그래프: 픽셀 열마다 값 하나. 좁은 구간(저음)은 보간, 넓은 구간(고음)은 구간 안 최댓값
         const auto sampleRate = (float) engine.getSampleRate();

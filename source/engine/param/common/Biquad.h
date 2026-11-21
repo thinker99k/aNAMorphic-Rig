@@ -21,28 +21,12 @@ namespace rig
 
         void reset() noexcept { z1 = z2 = 0; }
 
-        void setLowShelf (double sr, double hz, double q, double gainDb) noexcept
-        {
-            const Terms t (sr, hz, q);
-            const double A = std::pow (10.0, gainDb / 40.0), s = 2.0 * std::sqrt (A) * t.alpha;
-            set (A * ((A + 1) - (A - 1) * t.cosw + s), 2 * A * ((A - 1) - (A + 1) * t.cosw), A * ((A + 1) - (A - 1) * t.cosw - s),
-                 (A + 1) + (A - 1) * t.cosw + s, -2 * ((A - 1) + (A + 1) * t.cosw), (A + 1) + (A - 1) * t.cosw - s);
-        }
-
         void setPeak (double sr, double hz, double q, double gainDb) noexcept
         {
             const Terms t (sr, hz, q);
             const double A = std::pow (10.0, gainDb / 40.0);
             set (1 + t.alpha * A, -2 * t.cosw, 1 - t.alpha * A,
                  1 + t.alpha / A, -2 * t.cosw, 1 - t.alpha / A);
-        }
-
-        void setHighShelf (double sr, double hz, double q, double gainDb) noexcept
-        {
-            const Terms t (sr, hz, q);
-            const double A = std::pow (10.0, gainDb / 40.0), s = 2.0 * std::sqrt (A) * t.alpha;
-            set (A * ((A + 1) + (A - 1) * t.cosw + s), -2 * A * ((A - 1) + (A + 1) * t.cosw), A * ((A + 1) + (A - 1) * t.cosw - s),
-                 (A + 1) - (A - 1) * t.cosw + s, 2 * ((A - 1) - (A + 1) * t.cosw), (A + 1) - (A - 1) * t.cosw - s);
         }
 
         void setHighPass (double sr, double hz, double q) noexcept

@@ -60,9 +60,9 @@ namespace rig
 
         // 값은 구간 단위로 따라가고 계수는 구간마다 한 번 계산한다
         setTargets();
-        low.setLowShelf   (sampleRate, bassHz.skip (n),   NamParams::shelfQ, bassDb.skip (n));
-        middle.setPeak    (sampleRate, middleHz.skip (n), NamParams::peakQ,  middleDb.skip (n));
-        high.setHighShelf (sampleRate, trebleHz.skip (n), NamParams::shelfQ, trebleDb.skip (n));
+        low.setPeak    (sampleRate, bassHz.skip (n),   NamParams::eqQ, bassDb.skip (n));
+        middle.setPeak (sampleRate, middleHz.skip (n), NamParams::eqQ, middleDb.skip (n));
+        high.setPeak   (sampleRate, trebleHz.skip (n), NamParams::eqQ, trebleDb.skip (n));
 
         for (int i = 0; i < n; ++i)
         {

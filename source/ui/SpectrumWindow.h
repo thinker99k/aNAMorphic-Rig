@@ -14,7 +14,7 @@
 
 namespace rig
 {
-    // 출력 소리의 주파수별 세기 (x: 20 Hz ~ 20 kHz 로그, y: -60 ~ 0 dBFS). 30 Hz 갱신
+    // 출력 소리의 주파수별 세기 (x: 20 Hz ~ 20 kHz 로그, y: -90 ~ 0 dBFS). 30 Hz 갱신
     class SpectrumView final : public juce::Component,
                                private juce::Timer
     {
@@ -23,7 +23,8 @@ namespace rig
         static constexpr int fftSize = 1 << fftOrder;            // 8192
         static constexpr int numBins = fftSize / 2 + 1;          // 0 ~ 나이퀴스트
         static constexpr float minHz = 20.0f, maxHz = 20000.0f;
-        static constexpr float floorDb = -60.0f, topDb = 0.0f;
+        static constexpr float floorDb = -90.0f, topDb = 0.0f;
+        static constexpr float gridStepDb = 15.0f;               // 가로 눈금 간격 (0 ~ -90 을 6 칸으로)
         static constexpr float fallDbPerFrame = 1.0f;            // 내려갈 때만 천천히 (30 Hz 에서 약 30 dB/s)
         static constexpr int refreshHz = 30;
 
