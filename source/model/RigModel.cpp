@@ -648,28 +648,55 @@ namespace rig
         changed();
     }
 
-    void RigModel::addParallel (juce::uint64 belowSlotId, BlockType type, const juce::File& file)
+    bool RigModel::wrapInParallel (juce::uint64 belowSlotId, Slot lower)
     {
         // 병렬은 한 단계만: 본 줄의 블록 아래에만 만든다
         const auto place = findPlace (belowSlotId);
         if (! place.has_value() || place->branch >= 0)
-            return;
+            return false;
 
         auto parallel = makeParallel();
         parallel.branches[0].push_back (std::move (std::get<Slot> (chain[(size_t) place->item])));
-        parallel.branches[1].push_back (makeSlot (type, file));
+        parallel.branches[1].push_back (std::move (lower));
         applyMerge (parallel, true);   // 아직 오디오 스레드가 쓰지 않는다
-
-        const auto newId = parallel.branches[1].front().id;
         chain[(size_t) place->item] = std::move (parallel);
 
-        // 위 갈래로 옮겨진 블록은 자리가 바뀌었으므로 새 인스턴스로 (이미 로딩 중이면 그 결과가 새 인스턴스)
-        auto& branches = std::get<Parallel> (chain[(size_t) place->item]).branches;
-        if (! branches[0].front().loading)
-            startLoading (branches[0].front());
+        // 두 갈래 블록 모두 자리가 바뀌었으므로 새 인스턴스로 (이미 로딩 중이면 그 결과가 새 인스턴스)
+        for (auto& branch : std::get<Parallel> (chain[(size_t) place->item]).branches)
+            if (! branch.front().loading)
+                startLoading (branch.front());
 
-        startLoading (branches[1].front());
-        setSelectedSlot (newId);
+        return true;
+    }
+
+    void RigModel::addParallel (juce::uint64 belowSlotId, BlockType type, const juce::File& file)
+    {
+        auto slot = makeSlot (type, file);
+        const auto id = slot.id;
+
+        if (! wrapInParallel (belowSlotId, std::move (slot)))
+            return;
+
+        setSelectedSlot (id);
+        changed();
+    }
+
+    void RigModel::moveBlockBelow (juce::uint64 slotId, juce::uint64 belowSlotId)
+    {
+        if (slotId == belowSlotId || findSlot (slotId) == nullptr)
+            return;
+
+        // moveBlock 과 같이 먼저 새 자리(병렬 아래 갈래)에 넣고 나중에 옛 자리를 지운다. 새 자리의 블록은 새 id, 새 인스턴스
+        auto moved = *findSlot (slotId);
+        moved.id = nextId++;
+        moved.loading = false;   // 옛 id 로 진행 중이던 로딩 결과는 버려진다
+        const auto movedId = moved.id;
+
+        if (! wrapInParallel (belowSlotId, std::move (moved)))
+            return;
+
+        eraseSlot (slotId);
+        setSelectedSlot (movedId);
         changed();
     }
 
@@ -702,6 +729,50 @@ namespace rig
             startLoading (*slot);
 
         setSelectedSlot (movedId);
+        changed();
+    }
+
+    void RigModel::moveMerge (juce::uint64 parallelId, int delta)
+    {
+        int item = -1;
+
+        for (int i = 0; i < (int) chain.size(); ++i)
+            if (const auto* p = std::get_if<Parallel> (&chain[(size_t) i]); p != nullptr && p->id == parallelId)
+                item = i;
+
+        if (item < 0 || delta == 0)
+            return;
+
+        std::vector<juce::uint64> moved;
+
+        // 넣기: 병렬 바로 뒤 본 줄 블록부터 (병렬을 만나면 멈춘다)
+        for (; delta > 0 && item + 1 < (int) chain.size() && std::holds_alternative<Slot> (chain[(size_t) item + 1]); --delta)
+        {
+            auto slot = std::move (std::get<Slot> (chain[(size_t) item + 1]));
+            chain.erase (chain.begin() + item + 1);
+            moved.push_back (slot.id);
+            std::get<Parallel> (chain[(size_t) item]).branches[0].push_back (std::move (slot));
+        }
+
+        // 빼기: 위 갈래 끝 블록부터 (위 갈래에 1개는 남긴다). 뺀 순서대로 병렬 바로 뒤에 넣으면 원래 순서가 유지된다
+        // (chain 에 넣으면 벡터가 다시 잡힐 수 있으므로 위 갈래는 매번 다시 찾는다)
+        for (; delta < 0 && std::get<Parallel> (chain[(size_t) item]).branches[0].size() > 1; ++delta)
+        {
+            auto& upper = std::get<Parallel> (chain[(size_t) item]).branches[0];
+            auto slot = std::move (upper.back());
+            upper.pop_back();
+            moved.push_back (slot.id);
+            chain.emplace (chain.begin() + item + 1, std::move (slot));
+        }
+
+        if (moved.empty())
+            return;
+
+        // 합류 앞뒤로 옮겨진 블록은 처리 자리가 바뀌었으므로 새 인스턴스로 (이미 로딩 중이면 그 결과가 새 인스턴스)
+        for (const auto id : moved)
+            if (auto* slot = editSlot (id); ! slot->loading)
+                startLoading (*slot);
+
         changed();
     }
 

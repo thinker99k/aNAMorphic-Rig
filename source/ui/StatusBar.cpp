@@ -94,8 +94,9 @@ namespace rig
         follow (inputDb, inputPeak);
         follow (outputDb, outputPeak);
 
-        input.setValue (toMeterFraction (inputDb));
-        output.setValue (toMeterFraction (outputDb));
+        // 이름(IN / OUT) 오른쪽 끝에 노브의 dB 값
+        input.setValue (toMeterFraction (inputDb), inputKnob.getValueText());
+        output.setValue (toMeterFraction (outputDb), outputKnob.getValueText());
         cpu.setValue ((float) cpuUsage, juce::String (cpuUsage * 100.0, 1) + " %");   // 성능 측정용 수치
     }
 

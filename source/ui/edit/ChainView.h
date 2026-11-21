@@ -8,11 +8,11 @@
 namespace rig
 {
     // 화면 상단: 패치 맵 (직렬/병렬 체인).
-    //   [IN] -+- [블록1] -+- ● -+- [블록2] -+- ◆ -+- [OUT]      ● = Split, ◆ = Merge (누르면 합류 선택)
-    //                         └-+- [블록3] -+-┘
+    //   [IN] --- [블록1] ---+--- [블록2] ---[⚙]--- [OUT]      갈라지는 곳 = 선만, [⚙] = 합류 버튼 (누르면 선택, 끌면 합류 지점 이동)
+    //                       └--- [블록3] ----┘
     // IN / OUT 에는 패치가 쓰는 장치 채널 번호를 표시한다. 누르면 선택되어 파라미터 바에서 채널을 고른다.
     // 지금 장치에 없는 채널이면 블록의 로딩 실패와 같은 빨간 빗금.
-    // 이웃한 두 노드 사이 연결선 가운데의 [+] 를 누르면 그 자리에 미지정 블록이 들어간다.
+    // 블록 추가·교체·이동은 끌어 놓기로 (선택기 항목 → 패치맵, 패치맵 블록 → 다른 자리). 놓을 자리 규칙은 Strip 참고.
     // 블록 수 제한 없음. 넘치면 가로 스크롤.
     // 선택된 블록의 파일명이 블록보다 길면 이름 칸 안에서 왼쪽으로 흘러간다 (멈춤 → 흐름 → 멈춤 → 처음으로, 반복).
     class ChainView final : public juce::Component,
@@ -31,7 +31,7 @@ namespace rig
 
     private:
         class Tile;
-        struct MergeDot;
+        class MergeButton;
         class Strip;
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;

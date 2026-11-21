@@ -29,6 +29,8 @@ namespace rig
                      } };
         }
 
+        constexpr float levelTextSize = 14.0f;   // 합류 화면의 갈래 이름(굵게) / dB 글자
+
         juce::String levelText (double db)
         {
             return db <= RigModel::mergeMinDb ? juce::String ("-inf dB") : juce::String (db, 1) + " dB";
@@ -51,7 +53,8 @@ namespace rig
 
         for (auto* label : { &errorLabel, &warningLabel })
         {
-            label->setJustificationType (juce::Justification::centredLeft);
+            label->setJustificationType (juce::Justification::topRight);
+            label->setBorderSize ({});
             label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
             addChildComponent (label);
         }
@@ -65,13 +68,17 @@ namespace rig
             };
 
             branchLabel[(size_t) b].setText (b == 0 ? "Upper" : "Lower", juce::dontSendNotification);
-            branchLabel[(size_t) b].setJustificationType (juce::Justification::centredRight);
+            branchLabel[(size_t) b].setFont (juce::FontOptions (levelTextSize, juce::Font::bold));
+            branchLabel[(size_t) b].setJustificationType (juce::Justification::centredLeft);
+            branchLabel[(size_t) b].setBorderSize ({});   // 글자 끝 = 홈 끝 (Label 기본 여백 없이)
 
             auto& slider = levelSlider[(size_t) b];
+            slider.setLookAndFeel (&faderLnf);
             slider.setSliderStyle (juce::Slider::LinearHorizontal);
             slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
             slider.setNormalisableRange (levelRange());
             slider.setScrollWheelEnabled (false);   // 휠은 드래그 끝(저장)이 오지 않으므로 막는다
+            slider.setSliderSnapsToMousePosition (false);   // 클릭만으로는 값이 그대로, 끈 거리만큼 지금 값에서 움직인다 (잘못 눌러 레벨이 튀지 않게)
             slider.setDoubleClickReturnValue (true, RigModel::mergeDefaultDb);   // JUCE 가 드래그 시작/끝도 보내 저장된다
 
             // 드래그 중에는 소리만, 드래그 끝에 저장
@@ -85,7 +92,9 @@ namespace rig
                 model.setBranchLevel (model.getSelectedParallelId(), b, (float) levelSlider[(size_t) b].getValue(), true);
             };
 
-            levelValue[(size_t) b].setJustificationType (juce::Justification::centredLeft);
+            levelValue[(size_t) b].setFont (juce::FontOptions (levelTextSize));
+            levelValue[(size_t) b].setJustificationType (juce::Justification::centredRight);
+            levelValue[(size_t) b].setBorderSize ({});
 
             for (auto* c : std::initializer_list<juce::Component*> { &branchPower[(size_t) b], &branchLabel[(size_t) b],
                                                                      &slider, &levelValue[(size_t) b] })
@@ -158,7 +167,7 @@ namespace rig
 
         if (slot != nullptr && slot->dsp != nullptr)
             if (const auto modelRate = slot->dsp->expectedSampleRate(); modelRate > 0.0 && std::abs (modelRate - deviceRate) > 0.5)
-                warning = "Sample rate mismatch: model " + juce::String (juce::roundToInt (modelRate)) + " Hz, device "
+                warning = "Sample rate mismatch:\nmodel " + juce::String (juce::roundToInt (modelRate)) + " Hz\ndevice "
                         + juce::String (juce::roundToInt (deviceRate)) + " Hz";
 
         setMessages (slot != nullptr ? slot->error : juce::String(), warning);
@@ -249,6 +258,26 @@ namespace rig
             model.setOutputChannel (id - 1, false);
     }
 
+    void ParamBar::FaderLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos,
+                                                       float, float, juce::Slider::SliderStyle, juce::Slider&)
+    {
+        // x ~ x + width 는 JUCE 가 손잡이 반지름(capWidth / 2)만큼 들인 범위. 값 0 / 1 = 홈 양 끝
+        const float cy = (float) y + (float) height * 0.5f;
+        constexpr float grooveHeight = 4.0f;
+
+        g.setColour (juce::Colours::black.withAlpha (0.55f));
+        g.fillRoundedRectangle ({ (float) x, cy - grooveHeight * 0.5f, (float) width, grooveHeight }, grooveHeight * 0.5f);
+
+        // 손잡이: 짙은 회색 사각 + 밝은 테두리 + 가운데 흰 선 (움직이는 방향에 수직)
+        const auto cap = juce::Rectangle<float> ((float) capWidth, (float) juce::jmin (capHeight, height)).withCentre ({ sliderPos, cy });
+        g.setColour (juce::Colour (0xff3c3c3c));
+        g.fillRoundedRectangle (cap, 2.0f);
+        g.setColour (juce::Colours::grey);
+        g.drawRoundedRectangle (cap.reduced (0.5f), 2.0f, 1.0f);
+        g.setColour (juce::Colours::white);
+        g.drawLine (sliderPos, cap.getY() + 3.0f, sliderPos, cap.getBottom() - 3.0f, 2.0f);
+    }
+
     void ParamBar::PowerButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
     {
         auto bounds = getLocalBounds().toFloat().reduced (1.5f);
@@ -303,32 +332,35 @@ namespace rig
         row.removeFromLeft (8);
         channelBox.setBounds (row.removeFromLeft (320));
 
-        // 오류 / 경고 문구: IN / OUT 이면 채널 목록 오른쪽, 블록이면 전원 버튼 왼쪽 (오른쪽 정렬, 폭 messageWidth)
-        constexpr int messageWidth = 420, messageHeight = 20;
-        auto messages = channelBox.isVisible() ? row.withTrimmedLeft (16)
-                                               : area.withTrimmedRight (12).removeFromRight (messageWidth);
-        const int lines = (errorLabel.isVisible() ? 1 : 0) + (warningLabel.isVisible() ? 1 : 0);
-        messages = messages.withSizeKeepingCentre (messages.getWidth(), messageHeight * juce::jmax (1, lines));
+        // 오류 / 경고 문구: 전원 버튼 자리 왼쪽에 오른쪽 정렬, 윗변 = 전원 버튼 윗변 (IN / OUT 일 때도 같은 자리).
+        // 오류(빨강) 아래 경고(노랑), 글자의 줄바꿈(\n)만큼 줄 수
+        constexpr int messageWidth = 420, messageLineHeight = 18;
+        auto messages = area.withTrimmedRight (12).removeFromRight (messageWidth).withTop (powerButton.getY());
 
-        if (errorLabel.isVisible())
-            errorLabel.setBounds (messages.removeFromTop (messageHeight));
+        for (auto* label : { &errorLabel, &warningLabel })
+        {
+            const int lines = label->isVisible() ? label->getText().length() - label->getText().removeCharacters ("\n").length() + 1 : 0;
+            label->setBounds (messages.removeFromTop (messageLineHeight * lines));
+        }
 
-        warningLabel.setBounds (messages.removeFromTop (messageHeight));
-
-        // 합류 선택 시: [전원 50][8][이름 50][슬라이더 220][값 70]  간격 24  [아래 갈래 같은 구성] ... [Level Reset 110]
+        // 합류 선택 시: [전원 50] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
+        constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;
         auto merge = getLocalBounds().reduced (12, 0);
-        levelResetButton.setBounds (merge.removeFromRight (110).withSizeKeepingCentre (110, 28));
+        // Level Reset: 전원 버튼과 같은 높이, 좁게 (글자 "Level\nReset" 두 줄)
+        constexpr int resetWidth = 64;
+        levelResetButton.setBounds (merge.removeFromRight (resetWidth).withSizeKeepingCentre (resetWidth, size));
 
         for (size_t b = 0; b < 2; ++b)
         {
             branchPower[b].setBounds (merge.removeFromLeft (size).withSizeKeepingCentre (size, size));
             merge.removeFromLeft (8);
-            branchLabel[b].setBounds (merge.removeFromLeft (50).withSizeKeepingCentre (50, 28));
-            merge.removeFromLeft (8);
-            levelSlider[b].setBounds (merge.removeFromLeft (220).withSizeKeepingCentre (220, 28));
-            merge.removeFromLeft (8);
-            levelValue[b].setBounds (merge.removeFromLeft (70).withSizeKeepingCentre (70, 28));
-            merge.removeFromLeft (24);
+
+            auto column = merge.removeFromLeft (columnWidth).withSizeKeepingCentre (columnWidth, textHeight + sliderHeight);
+            auto text = column.removeFromTop (textHeight).reduced (FaderLookAndFeel::capWidth / 2, 0);   // 홈 양 끝에 맞춘다
+            branchLabel[b].setBounds (text.removeFromLeft (columnWidth / 2));
+            levelValue[b].setBounds (text);
+            levelSlider[b].setBounds (column);
+            merge.removeFromLeft (branchGap);
         }
     }
 }

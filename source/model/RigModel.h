@@ -128,6 +128,10 @@ namespace rig
         void insertBlock (Place where, BlockType type, const juce::File& file);   // where 에 새 블록을 넣고 선택한다
         void addParallel (juce::uint64 belowSlotId, BlockType type, const juce::File& file);   // 본 줄 블록 아래에 새 블록 → 병렬
         void moveBlock (juce::uint64 slotId, Place where);   // where 는 옮기기 전 트리 기준 (먼저 넣고 나중에 지운다)
+        void moveBlockBelow (juce::uint64 slotId, juce::uint64 belowSlotId);   // 본 줄 블록 아래로 옮겨 병렬 (먼저 넣고 나중에 지운다)
+        // 합류 지점 옮기기: delta > 0 이면 병렬 바로 뒤 본 줄 블록을 delta 개 위 갈래 끝으로 넣고,
+        // delta < 0 이면 위 갈래 끝 블록을 -delta 개 병렬 바로 뒤 본 줄로 뺀다. 위 갈래는 블록 1개 이상, 다른 병렬은 넘지 못한다
+        void moveMerge (juce::uint64 parallelId, int delta);
         void removeBlock (juce::uint64 slotId);   // 갈래가 비면 병렬 해제. 선택은 신호 흐름상 바로 앞 블록, 없으면 IN
         void setOn (juce::uint64 slotId, bool shouldBeOn);   // 현재 씬의 값만 바꾼다
         bool isOn (const Slot& slot) const noexcept { return slot.on[(size_t) currentScene]; }
@@ -181,6 +185,7 @@ namespace rig
         void setSelectedSlot (juce::uint64 id);   // 알림 없이 (편집 함수가 마지막에 한 번 알린다)
         bool isValidInsertPlace (const Place&) const;
         void insertSlot (Place where, Slot slot);
+        bool wrapInParallel (juce::uint64 belowSlotId, Slot lower);   // 본 줄 블록을 위 갈래, lower 를 아래 갈래로 하는 병렬로 바꾼다
         void eraseSlot (juce::uint64 slotId);   // 갈래가 비면 병렬 해제 (남은 갈래 블록은 본 줄로 옮겨 다시 로딩)
         void applyMerge (Parallel&, bool immediately = false);   // 현재 씬의 갈래 On/Off·레벨을 Merge 게인으로
         void mergeEdited (Parallel&);   // 합류 값 편집 후: DSP 반영, 저장, UI 알림
