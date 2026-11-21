@@ -66,11 +66,12 @@
 │   │   ├── Block.h                     블록 공통 인터페이스, 블록 종류 (None / NAM / IR)
 │   │   ├── NamBlock.*                  .nam 캡처 (NAM Core)
 │   │   ├── IrBlock.*                   .wav IR (juce::dsp::Convolution)
-│   │   └── AudioEngine.*               오디오 콜백 + 직렬 체인 처리, 크로스페이드, 입출력 볼륨
+│   │   ├── Merge.h                     병렬 두 갈래 합류 (갈래별 게인)
+│   │   └── AudioEngine.*               오디오 콜백 + 직렬/병렬 체인 처리, 크로스페이드, 입출력 볼륨
 │   ├── library/
 │   │   └── NamMetadata.*               .nam 파일의 메타데이터(이름, 장비 종류 등)만 읽기
 │   ├── model/
-│   │   └── RigModel.*                  체인 편집 상태, 패치·씬, 자동 저장, 백그라운드 로딩
+│   │   └── RigModel.*                  체인(직렬/병렬 트리) 편집 상태, 패치·씬, 자동 저장, 백그라운드 로딩
 │   └── ui/                             화면
 │       ├── MainComponent.*             전체 배치, Edit / Live 모드 전환
 │       ├── TopBar.*                    패치 콤보박스, 이전/다음, 패치 이름(Rename / Reset), 설정 버튼
@@ -123,13 +124,25 @@
   "scenes": [ { "name": "Scene 1" }, ... 8개 ],
   "io": { "in": 0, "out": [0, 1] },
   "blocks": [
-    { "type": "nam", "file": "/home/<user>/Documents/aNAMorphic-Rig/nam/amp.nam", "on": [true, true, false, ...8개] },
+    { "type": "nam", "file": "/home/<user>/Documents/aNAMorphic-Rig/nam/drive.nam", "on": [true, true, false, ...8개] },
+    { "type": "parallel",
+      "branches": [
+        { "on": [true, ...8개], "level": [-3.0, ...8개],
+          "blocks": [ { "type": "nam", "file": ".../nam/clean.nam", "on": [true, ...8개] } ] },
+        { "on": [true, false, ...8개], "level": [-3.0, ...8개],
+          "blocks": [ { "type": "nam", "file": ".../nam/lead.nam", "on": [true, ...8개] } ] }
+      ] },
     { "type": "ir",  "file": "/home/<user>/Documents/aNAMorphic-Rig/ir/cab.wav",  "on": [true, ...8개] }
   ]
 }
 ```
 
-- `type` : `nam` / `ir` / `none`(미지정 블록, 소리 그대로 통과)
+- `blocks` : IN 에서 OUT 까지의 본 줄. 블록 또는 병렬
+- `type` : `nam` / `ir` / `none`(미지정 블록, 소리 그대로 통과) / `parallel`(병렬)
 - `file` : 절대 경로. 파일이 필요한 종류인데 경로가 비어 있으면 미지정 블록으로 읽음
-- `on` : 씬 1~8 에서 이 블록의 On/Off
+- `on` : 씬 1~8 에서 이 블록의 On/Off (Off = 바이패스)
+- `branches` : 병렬의 위 / 아래 두 갈래. 갈래 안에는 블록만 (병렬은 한 단계). 두 갈래는 합류에서 다시 합쳐짐
+  - `on` : 씬 1~8 에서 이 갈래의 On/Off (Off = 그 갈래 무음)
+  - `level` : 씬 1~8 에서 이 갈래의 레벨 dB (-60 = -inf ~ 0, 기본 -3)
+  - 갈래가 두 개가 아니면 병렬을 버리고, 블록이 없는 갈래가 있으면 남은 갈래의 블록만 본 줄에 둠
 - `io` : 장치 채널 번호(0부터). `in` 은 입력 채널 하나, `out` 은 스테레오 쌍 `[짝수, 짝수+1]` 또는 단일 `[n]`. 이상한 값이면 기본값(`in` 0, `out` [0, 1]). 지금 장치에 없는 번호는 그대로 두고 소리는 기본 채널로 내며, 패치 맵의 IN / OUT 노드에 빨간 빗금

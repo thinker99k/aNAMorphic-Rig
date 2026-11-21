@@ -114,28 +114,38 @@ namespace rig
     }
 
     //==============================================================================
-    // 블록 하나를 나타내는 타일
+    // 블록 하나를 나타내는 타일. 병렬은 아직 그리지 않고 위 갈래, 아래 갈래 블록을 본 줄처럼 이어서 보여준다 (임시).
+    // < > 는 블록이 있는 목록(본 줄 또는 그 갈래) 안에서만 옮긴다
     class ChainView::Tile final : public juce::Component
     {
     public:
-        Tile (RigModel& m, int i, const juce::uint32& startMs) : model (m), index (i), marqueeStart (startMs)
+        Tile (RigModel& m, juce::uint64 id, int n, RigModel::Place p, int listSize, const juce::uint32& startMs)
+            : model (m), slotId (id), number (n), place (p), marqueeStart (startMs)
         {
-            leftButton.onClick   = [this] { model.moveBlock (index, -1); };
-            rightButton.onClick  = [this] { model.moveBlock (index, +1); };
-            removeButton.onClick = [this] { model.removeBlock (index); };
+            // moveBlock 의 자리는 옮기기 전 기준: 왼쪽 = 한 칸 앞, 오른쪽 = 다음 블록의 뒤
+            leftButton.onClick   = [this] { model.moveBlock (slotId, shifted (-1)); };
+            rightButton.onClick  = [this] { model.moveBlock (slotId, shifted (2)); };
+            removeButton.onClick = [this] { model.removeBlock (slotId); };
 
-            leftButton.setEnabled (index > 0);
-            rightButton.setEnabled (index < (int) model.getSlots().size() - 1);
+            const int position = place.branch < 0 ? place.item : place.index;
+            leftButton.setEnabled (position > 0);
+            rightButton.setEnabled (position < listSize - 1);
 
             for (auto* b : std::initializer_list<juce::Component*> { &leftButton, &rightButton, &removeButton })
                 addAndMakeVisible (b);
         }
 
-        void mouseDown (const juce::MouseEvent& e) override { if (isLeftClick (e)) model.select (index); }
+        void mouseDown (const juce::MouseEvent& e) override { if (isLeftClick (e)) model.selectSlot (slotId); }
+
+        juce::uint64 getSlotId() const noexcept { return slotId; }
 
         void paint (juce::Graphics& g) override
         {
-            const auto& slot = model.getSlots()[(size_t) index];
+            const auto* found = model.findSlot (slotId);
+            if (found == nullptr)
+                return;   // 지워진 블록: 변경 알림(비동기)으로 타일을 다시 만들기 전에 그려지는 경우
+
+            const auto& slot = *found;
             auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
             auto base = colourFor (slot.type);
@@ -149,7 +159,7 @@ namespace rig
 
             g.setColour (slot.type == BlockType::None ? juce::Colours::grey : base.brighter (0.4f));
             g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-            g.drawText ("#" + juce::String (index + 1) + "  " + labelFor (slot.type),
+            g.drawText ("#" + juce::String (number) + "  " + labelFor (slot.type),
                         text.removeFromTop (16).withTrimmedRight (removeWidth),   // 윗줄 오른쪽 = 삭제 칸
                         juce::Justification::centredLeft);
 
@@ -159,7 +169,7 @@ namespace rig
             const auto overflow = nameOverflow();
 
             // 선택되지 않았거나 다 들어가면 앞부분만 (넘치면 말줄임). 선택된 긴 이름은 이름 칸 안에서 흘러간다
-            if (model.getSelectedIndex() != index || overflow <= 0.0f)
+            if (model.getSelectedSlotId() != slotId || overflow <= 0.0f)
             {
                 g.drawText (name, text, juce::Justification::centredLeft, true);
                 return;
@@ -175,12 +185,12 @@ namespace rig
         // 파일명이 이름 칸보다 긴 만큼 (px). 0 이하면 다 들어간다
         float nameOverflow() const
         {
-            const auto& slot = model.getSlots()[(size_t) index];
-            if (slot.type == BlockType::None)
+            const auto* slot = model.findSlot (slotId);
+            if (slot == nullptr || slot->type == BlockType::None)
                 return 0.0f;
 
             const auto width = juce::GlyphArrangement::getStringWidth (juce::Font (juce::FontOptions (13.0f)),
-                                                                      slot.file.getFileNameWithoutExtension());
+                                                                      slot->file.getFileNameWithoutExtension());
             return width - (float) nameArea().getWidth();
         }
 
@@ -192,8 +202,12 @@ namespace rig
         // 테두리는 버튼(삭제 칸) 위에 그려야 귀퉁이 칸이 블록 테두리를 같이 쓰는 것처럼 보인다
         void paintOverChildren (juce::Graphics& g) override
         {
-            const auto& slot = model.getSlots()[(size_t) index];
-            const bool selected = model.getSelectedIndex() == index;
+            const auto* found = model.findSlot (slotId);
+            if (found == nullptr)
+                return;
+
+            const auto& slot = *found;
+            const bool selected = model.getSelectedSlotId() == slotId;
             const bool failed = slot.error.isNotEmpty();
             const auto bounds = getLocalBounds().toFloat().reduced (1.5f);
 
@@ -232,8 +246,17 @@ namespace rig
         }
 
     private:
+        RigModel::Place shifted (int delta) const
+        {
+            auto p = place;
+            (p.branch < 0 ? p.item : p.index) += delta;
+            return p;
+        }
+
         RigModel& model;
-        const int index;
+        const juce::uint64 slotId;
+        const int number;               // 화면에 보이는 순번 (1부터)
+        const RigModel::Place place;
         const juce::uint32& marqueeStart;   // ChainView 소유: 타일을 다시 만들어도 흘러가던 위치가 이어진다
         static constexpr int removeWidth = 36, removeHeight = 20;
         LeftClickOnly<juce::TextButton> leftButton { "<" }, rightButton { ">" };
@@ -248,16 +271,46 @@ namespace rig
         Strip (RigModel& m, bool inFailed, bool outFailed, const juce::uint32& startMs)
             : model (m), inputFailed (inFailed), outputFailed (outFailed)
         {
-            const int numBlocks = (int) model.getSlots().size();
+            // 블록을 화면 순서로: 본 줄 블록, 병렬은 위 갈래 다음 아래 갈래 (임시)
+            std::vector<std::pair<juce::uint64, RigModel::Place>> blocks;
+            std::vector<int> listSizes;
+            const auto& chain = model.getChain();
 
-            for (int i = 0; i < numBlocks; ++i)
-                addAndMakeVisible (tiles.add (new Tile (model, i, startMs)));
-
-            // 연결선마다 하나: i 번째 [+] 는 블록 i 자리에 넣는다
-            for (int i = 0; i <= numBlocks; ++i)
+            for (int i = 0; i < (int) chain.size(); ++i)
             {
+                if (const auto* slot = std::get_if<RigModel::Slot> (&chain[(size_t) i]))
+                {
+                    blocks.push_back ({ slot->id, { i, -1, 0 } });
+                    listSizes.push_back ((int) chain.size());
+                    continue;
+                }
+
+                const auto& branches = std::get<RigModel::Parallel> (chain[(size_t) i]).branches;
+
+                for (int b = 0; b < 2; ++b)
+                    for (int k = 0; k < (int) branches[(size_t) b].size(); ++k)
+                    {
+                        blocks.push_back ({ branches[(size_t) b][(size_t) k].id, { i, b, k } });
+                        listSizes.push_back ((int) branches[(size_t) b].size());
+                    }
+            }
+
+            for (size_t i = 0; i < blocks.size(); ++i)
+                addAndMakeVisible (tiles.add (new Tile (model, blocks[i].first, (int) i + 1, blocks[i].second, listSizes[i], startMs)));
+
+            // 연결선마다 하나: 첫 [+] 는 본 줄 맨 앞, 나머지는 바로 왼쪽 블록의 뒤 (그 블록이 있는 목록 안)에 넣는다
+            for (size_t i = 0; i <= blocks.size(); ++i)
+            {
+                RigModel::Place where;
+
+                if (i > 0)
+                {
+                    where = blocks[i - 1].second;
+                    (where.branch < 0 ? where.item : where.index) += 1;
+                }
+
                 auto* plus = plusButtons.add (new PlusButton());
-                plus->onClick = [this, i] { model.insertBlock (i); };
+                plus->onClick = [this, where] { model.insertBlock (where, BlockType::None, {}); };
                 addAndMakeVisible (plus);
             }
         }
@@ -267,21 +320,22 @@ namespace rig
             return margin + endWidth + tiles.size() * (gap + tileWidth) + gap + endWidth + margin;
         }
 
-        juce::Rectangle<int> tileBounds (int index) const
+        juce::Rectangle<int> selectedTileBounds() const
         {
-            return tiles[index] != nullptr ? tiles[index]->getBounds() : juce::Rectangle<int>();
+            auto* t = selectedTile();
+            return t != nullptr ? t->getBounds() : juce::Rectangle<int>();
         }
 
         // 선택된 블록의 파일명이 넘쳐서 흘러가야 하는지
         bool selectedNameOverflows() const
         {
-            auto* t = tiles[model.getSelectedIndex()];
+            auto* t = selectedTile();
             return t != nullptr && t->nameOverflow() > 0.0f;
         }
 
         void repaintSelectedTile()
         {
-            if (auto* t = tiles[model.getSelectedIndex()])
+            if (auto* t = selectedTile())
                 t->repaint (t->nameArea());
         }
 
@@ -341,6 +395,15 @@ namespace rig
         }
 
     private:
+        Tile* selectedTile() const
+        {
+            for (auto* t : tiles)
+                if (t->getSlotId() == model.getSelectedSlotId())
+                    return t;
+
+            return nullptr;
+        }
+
         int nodeY() const { return (getHeight() - tileHeight) / 2; }
         juce::Rectangle<int> inNode() const  { return { margin, nodeY(), endWidth, tileHeight }; }
         juce::Rectangle<int> outNode() const { return { idealWidth() - margin - endWidth, nodeY(), endWidth, tileHeight }; }
@@ -471,7 +534,7 @@ namespace rig
         if (selectedId != shownSelectedId)
         {
             shownSelectedId = selectedId;
-            const auto tile = strip->tileBounds (model.getSelectedIndex());
+            const auto tile = strip->selectedTileBounds();
             const auto view = viewport.getViewArea();
 
             if (! tile.isEmpty() && (tile.getX() < view.getX() || tile.getRight() > view.getRight()))

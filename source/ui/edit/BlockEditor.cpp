@@ -69,7 +69,7 @@ namespace rig
             const auto& builtIns = shownCategory().builtIns;
 
             if (model.getSelectedSlot() != nullptr && juce::isPositiveAndBelow (row, (int) builtIns.size()))
-                model.assignBlock (model.getSelectedIndex(), builtIns[(size_t) row].type, {});
+                model.assignBlock (model.getSelectedSlotId(), builtIns[(size_t) row].type, {});
         };
 
         model.addChangeListener (this);
@@ -393,7 +393,7 @@ namespace rig
         }
 
         // 같은 파일이어도 막지 않는다 (로딩 실패 후 다시 시도). 중복 로딩은 RigModel::assignBlock 이 막는다
-        model.assignBlock (model.getSelectedIndex(), shownCategory().fileType, file);
+        model.assignBlock (model.getSelectedSlotId(), shownCategory().fileType, file);
     }
 
     void BlockEditor::sortOrderChanged (int, bool)

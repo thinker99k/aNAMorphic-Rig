@@ -11,7 +11,7 @@ namespace rig
     ParamBar::ParamBar (RigModel& m, juce::AudioDeviceManager& dm) : model (m), deviceManager (dm)
     {
         powerButton.setClickingTogglesState (true);
-        powerButton.onClick = [this] { model.setOn (model.getSelectedIndex(), powerButton.getToggleState()); };
+        powerButton.onClick = [this] { model.setOn (model.getSelectedSlotId(), powerButton.getToggleState()); };
         addAndMakeVisible (powerButton);
 
         channelLabel.setJustificationType (juce::Justification::centredRight);
