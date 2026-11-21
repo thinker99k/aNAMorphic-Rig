@@ -1,0 +1,31 @@
+#pragma once
+
+#include "ParamPanel.h"
+#include "ui/ParamKnob.h"
+#include "ui/ParamSwitch.h"
+
+namespace rig
+{
+    class IrParams;
+    class RigModel;
+
+    // IR 블록 선택 시: 왼쪽 절반 [LC 스위치][LC 노브], 오른쪽 절반 [RC 스위치][RC 노브]
+    // 값은 패치의 IrParams (체인의 모든 IR 블록에 적용). LC 와 RC 는 스위치·흐림이 서로 독립
+    class IrParamPanel final : public ParamPanel
+    {
+    public:
+        explicit IrParamPanel (RigModel& model);
+
+        void refresh() override;
+        void resized() override;
+
+    private:
+        RigModel& model;
+        IrParams* params = nullptr;   // refresh() 마다 다시 얻는다 (패치를 바꾸면 새 객체)
+
+        ParamSwitch lowCutSwitch { "LC" }, highCutSwitch { "RC" };
+        ParamKnob lowCut, highCut;
+
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IrParamPanel)
+    };
+}

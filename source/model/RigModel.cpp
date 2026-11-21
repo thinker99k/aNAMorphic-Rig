@@ -1,8 +1,7 @@
 #include "RigModel.h"
 
 #include "AppPaths.h"
-#include "engine/IrBlock.h"
-#include "engine/NamBlock.h"
+#include "engine/BlockFactory.h"
 
 namespace rig
 {
@@ -10,6 +9,8 @@ namespace rig
     {
         for (int i = 0; i < numScenes; ++i)
             sceneNames[(size_t) i] = defaultSceneName (i);
+
+        createParams ({});   // loadPatch 전에도 getParams 가 유효하도록 기본값으로
 
         loadSettings();
     }
@@ -69,7 +70,8 @@ namespace rig
     //    "io": { "in": 0, "out": [ 0, 1 ] },
     //    "blocks": [ { "type": "nam",  "file": "/path/amp.nam", "on": [ true, false, true, true, true, true, true, true ] },
     //                { "type": "none", "file": "",              "on": [ true, true, true, true, true, true, true, true ] },
-    //                { "type": "ir",   "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ] } ]
+    //                { "type": "ir",   "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ] } ],
+    //    "params": { "nam": { ... }, "ir": { ... } }     블록 종류별 파라미터. 필드는 각 BlockParams 가 정한다. 없으면 기본값
     //  }
 
     juce::String RigModel::sanitizePatchName (const juce::var& value, const juce::String& fallback)
@@ -152,12 +154,15 @@ namespace rig
         for (int i = 0; i < numScenes; ++i)
             sceneNames[(size_t) i] = defaultSceneName (i);
 
+        juce::var patchParams;   // 파일이 없거나 "params" 항목이 없는 옛 파일이면 비어 있다 -> 기본값
+
         if (file.existsAsFile())
         {
             const auto json = juce::JSON::parse (file);
 
             patchName = sanitizePatchName (json.getProperty ("name", {}), file.getFileName());
             routing = readRouting (json.getProperty ("io", {}));
+            patchParams = json.getProperty ("params", {});
 
             const auto* scenes = json.getProperty ("scenes", {}).getArray();
 
@@ -188,6 +193,9 @@ namespace rig
             }
         }
 
+        // 블록 로딩보다 먼저: 새 블록들이 이 패치의 새 파라미터 객체를 받는다
+        createParams (patchParams);
+
         for (auto& slot : slots)
             startLoading (slot);
 
@@ -215,6 +223,8 @@ namespace rig
 
         for (int i = 0; i < numScenes; ++i)
             sceneNames[(size_t) i] = defaultSceneName (i);
+
+        createParams ({});   // 기본값
 
         waitingForPatch = false;
         changed();   // 저장 + 빈 체인으로 크로스페이드 + UI 알림
@@ -288,7 +298,42 @@ namespace rig
         root->setProperty ("io", juce::var (io.release()));
         root->setProperty ("blocks", blocks);
 
+        auto paramsObj = std::make_unique<juce::DynamicObject>();
+
+        for (const auto type : BlockParams::paramTypes())
+            if (const auto* p = getParams (type))
+                paramsObj->setProperty (toString (type), p->toVar());
+
+        root->setProperty ("params", juce::var (paramsObj.release()));
+
         paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release())));
+    }
+
+    void RigModel::createParams (const juce::var& patchParams)
+    {
+        // 옛 객체는 지우지 않고 바꿔 끼운다: 옛 블록이 shared_ptr 로 들고 있어서, 소리를 내는 동안 값이 바뀌지 않는다
+        for (const auto type : BlockParams::paramTypes())
+        {
+            auto p = BlockParams::create (type);
+
+            if (patchParams.isVoid())
+                p->setDefaults();
+            else
+                p->fromVar (patchParams.getProperty (toString (type), {}));
+
+            params[type] = std::move (p);
+        }
+    }
+
+    BlockParams* RigModel::getParams (BlockType type) const noexcept
+    {
+        const auto it = params.find (type);
+        return it != params.end() ? it->second.get() : nullptr;
+    }
+
+    void RigModel::saveParams()
+    {
+        savePatch();
     }
 
     //==============================================================================
@@ -558,16 +603,15 @@ namespace rig
         const auto bs = engine.getMaxBlockSize();
         juce::WeakReference<RigModel> weakThis (this);
 
+        // 작업을 넣는 시점의 파라미터 객체를 값으로 넘긴다 (로더 스레드에서 멤버를 읽지 않는다)
+        const auto it = params.find (type);
+        const std::shared_ptr<BlockParams> paramsSnapshot = it != params.end() ? it->second : nullptr;
+
         // 무거운 작업(파일 파싱, 모델 생성, Reset/prewarm)은 로더 스레드에서
-        loader.addJob ([weakThis, slotId, generation, type, file, sr, bs]
+        loader.addJob ([weakThis, slotId, generation, type, file, sr, bs, paramsSnapshot]
         {
             juce::String error;
-            std::shared_ptr<Block> block;
-
-            if (type == BlockType::Nam)
-                block = NamBlock::load (file, error);
-            else
-                block = IrBlock::load (file, error);
+            auto block = loadBlock (type, file, error, paramsSnapshot);
 
             if (block != nullptr)
                 block->prepare (sr, bs);

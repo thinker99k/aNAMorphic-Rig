@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/KnobLookAndFeel.h"
 #include "ui/Widgets.h"
 
 #include <functional>
@@ -37,19 +38,6 @@ namespace rig
         const float minDb;
         const bool minIsInf;
         bool nameVisible = true;
-
-        // 노브 몸통 + 호(맨 왼쪽 ~ 현재 값) + 지시선
-        struct KnobLookAndFeel final : juce::LookAndFeel_V4
-        {
-            void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
-                                   float sliderPosProportional, float rotaryStartAngle,
-                                   float rotaryEndAngle, juce::Slider&) override;
-
-            // 값 말풍선: 항상 노브 위, 꼬리 없는 둥근 사각형
-            int getSliderPopupPlacement (juce::Slider&) override { return juce::BubbleComponent::above; }
-            void drawBubble (juce::Graphics&, juce::BubbleComponent&, const juce::Point<float>& tip,
-                             const juce::Rectangle<float>& body) override;
-        };
 
         // slider 보다 먼저 선언: 멤버는 역순으로 소멸하므로 slider 가 먼저 사라진다
         KnobLookAndFeel knobLnf;

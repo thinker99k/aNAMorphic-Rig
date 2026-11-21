@@ -44,6 +44,9 @@ namespace rig
         channelLabel.setVisible (isEndpoint);
         channelBox.setVisible (isEndpoint);
 
+        if (panel != nullptr)
+            panel->setVisible (! isEndpoint);   // IN / OUT 을 고르면 채널 목록과 겹치지 않게 숨긴다
+
         if (isEndpoint)
         {
             fillChannelBox (endpoint);
@@ -55,6 +58,25 @@ namespace rig
         // 미지정 블록은 지정할 때까지 끌 수 없다
         powerButton.setEnabled (slot != nullptr && slot->type != BlockType::None);
         powerButton.setToggleState (slot == nullptr || model.isOn (*slot), juce::dontSendNotification);
+
+        // 블록 종류가 바뀌면 패널을 다시 만들고, 같으면 값만 갱신 (패치가 바뀐 경우 포함)
+        const auto type = slot != nullptr ? slot->type : BlockType::None;
+
+        if (type != panelType || (panel == nullptr && type != BlockType::None))
+        {
+            panelType = type;
+            panel = createParamPanel (type, model);   // 이전 패널은 여기서 지워진다
+
+            if (panel != nullptr)
+            {
+                addAndMakeVisible (*panel);
+                resized();
+            }
+        }
+        else if (panel != nullptr)
+        {
+            panel->refresh();
+        }
     }
 
     void ParamBar::fillChannelBox (RigModel::Endpoint endpoint)
@@ -164,10 +186,16 @@ namespace rig
 
     void ParamBar::resized()
     {
-        // 오른쪽 끝 = 전원 버튼. 나머지(왼쪽)는 나중에 파라미터 노브 자리
+        // 오른쪽 끝 = 전원 버튼. 나머지(왼쪽)는 블록 종류별 파라미터 패널
         auto area = getLocalBounds().reduced (12, 0);
         const int size = juce::jmin (50, getHeight() - 8);   // 전원 버튼 50 px (예전 40 px 의 1.25 배)
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
+
+        if (panel != nullptr)
+        {
+            area.removeFromRight (12);
+            panel->setBounds (area);
+        }
 
         // IN / OUT 선택 시: 왼쪽부터 [이름표 110] [채널 목록 320], 높이 28 (설정창 줄과 같은 크기)
         auto row = getLocalBounds().reduced (12, 0).withSizeKeepingCentre (getWidth() - 24, 28);
