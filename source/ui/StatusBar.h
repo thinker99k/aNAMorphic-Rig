@@ -36,7 +36,7 @@ namespace rig
         GainKnob outputKnob { "OUTPUT", AudioEngine::outputMinDb, AudioEngine::outputMaxDb, true  };
         LeftClickOnly<juce::TextButton> muteButton { "MUTE" };
 
-        // 피크 값(선형 0..1+), CPU(0..1) 를 받아 갱신. UI 타이머에서 호출.
+        // 피크 값(선형 0..1+), CPU(0..1) 를 받아 갱신하고 게이지 이름 오른쪽에 노브 dB 값을 쓴다. UI 타이머에서 호출.
         void update (float inputPeak, double cpuUsage, float outputPeak);
 
         void paint (juce::Graphics&) override;

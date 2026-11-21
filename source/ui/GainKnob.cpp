@@ -62,16 +62,6 @@ namespace rig
                                                      juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
-    void GainKnob::KnobLookAndFeel::drawBubble (juce::Graphics& g, juce::BubbleComponent& bubble,
-                                                const juce::Point<float>&, const juce::Rectangle<float>& body)
-    {
-        const auto r = body.reduced (0.5f);
-        g.setColour (bubble.findColour (juce::BubbleComponent::backgroundColourId));
-        g.fillRoundedRectangle (r, 4.0f);
-        g.setColour (bubble.findColour (juce::BubbleComponent::outlineColourId));
-        g.drawRoundedRectangle (r, 4.0f, 1.0f);
-    }
-
     //==============================================================================
 
     GainKnob::GainKnob (const juce::String& name, float min, float max, bool minShowsInf)
@@ -121,8 +111,6 @@ namespace rig
         slider.setScrollWheelEnabled (false);
         // 더블클릭하면 0 dB 로. JUCE 가 드래그 시작/끝 알림을 같이 보내서 onDragEnd 저장도 그대로 된다
         slider.setDoubleClickReturnValue (true, 0.0);
-        // dB 값은 상시 표시하지 않고, 누르거나 돌리는 동안만 말풍선으로 띄운다 (놓으면 잠시 뒤 사라짐)
-        slider.textFromValueFunction = [this] (double db) { return toText (db); };
 
         slider.onValueChange = [this]
         {
@@ -178,12 +166,6 @@ namespace rig
             return "0.0 dB";
 
         return text;
-    }
-
-    void GainKnob::parentHierarchyChanged()
-    {
-        // 말풍선은 창 안(최상위 컴포넌트)에 그린다. 노브가 창에 붙은 뒤에야 알 수 있어서 여기서 설정
-        slider.setPopupDisplayEnabled (true, false, getTopLevelComponent());
     }
 
     void GainKnob::resized()
