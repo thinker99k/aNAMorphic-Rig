@@ -7,8 +7,9 @@
 
 namespace rig
 {
-    // 화면 상단: 패치 맵 (직렬 체인).
-    //   [IN] -+- [블록1] -+- [블록2] -+- [OUT]
+    // 화면 상단: 패치 맵 (직렬/병렬 체인).
+    //   [IN] -+- [블록1] -+- ● -+- [블록2] -+- ◆ -+- [OUT]      ● = Split, ◆ = Merge (누르면 합류 선택)
+    //                         └-+- [블록3] -+-┘
     // IN / OUT 에는 패치가 쓰는 장치 채널 번호를 표시한다. 누르면 선택되어 파라미터 바에서 채널을 고른다.
     // 지금 장치에 없는 채널이면 블록의 로딩 실패와 같은 빨간 빗금.
     // 이웃한 두 노드 사이 연결선 가운데의 [+] 를 누르면 그 자리에 미지정 블록이 들어간다.
@@ -30,6 +31,7 @@ namespace rig
 
     private:
         class Tile;
+        struct MergeDot;
         class Strip;
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;

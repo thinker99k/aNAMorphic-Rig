@@ -81,8 +81,8 @@
 │       ├── Widgets.h                   공용 위젯, 마우스 규칙, 기본 LookAndFeel
 │       ├── edit/                       Edit 모드 화면
 │       │   ├── EditView.*              Edit 화면 배치
-│       │   ├── ChainView.*             패치 맵 (직렬 체인)
-│       │   ├── ParamBar.*              선택 블록 파라미터
+│       │   ├── ChainView.*             패치 맵 (직렬/병렬 체인, Split / Merge 점)
+│       │   ├── ParamBar.*              선택 블록 / 합류 / IN·OUT 파라미터, 오류·경고 문구
 │       │   ├── BlockEditor.*           블록 선택기
 │       │   └── SceneBar.*              씬 버튼, Copy / Swap, All Reset, Live 버튼
 │       └── live/                       Live 모드 화면

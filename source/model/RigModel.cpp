@@ -333,7 +333,7 @@ namespace rig
             for (int i = 0; i < numScenes; ++i)
             {
                 on.add (parallel.branchOn[k][(size_t) i]);
-                level.add (parallel.levelDb[k][(size_t) i]);
+                level.add (std::round ((double) parallel.levelDb[k][(size_t) i] * 10.0) / 10.0);   // 0.1 dB 단위 (float 꼬리 없이)
             }
 
             for (const auto& slot : parallel.branches[k])
@@ -389,7 +389,8 @@ namespace rig
         root->setProperty ("io", juce::var (io.release()));
         root->setProperty ("blocks", blocks);
 
-        paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release())));
+        // 소수 자릿수 0 = 필요한 만큼 (기본 15 자리면 -23.3 이 -23.300000000000001 로 써진다)
+        paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release()), false, 0));
     }
 
 
@@ -410,6 +411,20 @@ namespace rig
         routing.output = firstChannel;
         routing.stereoOutput = stereo;
         changed();
+    }
+
+    bool RigModel::isChannelMissing (Endpoint endpoint, const juce::AudioIODevice* device) const
+    {
+        const int numInputs  = device != nullptr ? device->getActiveInputChannels().countNumberOfSetBits() : 0;
+        const int numOutputs = device != nullptr ? device->getActiveOutputChannels().countNumberOfSetBits() : 0;
+
+        if (endpoint == Endpoint::input)
+            return routing.input >= numInputs;
+
+        if (endpoint == Endpoint::output)
+            return routing.output + (routing.stereoOutput ? 2 : 1) > numOutputs;
+
+        return false;
     }
 
     juce::BigInteger RigModel::getUsedInputChannels (Endpoint except) const
@@ -746,14 +761,21 @@ namespace rig
         mergeEdited (*p);
     }
 
-    void RigModel::setBranchLevel (juce::uint64 parallelId, int branch, float db)
+    void RigModel::setBranchLevel (juce::uint64 parallelId, int branch, float db, bool save)
     {
         auto* p = editParallel (parallelId);
         if (p == nullptr || ! juce::isPositiveAndBelow (branch, 2))
             return;
 
         p->levelDb[(size_t) branch][(size_t) currentScene] = juce::jlimit (mergeMinDb, mergeMaxDb, db);
-        mergeEdited (*p);
+
+        if (save)
+        {
+            mergeEdited (*p);
+            return;
+        }
+
+        applyMerge (*p);   // 드래그 중: 소리만 따라가고 저장·알림은 드래그 끝에
     }
 
     void RigModel::resetLevels (juce::uint64 parallelId)

@@ -6,6 +6,33 @@ namespace rig
     {
         // channelBox 항목 id: 단일 채널은 1 + 채널(0부터), 출력 스테레오 쌍은 pairIdBase + 첫 채널(0부터)
         constexpr int pairIdBase = 1000;
+
+        const juce::Colour errorColour (juce::Colours::red.brighter (0.2f));
+        const juce::Colour warningColour (juce::Colours::yellow);
+
+        // 합류 레벨: 오디오 테이퍼. 위치 p 에서 dB = 10 * log2 (p) → 절반마다 -10 dB, -3 dB ≈ 81 %,
+        // p ≤ 2^-6 (= -60 dB) 는 -inf (mergeMinDb 에 붙임). 0.1 dB 단위
+        juce::NormalisableRange<double> levelRange()
+        {
+            return { RigModel::mergeMinDb, RigModel::mergeMaxDb,
+                     [] (double start, double end, double p)        // 0..1 -> dB
+                     {
+                         return p <= 0.0 ? start : juce::jlimit (start, end, 10.0 * std::log2 (p));
+                     },
+                     [] (double start, double end, double db)       // dB -> 0..1
+                     {
+                         return db <= start ? 0.0 : juce::jlimit (0.0, 1.0, std::pow (2.0, (db - end) / 10.0));
+                     },
+                     [] (double start, double end, double db)       // 0.1 dB 단위
+                     {
+                         return juce::jlimit (start, end, std::round (db * 10.0) / 10.0);
+                     } };
+        }
+
+        juce::String levelText (double db)
+        {
+            return db <= RigModel::mergeMinDb ? juce::String ("-inf dB") : juce::String (db, 1) + " dB";
+        }
     }
 
     ParamBar::ParamBar (RigModel& m, juce::AudioDeviceManager& dm) : model (m), deviceManager (dm)
@@ -18,6 +45,55 @@ namespace rig
         addChildComponent (channelLabel);
         channelBox.onChange = [this] { channelChosen(); };
         addChildComponent (channelBox);
+
+        errorLabel.setColour (juce::Label::textColourId, errorColour);
+        warningLabel.setColour (juce::Label::textColourId, warningColour);
+
+        for (auto* label : { &errorLabel, &warningLabel })
+        {
+            label->setJustificationType (juce::Justification::centredLeft);
+            label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
+            addChildComponent (label);
+        }
+
+        for (int b = 0; b < 2; ++b)
+        {
+            branchPower[(size_t) b].setClickingTogglesState (true);
+            branchPower[(size_t) b].onClick = [this, b]
+            {
+                model.setBranchOn (model.getSelectedParallelId(), b, branchPower[(size_t) b].getToggleState());
+            };
+
+            branchLabel[(size_t) b].setText (b == 0 ? "Upper" : "Lower", juce::dontSendNotification);
+            branchLabel[(size_t) b].setJustificationType (juce::Justification::centredRight);
+
+            auto& slider = levelSlider[(size_t) b];
+            slider.setSliderStyle (juce::Slider::LinearHorizontal);
+            slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+            slider.setNormalisableRange (levelRange());
+            slider.setScrollWheelEnabled (false);   // 휠은 드래그 끝(저장)이 오지 않으므로 막는다
+            slider.setDoubleClickReturnValue (true, RigModel::mergeDefaultDb);   // JUCE 가 드래그 시작/끝도 보내 저장된다
+
+            // 드래그 중에는 소리만, 드래그 끝에 저장
+            slider.onValueChange = [this, b]
+            {
+                model.setBranchLevel (model.getSelectedParallelId(), b, (float) levelSlider[(size_t) b].getValue(), false);
+                levelValue[(size_t) b].setText (levelText (levelSlider[(size_t) b].getValue()), juce::dontSendNotification);
+            };
+            slider.onDragEnd = [this, b]
+            {
+                model.setBranchLevel (model.getSelectedParallelId(), b, (float) levelSlider[(size_t) b].getValue(), true);
+            };
+
+            levelValue[(size_t) b].setJustificationType (juce::Justification::centredLeft);
+
+            for (auto* c : std::initializer_list<juce::Component*> { &branchPower[(size_t) b], &branchLabel[(size_t) b],
+                                                                     &slider, &levelValue[(size_t) b] })
+                addChildComponent (c);
+        }
+
+        levelResetButton.onClick = [this] { model.resetLevels (model.getSelectedParallelId()); };
+        addChildComponent (levelResetButton);
 
         model.addChangeListener (this);
         deviceManager.addChangeListener (this);
@@ -39,14 +115,34 @@ namespace rig
     {
         const auto endpoint = model.getSelectedEndpoint();
         const bool isEndpoint = endpoint != RigModel::Endpoint::none;
+        const auto* parallel = model.findParallel (model.getSelectedParallelId());
+        const bool isMerge = parallel != nullptr;
 
-        powerButton.setVisible (! isEndpoint);
+        powerButton.setVisible (! isEndpoint && ! isMerge);
         channelLabel.setVisible (isEndpoint);
         channelBox.setVisible (isEndpoint);
+
+        for (int b = 0; b < 2; ++b)
+            for (auto* c : std::initializer_list<juce::Component*> { &branchPower[(size_t) b], &branchLabel[(size_t) b],
+                                                                     &levelSlider[(size_t) b], &levelValue[(size_t) b] })
+                c->setVisible (isMerge);
+
+        levelResetButton.setVisible (isMerge);
+
+        if (isMerge)
+        {
+            updateMerge (*parallel);
+            setMessages ({}, {});
+            return;
+        }
 
         if (isEndpoint)
         {
             fillChannelBox (endpoint);
+            setMessages (model.isChannelMissing (endpoint, deviceManager.getCurrentAudioDevice())
+                             ? "Channel not available on the current device" : juce::String(),
+                         {});
+            resized();
             return;
         }
 
@@ -55,6 +151,38 @@ namespace rig
         // 미지정 블록은 지정할 때까지 끌 수 없다
         powerButton.setEnabled (slot != nullptr && slot->type != BlockType::None);
         powerButton.setToggleState (slot == nullptr || model.isOn (*slot), juce::dontSendNotification);
+
+        // 모델 레이트와 장치 레이트가 다르면 소리가 틀어진다 (리샘플 미구현)
+        juce::String warning;
+        const auto deviceRate = model.getDeviceSampleRate();
+
+        if (slot != nullptr && slot->dsp != nullptr)
+            if (const auto modelRate = slot->dsp->expectedSampleRate(); modelRate > 0.0 && std::abs (modelRate - deviceRate) > 0.5)
+                warning = "Sample rate mismatch: model " + juce::String (juce::roundToInt (modelRate)) + " Hz, device "
+                        + juce::String (juce::roundToInt (deviceRate)) + " Hz";
+
+        setMessages (slot != nullptr ? slot->error : juce::String(), warning);
+        resized();
+    }
+
+    void ParamBar::updateMerge (const RigModel::Parallel& parallel)
+    {
+        for (int b = 0; b < 2; ++b)
+        {
+            const auto level = model.getBranchLevel (parallel, b);
+            branchPower[(size_t) b].setToggleState (model.isBranchOn (parallel, b), juce::dontSendNotification);
+            levelSlider[(size_t) b].setValue (level, juce::dontSendNotification);
+            levelValue[(size_t) b].setText (levelText (level), juce::dontSendNotification);
+        }
+    }
+
+    // 오류(빨강)와 경고(노랑)는 동시에 보일 수 있다. 하나뿐이면 그 줄만 세로 가운데에
+    void ParamBar::setMessages (const juce::String& error, const juce::String& warning)
+    {
+        errorLabel.setText (error, juce::dontSendNotification);
+        warningLabel.setText (warning, juce::dontSendNotification);
+        errorLabel.setVisible (error.isNotEmpty());
+        warningLabel.setVisible (warning.isNotEmpty());
     }
 
     void ParamBar::fillChannelBox (RigModel::Endpoint endpoint)
@@ -174,5 +302,33 @@ namespace rig
         channelLabel.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (8);
         channelBox.setBounds (row.removeFromLeft (320));
+
+        // 오류 / 경고 문구: IN / OUT 이면 채널 목록 오른쪽, 블록이면 전원 버튼 왼쪽 (오른쪽 정렬, 폭 messageWidth)
+        constexpr int messageWidth = 420, messageHeight = 20;
+        auto messages = channelBox.isVisible() ? row.withTrimmedLeft (16)
+                                               : area.withTrimmedRight (12).removeFromRight (messageWidth);
+        const int lines = (errorLabel.isVisible() ? 1 : 0) + (warningLabel.isVisible() ? 1 : 0);
+        messages = messages.withSizeKeepingCentre (messages.getWidth(), messageHeight * juce::jmax (1, lines));
+
+        if (errorLabel.isVisible())
+            errorLabel.setBounds (messages.removeFromTop (messageHeight));
+
+        warningLabel.setBounds (messages.removeFromTop (messageHeight));
+
+        // 합류 선택 시: [전원 50][8][이름 50][슬라이더 220][값 70]  간격 24  [아래 갈래 같은 구성] ... [Level Reset 110]
+        auto merge = getLocalBounds().reduced (12, 0);
+        levelResetButton.setBounds (merge.removeFromRight (110).withSizeKeepingCentre (110, 28));
+
+        for (size_t b = 0; b < 2; ++b)
+        {
+            branchPower[b].setBounds (merge.removeFromLeft (size).withSizeKeepingCentre (size, size));
+            merge.removeFromLeft (8);
+            branchLabel[b].setBounds (merge.removeFromLeft (50).withSizeKeepingCentre (50, 28));
+            merge.removeFromLeft (8);
+            levelSlider[b].setBounds (merge.removeFromLeft (220).withSizeKeepingCentre (220, 28));
+            merge.removeFromLeft (8);
+            levelValue[b].setBounds (merge.removeFromLeft (70).withSizeKeepingCentre (70, 28));
+            merge.removeFromLeft (24);
+        }
     }
 }

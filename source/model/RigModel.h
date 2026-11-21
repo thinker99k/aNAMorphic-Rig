@@ -147,6 +147,12 @@ namespace rig
         void setInputChannel (int channel);
         void setOutputChannel (int firstChannel, bool stereo);
 
+        // IN / OUT 의 채널이 지금 장치에 없는지 (장치는 모든 채널을 열어 둔다. 장치가 없으면 둘 다 없음)
+        bool isChannelMissing (Endpoint, const juce::AudioIODevice* device) const;
+
+        // 지금 장치의 샘플레이트 (NAM 모델 레이트와 다르면 파라미터 바에 경고)
+        double getDeviceSampleRate() const noexcept { return engine.getSampleRate(); }
+
         // 이 패치에서 except 말고 다른 곳(지금은 IN / OUT, 나중에 FX Loop 블록)이 쓰는 장치 채널. 선택 목록에서 막는 데 쓴다
         juce::BigInteger getUsedInputChannels (Endpoint except) const;
         juce::BigInteger getUsedOutputChannels (Endpoint except) const;
@@ -156,7 +162,7 @@ namespace rig
 
         // 병렬 합류 (현재 씬의 값만 바꾼다). branch 0 = 위, 1 = 아래
         void setBranchOn (juce::uint64 parallelId, int branch, bool shouldBeOn);
-        void setBranchLevel (juce::uint64 parallelId, int branch, float db);
+        void setBranchLevel (juce::uint64 parallelId, int branch, float db, bool save = true);   // 슬라이더 드래그 중에는 save = false, 끝에 true
         void resetLevels (juce::uint64 parallelId);   // Level Reset: 현재 씬의 두 갈래를 mergeDefaultDb 로
         bool isBranchOn (const Parallel& p, int branch) const noexcept { return p.branchOn[(size_t) branch][(size_t) currentScene]; }
         float getBranchLevel (const Parallel& p, int branch) const noexcept { return p.levelDb[(size_t) branch][(size_t) currentScene]; }
