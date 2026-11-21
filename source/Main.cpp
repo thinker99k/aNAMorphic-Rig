@@ -18,13 +18,21 @@ namespace rig
                                  .findColour (juce::ResizableWindow::backgroundColourId),
                              DocumentWindow::closeButton)
         {
-            // 저장된 장치 설정이 있으면 사용, 없으면 기본 장치 (입력 1채널, 출력 2채널)
+            // 저장된 장치 설정이 있으면 사용, 없으면 기본 장치. 채널은 항상 전부 연다 (어느 채널을 쓸지는 패치가 정한다).
+            // 예전 파일의 채널 지정(audioDeviceInChans/OutChans)은 지워서 "기본 채널 = 전부"로 연다
             // 마지막 인자 true: 저장된 장치를 못 열면 기본 장치로 대신 연다
             std::unique_ptr<juce::XmlElement> saved;
             if (paths::deviceSettingsFile().existsAsFile())
                 saved = juce::parseXML (paths::deviceSettingsFile());
 
-            const auto error = deviceManager.initialise (1, 2, saved.get(), true);
+            if (saved != nullptr)
+            {
+                saved->removeAttribute ("audioDeviceInChans");
+                saved->removeAttribute ("audioDeviceOutChans");
+            }
+
+            const auto error = deviceManager.initialise (AudioEngine::openAllChannels, AudioEngine::openAllChannels,
+                                                         saved.get(), true);
             if (error.isNotEmpty())
                 DBG ("Audio device error: " << error);
 

@@ -8,7 +8,8 @@ namespace rig
         constexpr int iconSize = 34;
         constexpr int iconGap = 10;     // 아이콘과 번호 사이
         constexpr int textGap = 2;      // 위 글자와 아래 글자 사이
-        constexpr int textInset = 12;   // 아이콘·글자가 버튼(칸) 가장자리에 닿지 않게
+        constexpr int edgeInset = 15;   // 버튼 안쪽 좌우 여백: 글자와 삼각형의 보이는 끝까지 (71 px 높이에서 글자 묶음 41 px 의 위·아래 여백과 같은 값)
+        constexpr int triangleInset = 4;   // 아이콘 칸 안에서 삼각형이 줄어드는 만큼
         constexpr float numberShare = 0.25f;   // 버튼 폭 중 아이콘 + 번호 칸 비율 (나머지는 글자 칸)
 
         // 색 (시안)
@@ -43,7 +44,7 @@ namespace rig
         // iconSize x iconSize 안에 채워진 삼각형 (◀ / ▶)
         void drawTriangle (juce::Graphics& g, juce::Rectangle<float> box, bool pointsLeft)
         {
-            const auto inner = box.reduced (4.0f);
+            const auto inner = box.reduced ((float) triangleInset);
             juce::Path p;
 
             if (pointsLeft)
@@ -74,7 +75,9 @@ namespace rig
                                            : labelArea.removeFromRight (area.getWidth() * numberShare);
 
             // 아이콘 + 번호 칸
-            const float iconX = isPrev ? numberArea.getX() + (float) textInset : numberArea.getRight() - (float) textInset - (float) iconSize;
+            // 삼각형의 보이는 끝이 버튼 가장자리에서 edgeInset 이 되도록 아이콘 칸을 triangleInset 만큼 바깥으로
+            const float iconOffset = (float) (edgeInset - triangleInset);
+            const float iconX = isPrev ? numberArea.getX() + iconOffset : numberArea.getRight() - iconOffset - (float) iconSize;
             const juce::Rectangle<float> icon (iconX, area.getCentreY() - (float) iconSize / 2.0f, (float) iconSize, (float) iconSize);
             const auto numberBox = isPrev ? numberArea.withLeft (icon.getRight() + (float) iconGap)
                                           : numberArea.withRight (icon.getX() - (float) iconGap);
@@ -87,7 +90,7 @@ namespace rig
 
             // 글자 칸
             const juce::String topText = isPrev ? "PREV PATCH" : "NEXT PATCH";
-            const auto textArea = labelArea.reduced ((float) textInset, 0.0f);
+            const auto textArea = labelArea.reduced ((float) edgeInset, 0.0f);
             const float textTop = area.getCentreY() - (topFont.getHeight() + (float) textGap + bottomFont.getHeight()) / 2.0f;
 
             g.setColour (textMuted);

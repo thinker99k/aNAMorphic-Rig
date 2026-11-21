@@ -24,11 +24,12 @@ namespace rig
                 fn (*block);
     }
 
-    void AudioEngine::setProgram (Program program)
+    void AudioEngine::setProgram (Program program, Routing routing)
     {
         JUCE_ASSERT_MESSAGE_THREAD
 
         wanted = std::move (program);
+        wantedRouting = routing;
         hasWanted = true;
         dispatch();
     }
@@ -47,8 +48,9 @@ namespace rig
             return;
 
         const auto active = owned != nullptr ? owned->result() : Program();
+        const auto activeRouting = owned != nullptr ? owned->newRouting : Routing();
 
-        if (active == wanted)
+        if (active == wanted && activeRouting == wantedRouting)
         {
             hasWanted = false;
             return;
@@ -69,6 +71,8 @@ namespace rig
         next->oldMiddle.assign (active.begin() + (std::ptrdiff_t) front, active.end() - (std::ptrdiff_t) back);
         next->newMiddle.assign (wanted.begin() + (std::ptrdiff_t) front, wanted.end() - (std::ptrdiff_t) back);
         next->suffix.assign (active.end() - (std::ptrdiff_t) back, active.end());
+        next->oldRouting = activeRouting;
+        next->newRouting = wantedRouting;
         next->crossfade = running;
 
         for (const auto& block : next->newMiddle)
@@ -198,6 +202,28 @@ namespace rig
         while (value > current && ! target.compare_exchange_weak (current, value, std::memory_order_relaxed)) {}
     }
 
+    AudioEngine::Channels AudioEngine::resolve (const Routing& r, int numInputs, int numOutputs) noexcept
+    {
+        Channels c;
+
+        if (numInputs > 0)
+            c.input = juce::isPositiveAndBelow (r.input, numInputs) ? r.input : 0;
+
+        const int width = r.stereoOutput ? 2 : 1;
+
+        if (r.output >= 0 && r.output + width <= numOutputs)
+        {
+            c.firstOutput = r.output;
+            c.numOutputs = width;
+        }
+        else
+        {
+            c.numOutputs = juce::jmin (2, numOutputs);   // 기본: 1+2, 채널이 하나뿐이면 1
+        }
+
+        return c;
+    }
+
     // [SPECTRUM] begin (테스트용)
     void AudioEngine::ScopeRing::write (const float* samples, int n) noexcept
     {
@@ -235,13 +261,17 @@ namespace rig
     {
         juce::ScopedNoDenormals noDenormals;
 
-        // 설정창에서 고른 입력 채널 하나만 열어두므로, 활성 입력의 0 번이 곧 기타 입력
-        const float* input = (numInputChannels > 0) ? inputChannelData[0] : nullptr;
         if (auto* next = live.load (std::memory_order_acquire); next != current)
         {
             current = next;
             fadePosition = (next != nullptr && next->crossfade) ? 0 : fadeLength;
         }
+
+        // 장치의 모든 채널을 열어 두므로 콜백 배열 번호 = 장치 채널 번호
+        const auto newChannels = resolve (current != nullptr ? current->newRouting : Routing(), numInputChannels, numOutputChannels);
+        const auto oldChannels = resolve (current != nullptr ? current->oldRouting : Routing(), numInputChannels, numOutputChannels);
+        const float* newInput = newChannels.input >= 0 ? inputChannelData[newChannels.input] : nullptr;
+        const float* oldInput = oldChannels.input >= 0 ? inputChannelData[oldChannels.input] : nullptr;
 
         const int blockSize = juce::jmin (scratch.getNumSamples(), maxBlockSize.load());
 
@@ -251,33 +281,47 @@ namespace rig
         for (int offset = 0; offset < numSamples && blockSize > 0; offset += blockSize)
         {
             const int n = juce::jmin (blockSize, numSamples - offset);
+            const bool fading = current != nullptr && fadePosition < fadeLength;
+
+            // 등전력 곡선: 새 쪽 = sin, 옛 쪽 = cos
+            const float step = 1.0f / (float) fadeLength;
+            const auto angle = [&] (int i)
+            {
+                return juce::jmin (1.0f, (float) (fadePosition + i) * step) * juce::MathConstants<float>::halfPi;
+            };
 
             float* a = scratch.getWritePointer (0);
             float* b = scratch.getWritePointer (1);
 
-            if (input != nullptr)
+            if (fading && newInput != oldInput)
             {
-                juce::FloatVectorOperations::copy (a, input + offset, n);
-
-                // 입력 볼륨 (IN 미터는 게인 뒤에서 잰다 = 모델에 들어가는 레벨)
-                inputSmoothed.applyGain (a, n);
-
-                storeMax (inputPeak, juce::FloatVectorOperations::findMaximum (a, n));
-                storeMax (inputPeak, -juce::FloatVectorOperations::findMinimum (a, n));
+                // 입력 채널이 바뀌었다: 옛 채널에서 새 채널로 넘어간다 (없는 쪽은 무음)
+                for (int i = 0; i < n; ++i)
+                    a[i] = (newInput != nullptr ? newInput[offset + i] * std::sin (angle (i)) : 0.0f)
+                         + (oldInput != nullptr ? oldInput[offset + i] * std::cos (angle (i)) : 0.0f);
+            }
+            else if (newInput != nullptr)
+            {
+                juce::FloatVectorOperations::copy (a, newInput + offset, n);
             }
             else
             {
                 juce::FloatVectorOperations::clear (a, n);
-                inputSmoothed.skip (n);
             }
+
+            // 입력 볼륨 (IN 미터는 게인 뒤에서 잰다 = 모델에 들어가는 레벨)
+            inputSmoothed.applyGain (a, n);
+
+            storeMax (inputPeak, juce::FloatVectorOperations::findMaximum (a, n));
+            storeMax (inputPeak, -juce::FloatVectorOperations::findMinimum (a, n));
 
             if (current != nullptr)
             {
                 processBlocks (current->prefix, a, b, n);
 
-                if (fadePosition < fadeLength)
+                if (fading)
                 {
-                    // 바뀐 구간만 옛/새 두 갈래로 같은 입력을 처리해서 등전력(sin/cos) 곡선으로 섞는다
+                    // 바뀐 구간만 옛/새 두 갈래로 같은 입력을 처리해서 섞는다
                     float* c = scratch.getWritePointer (2);
                     float* d = scratch.getWritePointer (3);
                     juce::FloatVectorOperations::copy (c, a, n);
@@ -285,15 +329,8 @@ namespace rig
                     processBlocks (current->newMiddle, a, b, n);
                     processBlocks (current->oldMiddle, c, d, n);
 
-                    const float step = 1.0f / (float) fadeLength;
-
                     for (int i = 0; i < n; ++i)
-                    {
-                        const float x = juce::jmin (1.0f, (float) (fadePosition + i) * step) * juce::MathConstants<float>::halfPi;
-                        a[i] = a[i] * std::sin (x) + c[i] * std::cos (x);
-                    }
-
-                    fadePosition = juce::jmin (fadeLength, fadePosition + n);
+                        a[i] = a[i] * std::sin (angle (i)) + c[i] * std::cos (angle (i));
                 }
                 else
                 {
@@ -314,10 +351,28 @@ namespace rig
                 outputScope.write (a, n);
             // [SPECTRUM] end
 
-            // 모노 결과를 열려 있는 모든 출력 채널(보통 L/R)에 복사
+            // 모노 결과를 고른 출력 채널(보통 1+2)에 복사하고 나머지 채널은 무음.
+            // 페이드 중 새 채널에만 있으면 키우고(sin), 옛 채널에만 있으면 줄인다(cos)
             for (int ch = 0; ch < numOutputChannels; ++ch)
-                if (auto* out = outputChannelData[ch])
+            {
+                auto* out = outputChannelData[ch];
+                if (out == nullptr)
+                    continue;
+
+                const bool inNew = newChannels.hasOutput (ch);
+                const bool inOld = fading && oldChannels.hasOutput (ch);
+
+                if (inNew && (inOld || ! fading))
                     juce::FloatVectorOperations::copy (out + offset, a, n);
+                else if (inNew || inOld)
+                    for (int i = 0; i < n; ++i)
+                        out[offset + i] = a[i] * (inNew ? std::sin (angle (i)) : std::cos (angle (i)));
+                else
+                    juce::FloatVectorOperations::clear (out + offset, n);
+            }
+
+            if (fading)
+                fadePosition = juce::jmin (fadeLength, fadePosition + n);
         }
 
         // 버퍼가 준비되지 않은 예외 상황에서는 무음

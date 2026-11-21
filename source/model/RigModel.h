@@ -86,6 +86,11 @@ namespace rig
         int getSelectedIndex() const noexcept { return selectedIndex; }
         const Slot* getSelectedSlot() const noexcept;
 
+        // 선택은 블록 하나 또는 IN / OUT 노드 하나. IN / OUT 을 고르면 블록 선택은 풀린다(selectedIndex = -1)
+        enum class Endpoint { none, input, output };
+        Endpoint getSelectedEndpoint() const noexcept { return selectedEndpoint; }
+        void selectEndpoint (Endpoint);
+
         void select (int index);
         void insertBlock (int index);   // 미지정(None) 블록을 index 자리에 넣고 선택한다
         void removeBlock (int index);
@@ -102,6 +107,15 @@ namespace rig
         void resetScene (int scene);                   // 모두 On, 기본 이름
         void resetAllScenes();                         // 8개 씬 모두 resetScene
         void renameScene (int scene, const juce::String& name);
+
+        // 입출력 채널 (패치별, 0부터). 장치에 없는 채널이어도 그대로 저장하고, 소리는 엔진이 기본 채널로 낸다
+        const AudioEngine::Routing& getRouting() const noexcept { return routing; }
+        void setInputChannel (int channel);
+        void setOutputChannel (int firstChannel, bool stereo);
+
+        // 이 패치에서 except 말고 다른 곳(지금은 IN / OUT, 나중에 FX Loop 블록)이 쓰는 장치 채널. 선택 목록에서 막는 데 쓴다
+        juce::BigInteger getUsedInputChannels (Endpoint except) const;
+        juce::BigInteger getUsedOutputChannels (Endpoint except) const;
 
         // 블록에 장치를 지정한다. None 이면 file 은 무시되고 비워진다. 블록별 값(on)은 그대로
         void assignBlock (int index, BlockType type, const juce::File& file);
@@ -127,6 +141,7 @@ namespace rig
 
         static juce::String defaultSceneName (int scene) { return "Scene " + juce::String (scene + 1); }
         static juce::String sanitizeSceneName (const juce::var& value, int scene);
+        static AudioEngine::Routing readRouting (const juce::var& io);   // 패치 파일의 "io" 값 검증
 
         AudioEngine& engine;
         juce::ThreadPool loader { 1 };          // 모델/IR 로딩 전용 스레드
@@ -137,6 +152,8 @@ namespace rig
         bool outputMuted = false;               // loadPatch() 에서 초기화하지 않는다
         std::vector<Slot> slots;
         int selectedIndex = -1;
+        Endpoint selectedEndpoint = Endpoint::none;
+        AudioEngine::Routing routing;
         int currentScene = 0;                   // 저장하지 않는다
         std::array<juce::String, numScenes> sceneNames;
         std::map<BlockType, std::shared_ptr<BlockParams>> params;   // 블록 종류별, 패치당 1벌

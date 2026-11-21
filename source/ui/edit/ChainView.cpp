@@ -18,6 +18,9 @@ namespace rig
         constexpr int margin = 8;
         constexpr float corner = 8.0f;
 
+        // IN / OUT 노드 색: 고를 수 있는 노드라는 뜻으로 블록처럼 유채색 (무채색 = 미지정 / 꺼짐). NAM, IR, 전원(초록)과 겹치지 않게 보라
+        const juce::Colour endpointColour (0xff9b6bd9);
+
         juce::Colour colourFor (BlockType t)
         {
             switch (t)
@@ -40,26 +43,6 @@ namespace rig
             }
 
             return {};
-        }
-
-        // 쓰고 있는 채널 번호 (1부터): 연속 2개 = "1+2", 3개 이상 = "1-4", 떨어져 있으면 ", " 로 구분
-        juce::String formatChannels (const juce::BigInteger& channels)
-        {
-            juce::StringArray parts;
-
-            for (int first = channels.findNextSetBit (0); first >= 0;)
-            {
-                const int end = channels.findNextClearBit (first);   // 연속 구간 끝 (포함 안 함)
-                const int count = end - first;
-
-                parts.add (count == 1 ? juce::String (first + 1)
-                         : count == 2 ? juce::String (first + 1) + "+" + juce::String (first + 2)
-                                      : juce::String (first + 1) + "-" + juce::String (end));
-
-                first = channels.findNextSetBit (end);
-            }
-
-            return parts.isEmpty() ? juce::String ("-") : parts.joinIntoString (", ");
         }
 
         // 연결선 가운데의 [+] 버튼. 컴포넌트(= 클릭 영역)는 넓고, 버튼은 가운데 plusSize 정사각형에만 그린다.
@@ -262,8 +245,8 @@ namespace rig
     class ChainView::Strip final : public juce::Component
     {
     public:
-        Strip (RigModel& m, juce::String inChannels, juce::String outChannels, const juce::uint32& startMs)
-            : model (m), inText (std::move (inChannels)), outText (std::move (outChannels))
+        Strip (RigModel& m, bool inFailed, bool outFailed, const juce::uint32& startMs)
+            : model (m), inputFailed (inFailed), outputFailed (outFailed)
         {
             const int numBlocks = (int) model.getSlots().size();
 
@@ -302,14 +285,28 @@ namespace rig
                 t->repaint (t->nameArea());
         }
 
+        // IN / OUT 노드 클릭 = 선택 (파라미터 바에 채널 선택이 나온다)
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            if (! isLeftClick (e))
+                return;
+
+            if (inNode().contains (e.getPosition()))
+                model.selectEndpoint (RigModel::Endpoint::input);
+            else if (outNode().contains (e.getPosition()))
+                model.selectEndpoint (RigModel::Endpoint::output);
+        }
+
         void paint (juce::Graphics& g) override
         {
             const auto y = nodeY();
-            const juce::Rectangle<int> inNode (margin, y, endWidth, tileHeight);
-            const juce::Rectangle<int> outNode (idealWidth() - margin - endWidth, y, endWidth, tileHeight);
+            const auto selected = model.getSelectedEndpoint();
 
-            drawEndNode (g, inNode, "IN", inText);
-            drawEndNode (g, outNode, "OUT", outText);
+            const auto& routing = model.getRouting();
+            drawEndNode (g, inNode(), "IN", channelText (routing.input, 1),
+                         selected == RigModel::Endpoint::input, inputFailed);
+            drawEndNode (g, outNode(), "OUT", channelText (routing.output, routing.stereoOutput ? 2 : 1),
+                         selected == RigModel::Endpoint::output, outputFailed);
 
             // 연결선: 각 [+] 의 왼쪽 노드 끝에서 오른쪽 노드 시작까지
             const float midY = (float) y + tileHeight * 0.5f;
@@ -345,26 +342,44 @@ namespace rig
 
     private:
         int nodeY() const { return (getHeight() - tileHeight) / 2; }
+        juce::Rectangle<int> inNode() const  { return { margin, nodeY(), endWidth, tileHeight }; }
+        juce::Rectangle<int> outNode() const { return { idealWidth() - margin - endWidth, nodeY(), endWidth, tileHeight }; }
 
-        static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& title, const juce::String& channels)
+        // 테두리와 오류 표시는 블록 타일(Tile::paintOverChildren)과 같은 규칙: 선택 = 흰 테두리,
+        // 장치에 없는 채널 = 굵은 빨간 대각선 + 빨간 테두리 (선택까지 되어 있으면 그 바깥에 흰 테두리)
+        static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& title, const juce::String& channels,
+                                 bool selected, bool failed)
         {
+            // 색 규칙은 블록 타일과 같다: 바탕 = 색.darker (0.6), 제목 = 색.brighter (0.4), 테두리 = 색
             const auto bounds = area.toFloat().reduced (1.5f);
-            g.setColour (juce::Colours::darkgrey.darker (0.5f));
+            g.setColour (endpointColour.darker (0.6f));
             g.fillRoundedRectangle (bounds, corner);
-            g.setColour (juce::Colours::grey);
-            g.drawRoundedRectangle (bounds, corner, 1.5f);
 
             auto text = area.withSizeKeepingCentre (area.getWidth() - 8, 34);
-            g.setColour (juce::Colours::lightgrey);
+            g.setColour (endpointColour.brighter (0.4f));
             g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
             g.drawText (title, text.removeFromTop (17), juce::Justification::centred);
-            g.setColour (juce::Colours::grey.brighter (0.2f));
+            g.setColour (juce::Colours::white);
             g.setFont (juce::FontOptions (12.0f));
             g.drawFittedText (channels, text, juce::Justification::centred, 1, 1.0f);   // 찌그러뜨리지 않고 말줄임
+
+            if (failed)
+            {
+                const auto inner = selected ? bounds.reduced (2.5f) : bounds;
+                drawErrorSlash (g, inner);
+                g.setColour (juce::Colours::red);
+                g.drawRoundedRectangle (inner.reduced (errorThickness * 0.5f - 0.75f), corner, errorThickness);
+            }
+
+            if (selected || ! failed)
+            {
+                g.setColour (selected ? juce::Colours::white : endpointColour);
+                g.drawRoundedRectangle (bounds, corner, selected ? 2.5f : 1.5f);
+            }
         }
 
         RigModel& model;
-        const juce::String inText, outText;
+        const bool inputFailed, outputFailed;
         juce::OwnedArray<Tile> tiles;
         juce::OwnedArray<PlusButton> plusButtons;
     };
@@ -408,13 +423,19 @@ namespace rig
     {
         // 블록 수가 작으므로 변경 때마다 통째로 다시 만든다 (단순함 우선)
         const auto scroll = viewport.getViewPosition();
-        juce::String inChannels ("-"), outChannels ("-");
+
+        // 패치의 채널이 지금 장치에 없으면 빗금 (장치는 모든 채널을 열어 둔다. 장치가 없으면 둘 다 없음)
+        int numInputs = 0, numOutputs = 0;
 
         if (auto* device = deviceManager.getCurrentAudioDevice())
         {
-            inChannels = formatChannels (device->getActiveInputChannels());
-            outChannels = formatChannels (device->getActiveOutputChannels());
+            numInputs = device->getActiveInputChannels().countNumberOfSetBits();
+            numOutputs = device->getActiveOutputChannels().countNumberOfSetBits();
         }
+
+        const auto& routing = model.getRouting();
+        const bool inputFailed = routing.input >= numInputs;
+        const bool outputFailed = routing.output + (routing.stereoOutput ? 2 : 1) > numOutputs;
 
         // 흘러가는 파일명: 선택 블록, 그 파일, 패치, 씬이 바뀌면 처음 위치로 (그 외 알림으로는 이어서 흐른다)
         const auto* current = model.getSelectedSlot();
@@ -427,7 +448,7 @@ namespace rig
             marqueeStartMs = juce::Time::getMillisecondCounter();
         }
 
-        strip = std::make_unique<Strip> (model, inChannels, outChannels, marqueeStartMs);
+        strip = std::make_unique<Strip> (model, inputFailed, outputFailed, marqueeStartMs);
         viewport.setViewedComponent (strip.get(), false);
         resized();
         viewport.setViewPosition (scroll);

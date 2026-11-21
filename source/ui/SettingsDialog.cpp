@@ -30,14 +30,11 @@ namespace rig
     namespace
     {
         constexpr int noDeviceId = 1;   // deviceBox 의 "(none)" 항목 id
-
-        // outputChannelBox 항목 id: 스테레오 쌍은 pairIdBase + 첫 채널(0부터), 단일 채널은 1 + 채널(0부터)
-        constexpr int pairIdBase = 1000;
     }
 
     SettingsDialog::SettingsDialog (juce::AudioDeviceManager& dm) : deviceManager (dm)
     {
-        for (auto* l : { &typeLabel, &deviceLabel, &channelLabel, &outputDeviceLabel, &outputChannelLabel })
+        for (auto* l : { &typeLabel, &deviceLabel, &outputDeviceLabel })
         {
             l->setJustificationType (juce::Justification::centredRight);
             addAndMakeVisible (l);
@@ -45,20 +42,15 @@ namespace rig
 
         addAndMakeVisible (typeBox);
         addAndMakeVisible (deviceBox);
-        addAndMakeVisible (channelBox);
         addAndMakeVisible (outputDeviceBox);
-        addAndMakeVisible (outputChannelBox);
 
         typeBox.onChange   = [this] { refreshInputDevices(); refreshOutputDevices(); };
         deviceBox.onChange = [this]
         {
-            refreshInputChannels();
-
             // 입출력이 한 장치인 드라이버(JACK/ASIO 등)는 출력 장치가 입력 장치를 따라간다
             if (auto* type = selectedType(); type != nullptr && ! type->hasSeparateInputsAndOutputs())
                 refreshOutputDevices();
         };
-        outputDeviceBox.onChange = [this] { refreshOutputChannels(); };
 
         saveButton.onClick   = [this] { save(); };
         cancelButton.onClick = [this] { close (false); };
@@ -66,7 +58,7 @@ namespace rig
         addAndMakeVisible (cancelButton);
 
         refreshDeviceTypes();
-        setSize (460, 260);
+        setSize (460, 188);   // 16 + 장치 줄 3개 (28 + 8) + 여백 20 + 버튼 28 + 16
     }
 
     void SettingsDialog::show (juce::AudioDeviceManager& dm,
@@ -143,51 +135,6 @@ namespace rig
                                                          : noDeviceId + 1 + type->getDefaultDeviceIndex (true),
                                          juce::dontSendNotification);
         }
-
-        refreshInputChannels();
-    }
-
-    void SettingsDialog::refreshInputChannels()
-    {
-        channelBox.clear (juce::dontSendNotification);
-
-        auto* type = selectedType();
-        const auto deviceName = deviceBox.getSelectedId() == noDeviceId ? juce::String() : deviceBox.getText();
-
-        if (type == nullptr || deviceName.isEmpty())
-        {
-            channelBox.setEnabled (false);
-            return;
-        }
-
-        channelBox.setEnabled (true);
-
-        // 지금 열려 있는 장치면 그대로 쓰고, 아니면 열지 않은 임시 장치 객체에서 채널 이름만 얻는다
-        juce::StringArray channelNames;
-        auto setup = deviceManager.getAudioDeviceSetup();
-        auto* current = deviceManager.getCurrentAudioDevice();
-        const bool isCurrent = current != nullptr
-                               && type->getTypeName() == deviceManager.getCurrentAudioDeviceType()
-                               && deviceName == setup.inputDeviceName;
-
-        if (isCurrent)
-        {
-            channelNames = current->getInputChannelNames();
-        }
-        else
-        {
-            const auto outputName = type->hasSeparateInputsAndOutputs() ? juce::String() : deviceName;
-            std::unique_ptr<juce::AudioIODevice> probe (type->createDevice (outputName, deviceName));
-
-            if (probe != nullptr)
-                channelNames = probe->getInputChannelNames();
-        }
-
-        for (int i = 0; i < channelNames.size(); ++i)
-            channelBox.addItem (juce::String (i + 1) + ": " + channelNames[i], i + 1);
-
-        const int currentChannel = isCurrent ? setup.inputChannels.findNextSetBit (0) : -1;
-        channelBox.setSelectedId (currentChannel >= 0 ? currentChannel + 1 : 1, juce::dontSendNotification);
     }
 
     void SettingsDialog::refreshOutputDevices()
@@ -199,7 +146,6 @@ namespace rig
         if (type == nullptr)
         {
             outputDeviceBox.setEnabled (false);
-            refreshOutputChannels();
             return;
         }
 
@@ -215,7 +161,6 @@ namespace rig
             }
 
             outputDeviceBox.setEnabled (false);
-            refreshOutputChannels();
             return;
         }
 
@@ -239,72 +184,6 @@ namespace rig
                                            juce::dontSendNotification);
 
         outputDeviceBox.setEnabled (! names.isEmpty());
-        refreshOutputChannels();
-    }
-
-    void SettingsDialog::refreshOutputChannels()
-    {
-        outputChannelBox.clear (juce::dontSendNotification);
-
-        auto* type = selectedType();
-        const auto deviceName = outputDeviceBox.getText();
-
-        if (type == nullptr || deviceName.isEmpty())
-        {
-            outputChannelBox.setEnabled (false);
-            return;
-        }
-
-        outputChannelBox.setEnabled (true);
-
-        // 지금 열려 있는 장치면 그대로 쓰고, 아니면 열지 않은 임시 장치 객체에서 채널 이름만 얻는다
-        juce::StringArray channelNames;
-        auto setup = deviceManager.getAudioDeviceSetup();
-        auto* current = deviceManager.getCurrentAudioDevice();
-        const bool isCurrent = current != nullptr
-                               && type->getTypeName() == deviceManager.getCurrentAudioDeviceType()
-                               && deviceName == setup.outputDeviceName;
-
-        if (isCurrent)
-        {
-            channelNames = current->getOutputChannelNames();
-        }
-        else
-        {
-            const auto inputName = type->hasSeparateInputsAndOutputs() ? juce::String() : deviceName;
-            std::unique_ptr<juce::AudioIODevice> probe (type->createDevice (deviceName, inputName));
-
-            if (probe != nullptr)
-                channelNames = probe->getOutputChannelNames();
-        }
-
-        // 엔진은 모노 결과를 열린 채널 전부에 복사하므로, 스테레오 쌍을 먼저 보이고 그다음 단일 채널
-        for (int i = 0; i + 1 < channelNames.size(); i += 2)
-            outputChannelBox.addItem (juce::String (i + 1) + "+" + juce::String (i + 2) + ": "
-                                          + channelNames[i] + " / " + channelNames[i + 1],
-                                      pairIdBase + i);
-
-        for (int i = 0; i < channelNames.size(); ++i)
-            outputChannelBox.addItem (juce::String (i + 1) + ": " + channelNames[i], i + 1);
-
-        // 기본 선택: 지금 열린 장치면 켜진 채널에 맞는 항목, 아니면 "1+2" (채널이 하나뿐이면 "1")
-        int selectedId = 0;
-
-        if (isCurrent)
-        {
-            const int first = setup.outputChannels.findNextSetBit (0);
-            const int count = setup.outputChannels.countNumberOfSetBits();
-
-            if (count == 2 && first >= 0 && first % 2 == 0 && setup.outputChannels[first + 1])
-                selectedId = pairIdBase + first;
-            else if (count == 1 && first >= 0)
-                selectedId = first + 1;
-        }
-
-        if (selectedId == 0 || outputChannelBox.indexOfItemId (selectedId) < 0)
-            selectedId = channelNames.size() >= 2 ? pairIdBase : 1;
-
-        outputChannelBox.setSelectedId (selectedId, juce::dontSendNotification);
     }
 
     //==============================================================================
@@ -332,27 +211,9 @@ namespace rig
         if (! type->hasSeparateInputsAndOutputs() && inputName.isNotEmpty())
             setup.outputDeviceName = inputName;   // JACK/ASIO 처럼 입출력이 한 장치인 드라이버: 입력 장치가 우선
 
-        setup.useDefaultInputChannels = false;
-        setup.inputChannels.clear();
-
-        if (inputName.isNotEmpty() && channelBox.getSelectedId() > 0)
-            setup.inputChannels.setBit (channelBox.getSelectedId() - 1);
-
-        setup.useDefaultOutputChannels = false;
-        setup.outputChannels.clear();
-
-        if (const int outId = outputChannelBox.getSelectedId(); setup.outputDeviceName.isNotEmpty() && outId > 0)
-        {
-            if (outId >= pairIdBase)
-            {
-                setup.outputChannels.setBit (outId - pairIdBase);       // 스테레오 쌍
-                setup.outputChannels.setBit (outId - pairIdBase + 1);
-            }
-            else
-            {
-                setup.outputChannels.setBit (outId - 1);                 // 단일 채널
-            }
-        }
+        // 채널은 전부 연다 (AudioEngine::openAllChannels 로 초기화했으므로 "기본 채널" = 전부)
+        setup.useDefaultInputChannels = true;
+        setup.useDefaultOutputChannels = true;
 
         const auto error = deviceManager.setAudioDeviceSetup (setup, true);
 
@@ -394,9 +255,7 @@ namespace rig
 
         for (auto [label, box] : { std::pair { &typeLabel, &typeBox },
                                    std::pair { &deviceLabel, &deviceBox },
-                                   std::pair { &channelLabel, &channelBox },
-                                   std::pair { &outputDeviceLabel, &outputDeviceBox },
-                                   std::pair { &outputChannelLabel, &outputChannelBox } })
+                                   std::pair { &outputDeviceLabel, &outputDeviceBox } })
         {
             auto r = row();
             label->setBounds (r.removeFromLeft (110));

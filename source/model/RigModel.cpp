@@ -59,12 +59,15 @@ namespace rig
     //  "type": "none" 은 미지정 블록 (통과), "file" 은 "". 기본 패치는 블록 없음
     //  "scenes" : 씬 8개의 이름. 이름이 없거나 문자열이 아니거나 비면 "Scene n", 16자까지
     //  "on"     : 블록의 씬별 On/Off 8개. 없거나 bool 이 아닌 값은 On
+    //  "io"     : 장치 채널 번호(0부터). "in" 은 하나, "out" 은 스테레오 쌍 [짝수, 짝수 + 1] 또는 단일 [n].
+    //             이상한 값이면 기본값(in 0, out [0, 1]). 장치에 없는 번호여도 그대로 둔다 (소리는 엔진이 기본 채널로)
     //  현재 씬 번호는 저장하지 않는다 (항상 씬 1 로 열린다)
     //
     //  {
     //    "version": 1,
     //    "name": "config01",
     //    "scenes": [ { "name": "Clean" }, { "name": "Scene 2" }, ... 8개 ],
+    //    "io": { "in": 0, "out": [ 0, 1 ] },
     //    "blocks": [ { "type": "nam",  "file": "/path/amp.nam", "on": [ true, false, true, true, true, true, true, true ] },
     //                { "type": "none", "file": "",              "on": [ true, true, true, true, true, true, true, true ] },
     //                { "type": "ir",   "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ] } ],
@@ -100,6 +103,32 @@ namespace rig
         return name.isNotEmpty() ? name : defaultSceneName (scene);
     }
 
+    AudioEngine::Routing RigModel::readRouting (const juce::var& io)
+    {
+        AudioEngine::Routing r;
+
+        if (const auto in = io.getProperty ("in", {}); in.isInt() && (int) in >= 0)
+            r.input = (int) in;
+
+        if (const auto* out = io.getProperty ("out", {}).getArray())
+        {
+            const auto isChannel = [] (const juce::var& v) { return v.isInt() && (int) v >= 0; };
+
+            if (out->size() == 1 && isChannel ((*out)[0]))
+            {
+                r.output = (*out)[0];
+                r.stereoOutput = false;
+            }
+            else if (out->size() == 2 && isChannel ((*out)[0]) && (int) (*out)[0] % 2 == 0
+                     && isChannel ((*out)[1]) && (int) (*out)[1] == (int) (*out)[0] + 1)
+            {
+                r.output = (*out)[0];
+            }
+        }
+
+        return r;
+    }
+
     void RigModel::setPatchName (const juce::String& name)
     {
         const auto trimmedName = name.trim().substring (0, maxPatchNameLength).trimEnd();
@@ -115,7 +144,9 @@ namespace rig
         patchNumber = juce::jlimit (1, numPatches, number);
         slots.clear();
         selectedIndex = -1;
+        selectedEndpoint = Endpoint::none;
         currentScene = 0;
+        routing = {};
 
         const auto file = paths::patchFile (patchNumber);
         patchName = file.getFileName();
@@ -130,6 +161,7 @@ namespace rig
             const auto json = juce::JSON::parse (file);
 
             patchName = sanitizePatchName (json.getProperty ("name", {}), file.getFileName());
+            routing = readRouting (json.getProperty ("io", {}));
             patchParams = json.getProperty ("params", {});
 
             const auto* scenes = json.getProperty ("scenes", {}).getArray();
@@ -184,7 +216,9 @@ namespace rig
     {
         slots.clear();
         selectedIndex = -1;
+        selectedEndpoint = Endpoint::none;
         currentScene = 0;
+        routing = {};
         patchName = paths::patchFile (patchNumber).getFileName();
 
         for (int i = 0; i < numScenes; ++i)
@@ -248,10 +282,20 @@ namespace rig
             scenes.add (juce::var (obj.release()));
         }
 
+        auto io = std::make_unique<juce::DynamicObject>();
+        io->setProperty ("in", routing.input);
+
+        juce::Array<juce::var> out { routing.output };
+        if (routing.stereoOutput)
+            out.add (routing.output + 1);
+
+        io->setProperty ("out", out);
+
         auto root = std::make_unique<juce::DynamicObject>();
         root->setProperty ("version", 1);
         root->setProperty ("name", patchName);
         root->setProperty ("scenes", scenes);
+        root->setProperty ("io", juce::var (io.release()));
         root->setProperty ("blocks", blocks);
 
         auto paramsObj = std::make_unique<juce::DynamicObject>();
@@ -301,7 +345,54 @@ namespace rig
     void RigModel::select (int index)
     {
         selectedIndex = juce::isPositiveAndBelow (index, (int) slots.size()) ? index : -1;
+        selectedEndpoint = Endpoint::none;
         sendChangeMessage();
+    }
+
+    void RigModel::selectEndpoint (Endpoint endpoint)
+    {
+        selectedEndpoint = endpoint;
+        selectedIndex = -1;
+        sendChangeMessage();
+    }
+
+    void RigModel::setInputChannel (int channel)
+    {
+        if (channel < 0 || channel == routing.input)
+            return;
+
+        routing.input = channel;
+        changed();   // 저장 + 엔진이 옛/새 채널을 크로스페이드 + UI 알림
+    }
+
+    void RigModel::setOutputChannel (int firstChannel, bool stereo)
+    {
+        if (firstChannel < 0 || (firstChannel == routing.output && stereo == routing.stereoOutput))
+            return;
+
+        routing.output = firstChannel;
+        routing.stereoOutput = stereo;
+        changed();
+    }
+
+    juce::BigInteger RigModel::getUsedInputChannels (Endpoint except) const
+    {
+        juce::BigInteger used;
+
+        if (except != Endpoint::input)
+            used.setBit (routing.input);
+
+        return used;
+    }
+
+    juce::BigInteger RigModel::getUsedOutputChannels (Endpoint except) const
+    {
+        juce::BigInteger used;
+
+        if (except != Endpoint::output)
+            used.setRange (routing.output, routing.stereoOutput ? 2 : 1, true);
+
+        return used;
     }
 
     void RigModel::insertBlock (int index)
@@ -312,6 +403,7 @@ namespace rig
         slot.id = nextSlotId++;
         slots.insert (slots.begin() + index, std::move (slot));
         selectedIndex = index;
+        selectedEndpoint = Endpoint::none;
         changed();
     }
 
@@ -335,6 +427,7 @@ namespace rig
 
         std::swap (slots[(size_t) index], slots[(size_t) target]);
         selectedIndex = target;
+        selectedEndpoint = Endpoint::none;
 
         // 같은 인스턴스를 바뀐 순서로 동시에 처리할 수 없으므로, 두 블록을 새로 로딩해 크로스페이드한다.
         // 로딩되는 동안은 옛 순서 그대로 소리가 난다
@@ -569,7 +662,7 @@ namespace rig
             if (slot.dsp != nullptr)
                 program.push_back (slot.dsp);
 
-        engine.setProgram (std::move (program));
+        engine.setProgram (std::move (program), routing);
     }
 
     void RigModel::changed()

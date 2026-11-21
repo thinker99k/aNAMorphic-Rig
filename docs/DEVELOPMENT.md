@@ -76,7 +76,7 @@
 │       ├── TopBar.*                    패치 콤보박스, 이전/다음, 패치 이름(Rename / Reset), 설정 버튼
 │       ├── StatusBar.*                 입출력 볼륨 노브, IN / OUT 미터, CPU, 출력 뮤트
 │       ├── GainKnob.*                  볼륨 노브
-│       ├── SettingsDialog.*            설정 모달 (입출력 장치, 채널, 저장/취소)
+│       ├── SettingsDialog.*            설정 모달 (드라이버, 입출력 장치, 저장/취소)
 │       ├── Widgets.h                   공용 위젯, 마우스 규칙, 기본 LookAndFeel
 │       ├── edit/                       Edit 모드 화면
 │       │   ├── EditView.*              Edit 화면 배치
@@ -104,7 +104,7 @@
 ~/Documents/aNAMorphic-Rig/             (Windows: C:\Users\<user>\Documents\aNAMorphic-Rig)
 ├── settings.json                       앱 전역 설정: 입력/출력 볼륨 (없거나 깨지면 0 dB 로 생성, 노브 드래그 끝/종료 시 저장)
 ├── settings.json.bak                   깨진 settings.json 을 다시 만들 때 남기는 백업
-├── audio-device.xml                    오디오 장치 설정 (처음 실행 시 기본 장치로 생성, Settings 에서 Save 하거나 종료할 때 저장)
+├── audio-device.xml                    오디오 장치 설정 (처음 실행 시 기본 장치로 생성, Settings 에서 Save 하거나 종료할 때 저장). 채널은 항상 전부 열고, 쓸 채널은 패치가 정함
 ├── nam/                                *.nam 캡처를 여기에 넣으면 블록 선택기 NAM 목록에 표시
 ├── ir/                                 *.wav IR 을 여기에 넣으면 블록 선택기 IR 목록에 표시
 └── patch/
@@ -121,6 +121,7 @@
   "version": 1,
   "name": "Clean Chorus",
   "scenes": [ { "name": "Scene 1" }, ... 8개 ],
+  "io": { "in": 0, "out": [0, 1] },
   "blocks": [
     { "type": "nam", "file": "/home/<user>/Documents/aNAMorphic-Rig/nam/amp.nam", "on": [true, true, false, ...8개] },
     { "type": "ir",  "file": "/home/<user>/Documents/aNAMorphic-Rig/ir/cab.wav",  "on": [true, ...8개] }
@@ -131,3 +132,4 @@
 - `type` : `nam` / `ir` / `none`(미지정 블록, 소리 그대로 통과)
 - `file` : 절대 경로. 파일이 필요한 종류인데 경로가 비어 있으면 미지정 블록으로 읽음
 - `on` : 씬 1~8 에서 이 블록의 On/Off
+- `io` : 장치 채널 번호(0부터). `in` 은 입력 채널 하나, `out` 은 스테레오 쌍 `[짝수, 짝수+1]` 또는 단일 `[n]`. 이상한 값이면 기본값(`in` 0, `out` [0, 1]). 지금 장치에 없는 번호는 그대로 두고 소리는 기본 채널로 내며, 패치 맵의 IN / OUT 노드에 빨간 빗금
