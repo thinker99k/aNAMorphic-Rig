@@ -46,7 +46,7 @@ namespace rig
         PassThroughLabel patchNameBox;                                        // 이름 편집 (공용, Widgets.h)
         CheckCornerButton saveNameButton { "Save patch name", 0.0f, 0.0f };   // 입력칸 오른쪽 끝, 편집 중에만 보인다
         LeftClickOnly<juce::TextButton> settingsButton { "Settings..." };
-        LeftClickOnly<juce::TextButton> spectrumButton { "Spectrum" };   // [SPECTRUM]
+        LeftClickOnly<juce::TextButton> spectrumButton { "S" };   // [SPECTRUM]
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TopBar)
     };
