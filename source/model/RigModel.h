@@ -171,6 +171,15 @@ namespace rig
         bool isBranchOn (const Parallel& p, int branch) const noexcept { return p.branchOn[(size_t) branch][(size_t) currentScene]; }
         float getBranchLevel (const Parallel& p, int branch) const noexcept { return p.levelDb[(size_t) branch][(size_t) currentScene]; }
 
+        // 되돌리기 / 다시 하기 (패치마다 메모리에만, 패치를 바꾸면 비운다. 최대 maxUndoSteps 단계).
+        // 대상: 블록·병렬·합류·채널·On/Off·씬 편집·패치 이름/리셋. 제외: 패치 전환, 볼륨 / MUTE, 씬 전환, 선택.
+        // 되돌리면 그 편집을 한 씬으로 함께 바뀌고, 소리는 다른 편집과 같이 크로스페이드
+        static constexpr int maxUndoSteps = 100;
+        bool canUndo() const noexcept { return ! undoStack.empty(); }
+        bool canRedo() const noexcept { return ! redoStack.empty(); }
+        void undo();
+        void redo();
+
         // 오디오 장치(샘플레이트 등)가 바뀐 뒤 호출: 꺼진(Off) 블록까지 다시 준비
         void deviceChanged();
 
@@ -185,6 +194,7 @@ namespace rig
         void setSelectedSlot (juce::uint64 id);   // 알림 없이 (편집 함수가 마지막에 한 번 알린다)
         bool isValidInsertPlace (const Place&) const;
         void insertSlot (Place where, Slot slot);
+        bool canWrapInParallel (juce::uint64 belowSlotId) const;
         bool wrapInParallel (juce::uint64 belowSlotId, Slot lower);   // 본 줄 블록을 위 갈래, lower 를 아래 갈래로 하는 병렬로 바꾼다
         void eraseSlot (juce::uint64 slotId);   // 갈래가 비면 병렬 해제 (남은 갈래 블록은 본 줄로 옮겨 다시 로딩)
         void applyMerge (Parallel&, bool immediately = false);   // 현재 씬의 갈래 On/Off·레벨을 Merge 게인으로
@@ -193,6 +203,22 @@ namespace rig
         static Slot readSlot (const juce::var& json, juce::uint64 id);
         static juce::var writeSlot (const Slot&);
         static juce::var writeParallel (const Parallel&);
+
+        // 되돌리기 한 단계 = 편집 직전 상태
+        struct Snapshot
+        {
+            std::vector<Item> chain;
+            AudioEngine::Routing routing;
+            std::array<juce::String, numScenes> sceneNames;
+            juce::String patchName;
+            juce::uint64 selectedSlotId = 0, selectedParallelId = 0;
+            Endpoint selectedEndpoint = Endpoint::none;
+            int scene = 0;   // 그 편집을 한 씬 (되돌리면 이 씬으로)
+        };
+
+        Snapshot snapshot (int scene) const;
+        void remember();   // 편집 함수가 바꾸기 직전에 부른다
+        void step (std::vector<Snapshot>& from, std::vector<Snapshot>& to);
 
         void startLoading (Slot& slot);
         void onLoaded (juce::uint64 slotId, int generation, std::shared_ptr<Block> block, juce::String error);
@@ -223,6 +249,8 @@ namespace rig
         std::array<juce::String, numScenes> sceneNames;
         bool waitingForLoads = false;           // 로딩을 시작한 블록(패치 전환, 추가, 이동 등)이 다 준비될 때까지 옛 소리 유지
         juce::uint64 nextId = 1;                // 슬롯과 병렬의 id (0 = 없음)
+        std::vector<Snapshot> undoStack, redoStack;
+        bool levelEditOpen = false;             // 합류 레벨 슬라이더를 끄는 중 (한 번 끌기 = 되돌리기 한 단계)
 
         JUCE_DECLARE_WEAK_REFERENCEABLE (RigModel)
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RigModel)

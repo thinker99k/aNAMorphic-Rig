@@ -140,6 +140,7 @@ namespace rig
         if (trimmedName.isEmpty() || trimmedName == patchName)
             return;
 
+        remember();
         patchName = trimmedName;
         savePatch();
     }
@@ -148,6 +149,9 @@ namespace rig
     {
         patchNumber = juce::jlimit (1, numPatches, number);
         chain.clear();
+        undoStack.clear();   // 되돌리기 이력은 패치마다 (패치를 바꾸면 비운다)
+        redoStack.clear();
+        levelEditOpen = false;
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
         currentScene = 0;
@@ -248,6 +252,7 @@ namespace rig
 
     void RigModel::resetPatch()
     {
+        remember();
         chain.clear();
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
@@ -399,6 +404,7 @@ namespace rig
         if (channel < 0 || channel == routing.input)
             return;
 
+        remember();
         routing.input = channel;
         changed();   // 저장 + 엔진이 옛/새 채널을 크로스페이드 + UI 알림
     }
@@ -408,6 +414,7 @@ namespace rig
         if (firstChannel < 0 || (firstChannel == routing.output && stereo == routing.stereoOutput))
             return;
 
+        remember();
         routing.output = firstChannel;
         routing.stereoOutput = stereo;
         changed();
@@ -607,6 +614,58 @@ namespace rig
     }
 
     //==============================================================================
+    // 되돌리기 / 다시 하기. 스냅샷의 블록은 DSP 인스턴스(shared_ptr)를 함께 들고 있어서 되돌려도 다시 로딩하지 않는다.
+    // 자리가 바뀌는 편집은 늘 새 인스턴스를 쓰므로, 되돌린 체인의 인스턴스가 지금 소리와 다른 자리에서 겹치는 일은 없다
+    RigModel::Snapshot RigModel::snapshot (int scene) const
+    {
+        return { chain, routing, sceneNames, patchName, selectedSlotId, selectedParallelId, selectedEndpoint, scene };
+    }
+
+    void RigModel::remember()
+    {
+        undoStack.push_back (snapshot (currentScene));
+
+        if ((int) undoStack.size() > maxUndoSteps)
+            undoStack.erase (undoStack.begin());
+
+        redoStack.clear();
+    }
+
+    void RigModel::undo() { step (undoStack, redoStack); }
+    void RigModel::redo() { step (redoStack, undoStack); }
+
+    // from 의 마지막 상태로 돌아가고, 지금 상태는 to 에 쌓는다. 그 편집을 한 씬으로 함께 바꾼다
+    void RigModel::step (std::vector<Snapshot>& from, std::vector<Snapshot>& to)
+    {
+        if (from.empty())
+            return;
+
+        auto target = std::move (from.back());
+        from.pop_back();
+        to.push_back (snapshot (target.scene));
+        levelEditOpen = false;
+
+        chain = std::move (target.chain);
+        routing = target.routing;
+        sceneNames = target.sceneNames;
+        patchName = target.patchName;
+        currentScene = target.scene;
+        selectedSlotId = findSlot (target.selectedSlotId) != nullptr ? target.selectedSlotId : 0;
+        selectedParallelId = findParallel (target.selectedParallelId) != nullptr ? target.selectedParallelId : 0;
+        selectedEndpoint = target.selectedEndpoint;
+
+        // 스냅샷을 찍을 때 로딩 중이던 블록은 그 결과가 이미 다른 상태로 갔을 수 있으므로 다시 로딩
+        forEachSlot ([this] (Slot& slot)
+        {
+            if (slot.loading)
+                startLoading (slot);
+        });
+
+        applyCurrentScene();
+        changed();   // 저장 + 바뀐 구간 크로스페이드 + UI 알림
+    }
+
+    //==============================================================================
     void RigModel::setSelectedSlot (juce::uint64 id)
     {
         selectedSlotId = findSlot (id) != nullptr ? id : 0;
@@ -640,6 +699,7 @@ namespace rig
         if (! isValidInsertPlace (where))
             return;
 
+        remember();
         auto slot = makeSlot (type, file);
         const auto id = slot.id;
         insertSlot (where, std::move (slot));
@@ -648,12 +708,19 @@ namespace rig
         changed();
     }
 
-    bool RigModel::wrapInParallel (juce::uint64 belowSlotId, Slot lower)
+    bool RigModel::canWrapInParallel (juce::uint64 belowSlotId) const
     {
         // 병렬은 한 단계만: 본 줄의 블록 아래에만 만든다
         const auto place = findPlace (belowSlotId);
-        if (! place.has_value() || place->branch >= 0)
+        return place.has_value() && place->branch < 0;
+    }
+
+    bool RigModel::wrapInParallel (juce::uint64 belowSlotId, Slot lower)
+    {
+        if (! canWrapInParallel (belowSlotId))
             return false;
+
+        const auto place = findPlace (belowSlotId);
 
         auto parallel = makeParallel();
         parallel.branches[0].push_back (std::move (std::get<Slot> (chain[(size_t) place->item])));
@@ -671,6 +738,10 @@ namespace rig
 
     void RigModel::addParallel (juce::uint64 belowSlotId, BlockType type, const juce::File& file)
     {
+        if (! canWrapInParallel (belowSlotId))
+            return;
+
+        remember();
         auto slot = makeSlot (type, file);
         const auto id = slot.id;
 
@@ -683,8 +754,10 @@ namespace rig
 
     void RigModel::moveBlockBelow (juce::uint64 slotId, juce::uint64 belowSlotId)
     {
-        if (slotId == belowSlotId || findSlot (slotId) == nullptr)
+        if (slotId == belowSlotId || findSlot (slotId) == nullptr || ! canWrapInParallel (belowSlotId))
             return;
+
+        remember();
 
         // moveBlock 과 같이 먼저 새 자리(병렬 아래 갈래)에 넣고 나중에 옛 자리를 지운다. 새 자리의 블록은 새 id, 새 인스턴스
         auto moved = *findSlot (slotId);
@@ -743,6 +816,7 @@ namespace rig
         if (item < 0 || delta == 0)
             return;
 
+        remember();   // 옮길 블록이 하나도 없으면 아래에서 되돌린다
         std::vector<juce::uint64> moved;
 
         // 넣기: 병렬 바로 뒤 본 줄 블록부터 (병렬을 만나면 멈춘다)
@@ -766,7 +840,10 @@ namespace rig
         }
 
         if (moved.empty())
+        {
+            undoStack.pop_back();
             return;
+        }
 
         // 합류 앞뒤로 옮겨진 블록은 처리 자리가 바뀌었으므로 새 인스턴스로 (이미 로딩 중이면 그 결과가 새 인스턴스)
         for (const auto id : moved)
@@ -781,6 +858,8 @@ namespace rig
         const auto place = findPlace (slotId);
         if (! place.has_value())
             return;
+
+        remember();
 
         // 지운 뒤 선택: 신호 흐름상 바로 앞 블록 (갈래 첫 블록이면 병렬 앞), 앞에 블록이 없으면 IN
         juce::uint64 previous = 0;
@@ -811,6 +890,8 @@ namespace rig
         if (slot == nullptr)
             return;
 
+        remember();
+
         // 프로그램은 그대로 두고 블록의 wet/dry 목표만 바꾼다 (오디오 스레드가 크로스페이드)
         slot->on[(size_t) currentScene] = shouldBeOn;
 
@@ -828,6 +909,7 @@ namespace rig
         if (p == nullptr || ! juce::isPositiveAndBelow (branch, 2))
             return;
 
+        remember();
         p->branchOn[(size_t) branch][(size_t) currentScene] = shouldBeOn;
         mergeEdited (*p);
     }
@@ -838,6 +920,11 @@ namespace rig
         if (p == nullptr || ! juce::isPositiveAndBelow (branch, 2))
             return;
 
+        // 드래그 한 번 = 되돌리기 한 단계: 드래그 중 첫 값에서 기억하고 끝(save)에서 닫는다
+        if (! levelEditOpen)
+            remember();
+
+        levelEditOpen = ! save;
         p->levelDb[(size_t) branch][(size_t) currentScene] = juce::jlimit (mergeMinDb, mergeMaxDb, db);
 
         if (save)
@@ -854,6 +941,8 @@ namespace rig
         auto* p = editParallel (parallelId);
         if (p == nullptr)
             return;
+
+        remember();
 
         for (auto& level : p->levelDb)
             level[(size_t) currentScene] = mergeDefaultDb;
@@ -897,6 +986,7 @@ namespace rig
             || source == destination)
             return;
 
+        remember();
         const auto s = (size_t) source, d = (size_t) destination;
         sceneNames[d] = sceneNames[s];
 
@@ -920,6 +1010,7 @@ namespace rig
             || source == destination)
             return;
 
+        remember();
         const auto s = (size_t) source, d = (size_t) destination;
         std::swap (sceneNames[s], sceneNames[d]);
 
@@ -943,6 +1034,7 @@ namespace rig
             return;
 
         // 블록 모두 On, 병렬 갈래 모두 On + 기본 레벨, 기본 이름
+        remember();
         const auto i = (size_t) scene;
         sceneNames[i] = defaultSceneName (scene);
 
@@ -962,6 +1054,8 @@ namespace rig
 
     void RigModel::resetAllScenes()
     {
+        remember();
+
         for (int i = 0; i < numScenes; ++i)
             sceneNames[(size_t) i] = defaultSceneName (i);
 
@@ -981,9 +1075,10 @@ namespace rig
 
     void RigModel::renameScene (int scene, const juce::String& name)
     {
-        if (! juce::isPositiveAndBelow (scene, numScenes))
+        if (! juce::isPositiveAndBelow (scene, numScenes) || sanitizeSceneName (name, scene) == sceneNames[(size_t) scene])
             return;
 
+        remember();
         sceneNames[(size_t) scene] = sanitizeSceneName (name, scene);
         savePatch();
         sendChangeMessage();
@@ -1025,6 +1120,7 @@ namespace rig
             && (type == BlockType::None || slot->dsp != nullptr || slot->loading))
             return;
 
+        remember();
         slot->type = type;
         slot->file = newFile;
         startLoading (*slot);
