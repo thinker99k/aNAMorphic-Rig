@@ -208,6 +208,16 @@ namespace rig
         void applyMerge (Parallel&, bool immediately = false);   // 현재 씬의 갈래 On/Off·레벨을 Merge 게인으로
         void mergeEdited (Parallel&);   // 합류 값 편집 후: DSP 반영, 저장, UI 알림
 
+        // 씬별 값의 초기화·복사·교환 (값만 바꾼다. Undo·저장·DSP 반영·알림은 부르는 쪽이 한 번).
+        // Level Reset, 씬 Reset / Copy / Swap, All Reset 이 모두 이것을 쓴다. 씬별 값을 더하면 여기에만 더한다
+        static void resetSceneValues (Slot&, size_t scene);
+        static void resetSceneValues (Parallel&, size_t scene);
+        static void resetLevelValues (Parallel&, size_t scene);   // 합류 레벨만 (Level Reset)
+        static void copySceneValues (Slot&, size_t source, size_t destination);
+        static void copySceneValues (Parallel&, size_t source, size_t destination);
+        static void swapSceneValues (Slot&, size_t a, size_t b);
+        static void swapSceneValues (Parallel&, size_t a, size_t b);
+
         static Slot readSlot (const juce::var& json, juce::uint64 id);
         static juce::var writeSlot (const Slot&);
         static juce::var writeParallel (const Parallel&);

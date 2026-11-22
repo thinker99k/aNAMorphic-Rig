@@ -566,11 +566,8 @@ namespace rig
         Parallel p;
         p.id = nextId++;
 
-        for (auto& on : p.branchOn)
-            on = allScenesOn();
-
-        for (auto& level : p.levelDb)
-            level.fill (mergeDefaultDb);
+        for (size_t i = 0; i < (size_t) numScenes; ++i)
+            resetSceneValues (p, i);
 
         p.merge = std::make_shared<Merge>();
         return p;
@@ -964,10 +961,7 @@ namespace rig
             return;
 
         remember();
-
-        for (auto& level : p->levelDb)
-            level[(size_t) currentScene] = mergeDefaultDb;
-
+        resetLevelValues (*p, (size_t) currentScene);
         mergeEdited (*p);
     }
 
@@ -1011,16 +1005,8 @@ namespace rig
         const auto s = (size_t) source, d = (size_t) destination;
         sceneNames[d] = sceneNames[s];
 
-        forEachSlot ([&] (Slot& slot) { slot.on[d] = slot.on[s]; });
-
-        forEachParallel ([&] (Parallel& p)
-        {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                p.branchOn[b][d] = p.branchOn[b][s];
-                p.levelDb[b][d] = p.levelDb[b][s];
-            }
-        });
+        forEachSlot ([&] (Slot& slot) { copySceneValues (slot, s, d); });
+        forEachParallel ([&] (Parallel& p) { copySceneValues (p, s, d); });
 
         sceneEdited (destination);
     }
@@ -1035,16 +1021,8 @@ namespace rig
         const auto s = (size_t) source, d = (size_t) destination;
         std::swap (sceneNames[s], sceneNames[d]);
 
-        forEachSlot ([&] (Slot& slot) { std::swap (slot.on[s], slot.on[d]); });
-
-        forEachParallel ([&] (Parallel& p)
-        {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                std::swap (p.branchOn[b][s], p.branchOn[b][d]);
-                std::swap (p.levelDb[b][s], p.levelDb[b][d]);
-            }
-        });
+        forEachSlot ([&] (Slot& slot) { swapSceneValues (slot, s, d); });
+        forEachParallel ([&] (Parallel& p) { swapSceneValues (p, s, d); });
 
         sceneEdited (source == currentScene ? source : destination);
     }
@@ -1059,16 +1037,8 @@ namespace rig
         const auto i = (size_t) scene;
         sceneNames[i] = defaultSceneName (scene);
 
-        forEachSlot ([&] (Slot& slot) { slot.on[i] = true; });
-
-        forEachParallel ([&] (Parallel& p)
-        {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                p.branchOn[b][i] = true;
-                p.levelDb[b][i] = mergeDefaultDb;
-            }
-        });
+        forEachSlot ([&] (Slot& slot) { resetSceneValues (slot, i); });
+        forEachParallel ([&] (Parallel& p) { resetSceneValues (p, i); });
 
         sceneEdited (scene);
     }
@@ -1077,19 +1047,12 @@ namespace rig
     {
         remember();
 
-        for (int i = 0; i < numScenes; ++i)
-            sceneNames[(size_t) i] = defaultSceneName (i);
-
-        forEachSlot ([] (Slot& slot) { slot.on = allScenesOn(); });
-
-        forEachParallel ([] (Parallel& p)
+        for (size_t i = 0; i < (size_t) numScenes; ++i)
         {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                p.branchOn[b] = allScenesOn();
-                p.levelDb[b].fill (mergeDefaultDb);
-            }
-        });
+            sceneNames[i] = defaultSceneName ((int) i);
+            forEachSlot ([&] (Slot& slot) { resetSceneValues (slot, i); });
+            forEachParallel ([&] (Parallel& p) { resetSceneValues (p, i); });
+        }
 
         sceneEdited (currentScene);
     }
@@ -1103,6 +1066,53 @@ namespace rig
         sceneNames[(size_t) scene] = sanitizeSceneName (name, scene);
         savePatch();
         sendChangeMessage();
+    }
+
+    void RigModel::resetSceneValues (Slot& slot, size_t scene)
+    {
+        slot.on[scene] = true;
+    }
+
+    void RigModel::resetSceneValues (Parallel& p, size_t scene)
+    {
+        for (auto& on : p.branchOn)
+            on[scene] = true;
+
+        resetLevelValues (p, scene);
+    }
+
+    void RigModel::resetLevelValues (Parallel& p, size_t scene)
+    {
+        for (auto& level : p.levelDb)
+            level[scene] = mergeDefaultDb;
+    }
+
+    void RigModel::copySceneValues (Slot& slot, size_t source, size_t destination)
+    {
+        slot.on[destination] = slot.on[source];
+    }
+
+    void RigModel::copySceneValues (Parallel& p, size_t source, size_t destination)
+    {
+        for (size_t b = 0; b < 2; ++b)
+        {
+            p.branchOn[b][destination] = p.branchOn[b][source];
+            p.levelDb[b][destination] = p.levelDb[b][source];
+        }
+    }
+
+    void RigModel::swapSceneValues (Slot& slot, size_t a, size_t b)
+    {
+        std::swap (slot.on[a], slot.on[b]);
+    }
+
+    void RigModel::swapSceneValues (Parallel& p, size_t a, size_t b)
+    {
+        for (size_t k = 0; k < 2; ++k)
+        {
+            std::swap (p.branchOn[k][a], p.branchOn[k][b]);
+            std::swap (p.levelDb[k][a], p.levelDb[k][b]);
+        }
     }
 
     void RigModel::sceneEdited (int scene)
