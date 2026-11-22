@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/AudioEngine.h"
 #include "tuner/PitchDetector.h"
 #include "tuner/TunerGauge.h"
 #include "tuner/TunerInput.h"
@@ -22,13 +23,15 @@ namespace rig
                               private juce::Timer
     {
     public:
-        static constexpr bool mutesOutput = true;   // 튜너가 열려 있는 동안 출력을 끈다 (3-3절). 소리를 그대로 내보내려면 false
+        static constexpr bool mutesOutput = true;   // 튜너가 열려 있는 동안 엔진 출력(앰프 체인)을 끈다 (3-3절). 소리를 그대로 내보내려면 false
+        static constexpr bool passesInput = true;   // 엔진 출력을 끈 동안 입력 소리만(체인 없이) 패치의 출력 채널로 내보낸다
 
-        // 모달 창으로 띄운다. inputChannel = 지금 패치의 입력 채널 (0부터, Routing::input). 닫힐 때(X) onClosed 호출
-        static void show (juce::AudioDeviceManager& deviceManager, int inputChannel,
+        // 모달 창으로 띄운다. routing = 지금 패치의 입출력 채널. passInput = 입력 소리를 출력으로 내보낼지.
+        // 닫힐 때(X) onClosed 호출
+        static void show (juce::AudioDeviceManager& deviceManager, const AudioEngine::Routing& routing, bool passInput,
                           juce::Component* parent, std::function<void()> onClosed);
 
-        TunerDialog (juce::AudioDeviceManager& deviceManager, int inputChannel);
+        TunerDialog (juce::AudioDeviceManager& deviceManager, const AudioEngine::Routing& routing, bool passInput);
         ~TunerDialog() override;
 
         void close();   // 창의 X 버튼이 부른다

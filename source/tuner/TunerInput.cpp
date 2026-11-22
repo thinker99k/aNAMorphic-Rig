@@ -27,6 +27,9 @@ namespace rig
         sampleRate.store (device->getCurrentSampleRate(), std::memory_order_relaxed);
         inputChannel.store (resolveChannel (device->getActiveInputChannels().countNumberOfSetBits()) + 1, std::memory_order_relaxed);
         writePos.store (0, std::memory_order_release);
+
+        passGain.reset (device->getCurrentSampleRate(), fadeSeconds);
+        passGain.setCurrentAndTargetValue (0.0f);
     }
 
     void TunerInput::audioDeviceStopped()
@@ -56,5 +59,30 @@ namespace rig
             data[(pos + (juce::uint64) i) & (ringSize - 1)].store (x[i], std::memory_order_relaxed);
 
         writePos.store (pos + (juce::uint64) numSamples, std::memory_order_release);
+
+        // 입력 통과: 패치의 출력 채널로 (없으면 1+2, 채널이 하나뿐이면 1)
+        passGain.setTargetValue (passThrough.load (std::memory_order_relaxed) ? 1.0f : 0.0f);
+
+        if (! passGain.isSmoothing() && passGain.getCurrentValue() <= 0.0f)
+            return;
+
+        const int width = stereoOutput.load (std::memory_order_relaxed) ? 2 : 1;
+        int first = outputChannel.load (std::memory_order_relaxed);
+        int count = width;
+
+        if (first < 0 || first + width > numOutputChannels)
+        {
+            first = 0;
+            count = juce::jmin (2, numOutputChannels);
+        }
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float y = x[i] * passGain.getNextValue();
+
+            for (int o = first; o < first + count; ++o)
+                if (outputChannelData[o] != nullptr)
+                    outputChannelData[o][i] = y;
+        }
     }
 }

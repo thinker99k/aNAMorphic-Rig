@@ -176,7 +176,10 @@ namespace rig
 
         juce::Component::SafePointer<MainComponent> safeThis (this);
 
-        TunerDialog::show (deviceManager, model.getRouting().input, this, [safeThis, wasMuted]
+        // 앰프 체인 대신 입력 소리만 내보낸다. 이미 뮤트 중이었으면 내보내지 않는다
+        const bool passInput = TunerDialog::mutesOutput && TunerDialog::passesInput && ! wasMuted;
+
+        TunerDialog::show (deviceManager, model.getRouting(), passInput, this, [safeThis, wasMuted]
         {
             if (safeThis == nullptr)
                 return;

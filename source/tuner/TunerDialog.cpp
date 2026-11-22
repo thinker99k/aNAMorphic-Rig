@@ -57,10 +57,10 @@ namespace rig
         };
     }
 
-    void TunerDialog::show (juce::AudioDeviceManager& dm, int inputChannel,
+    void TunerDialog::show (juce::AudioDeviceManager& dm, const AudioEngine::Routing& routing, bool passInput,
                             juce::Component* parent, std::function<void()> onClosed)
     {
-        auto content = std::make_unique<TunerDialog> (dm, inputChannel);
+        auto content = std::make_unique<TunerDialog> (dm, routing, passInput);
         content->onClosed = std::move (onClosed);
 
         auto* window = new TunerWindow (std::move (content), parent);
@@ -72,7 +72,7 @@ namespace rig
         window->enterModalState (true, nullptr, true);
     }
 
-    TunerDialog::TunerDialog (juce::AudioDeviceManager& dm, int inputChannel)
+    TunerDialog::TunerDialog (juce::AudioDeviceManager& dm, const AudioEngine::Routing& routing, bool passInput)
         : deviceManager (dm),
           pitchTenths (TunerSettings::load()),
           loadedTenths (pitchTenths)
@@ -105,7 +105,9 @@ namespace rig
         updatePitchControls();
         setSize (contentWidth, contentHeight);
 
-        input.setInputChannel (inputChannel);
+        input.setInputChannel (routing.input);
+        input.setOutput (routing.output, routing.stereoOutput);
+        input.setPassThrough (passInput);
         deviceManager.addAudioCallback (&input);
         startTimerHz (refreshHz);
     }
@@ -125,6 +127,15 @@ namespace rig
         auto callback = onClosed;
 
         stopTimer();
+
+        // 입력 통과 소리를 페이드로 줄인 뒤에 콜백을 뗀다 (바로 떼면 딸깍 소리)
+        // shortcut: 메시지 스레드를 페이드 시간만큼(약 30 ms) 멈춘다. 닫기가 느껴질 만큼 길어지면 타이머로 나눌 것
+        if (input.isPassingThrough())
+        {
+            input.setPassThrough (false);
+            juce::Thread::sleep (juce::roundToInt (TunerInput::fadeSeconds * 1000.0) + 10);
+        }
+
         deviceManager.removeAudioCallback (&input);
 
         if (pitchTenths != loadedTenths)
