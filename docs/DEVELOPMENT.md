@@ -125,7 +125,7 @@
   "io": { "in": 0, "out": [0, 1] },
   "blocks": [
     { "type": "nam", "file": "/home/<user>/Documents/aNAMorphic-Rig/nam/drive.nam", "on": [true, true, false, ...8개],
-      "params": { "bassDb": [0.0, ...8개], "bassHz": [71, ...8개], ... } },
+      "params": { "bassDb": [0.0, ...8개], "bassHz": [100, ...8개], ... } },
     { "type": "parallel",
       "branches": [
         { "on": [true, ...8개], "level": [-3.0, ...8개],
@@ -150,8 +150,8 @@
     | 이름 | 범위 | 기본 |
     |---|---|---|
     | `bassDb` / `middleDb` / `trebleDb` | -18 ~ 18 dB | 0 |
-    | `bassHz` | 20 ~ 250 Hz | 71 |
-    | `middleHz` | 250 ~ 2500 Hz | 791 |
+    | `bassHz` | 25 ~ 400 Hz | 100 |
+    | `middleHz` | 400 ~ 2500 Hz | 1000 |
     | `trebleHz` | 2500 ~ 10000 Hz | 5000 |
 
   - IR (블록 뒤 LC / RC, 48 dB/oct)
