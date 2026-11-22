@@ -23,7 +23,9 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ SceneBar    : [1]…[8] [Copy/Swap] (1/8)        │
     //  └──────────────────────────────────────────────┘
-    class EditView final : public juce::Component
+    // 끌어 놓기(선택기 → 패치맵, 패치맵 안 블록 이동)의 컨테이너
+    class EditView final : public juce::Component,
+                           public juce::DragAndDropContainer
     {
     public:
         EditView (RigModel& model, juce::AudioDeviceManager& deviceManager);

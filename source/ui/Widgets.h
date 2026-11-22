@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine/Block.h"
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
@@ -48,6 +50,7 @@ namespace rig
     //  - 오른쪽 클릭: fillMenu 가 항목을 채우면 커서 위치에 메뉴. 선택은 바꾸지 않고, 메뉴가 열린 동안 그 행이 isMenuRow (테두리는 모델이 그린다).
     //      fillMenu 가 없거나 비면 무반응
     //  - 가운데 클릭: 무반응
+    //  - 왼쪽으로 누른 채 끌기: dragDescription 이 있으면 끌어 놓기 시작
     // 사용: 모델의 refreshComponentForCell 에서 refreshCell 을 그대로 돌려준다. 칸 그림은 모델의 paintCell 을 Cell 이 대신 부른다
     //      (JUCE 는 커스텀 컴포넌트가 있는 칸을 직접 그리지 않는다). 행 배경(paintRowBackground)은 JUCE 가 그대로 그린다
     class TableRowMouse
@@ -55,6 +58,11 @@ namespace rig
     public:
         std::function<void (int row)> onDoubleClick;
         std::function<void (juce::PopupMenu&, int row)> fillMenu;
+
+        // 왼쪽으로 누른 채 끌면 끌어 놓기를 시작한다 (부모 중 DragAndDropContainer 가 있어야 한다).
+        // dragDescription 이 void 를 돌려주면 끌지 않는다. dragImage 는 커서 가운데에 붙는 그림
+        std::function<juce::var (int row)> dragDescription;
+        std::function<juce::Image (int row)> dragImage;
 
         bool isMenuRow (int row) const { return row >= 0 && row == menuRow; }
 
@@ -99,6 +107,26 @@ namespace rig
                 if (isLeftClick (e) && owner.onDoubleClick != nullptr)
                     owner.onDoubleClick (row);
             }
+
+            void mouseDrag (const juce::MouseEvent& e) override
+            {
+                if (! isLeftClick (e) || owner.dragDescription == nullptr || e.getDistanceFromDragStart() < dragStartDistance)
+                    return;
+
+                auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this);
+                if (container == nullptr || container->isDragAndDropActive())
+                    return;
+
+                const auto description = owner.dragDescription (row);
+                if (description.isVoid())
+                    return;
+
+                const auto image = owner.dragImage != nullptr ? owner.dragImage (row) : juce::Image();
+                const juce::Point<int> centre (-image.getWidth() / 2, -image.getHeight() / 2);
+                container->startDragging (description, this, juce::ScaledImage (image), false, &centre);
+            }
+
+            static constexpr int dragStartDistance = 4;   // 이만큼 움직여야 끌기 (클릭·더블클릭과 구분)
 
             TableRowMouse& owner;
             int row = -1, columnId = 0;
@@ -219,7 +247,7 @@ namespace rig
     };
 
     // 앱 기본 LookAndFeel (V4 그대로). TextButton 글자는 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 맞춘다.
-    // 한 줄과 "단어마다 한 줄" 중 글꼴을 더 크게 쓸 수 있는 쪽으로 그린다 (예: 좁은 "All Reset" → All / Reset)
+    // 한 줄과 "단어마다 한 줄" 중 글꼴을 더 크게 쓸 수 있는 쪽으로 그린다. 글자에 \n 이 있으면 그 줄바꿈 그대로
     struct AppLookAndFeel : public juce::LookAndFeel_V4
     {
         // 창 제목 표시줄의 X 도 왼쪽 클릭만 (마우스 규칙). 모양은 LookAndFeel_V4 의 X 그대로 (V4 버튼 클래스는 JUCE 안에 숨어 있어 상속할 수 없다)
@@ -287,11 +315,12 @@ namespace rig
                 return font;
             };
 
-            juce::StringArray lines { text };
+            // 글자에 줄바꿈(\n)이 있으면 그대로 그 줄들로 (예: "All\nReset")
+            auto lines = juce::StringArray::fromLines (text);
             auto font = bestFont (lines);
 
             const auto words = juce::StringArray::fromTokens (text, " ", {});
-            if (words.size() > 1)
+            if (lines.size() == 1 && words.size() > 1)
             {
                 if (const auto wordFont = bestFont (words); wordFont.getHeight() > font.getHeight())
                 {
@@ -398,5 +427,146 @@ namespace rig
             if (result == 1 && onReset != nullptr)
                 onReset();
         });
+    }
+
+    //==============================================================================
+    // 블록 양식: 패치맵 블록, IN / OUT, 선택기에서 끌 때 보이는 블록이 같이 쓴다.
+    // 색 하나로: 바탕 = 색.darker (0.6), 윗줄(종류 / IN·OUT) = 색.brighter (0.4) 굵게, 아랫줄(파일명 / 채널) = 흰색, 테두리 = 색
+    namespace block
+    {
+        constexpr int width = 130;           // 블록 폭 (예전 150)
+        constexpr int height = 44;           // 블록 높이 (예전 72): 위 여백 5 + 종류 줄 16 + 파일명 줄 18 + 아래 여백 5
+        constexpr float corner = 8.0f;
+
+        // 글자 배치: 윗줄 + 아랫줄 묶음을 세로 가운데에. 높이 44 기준 위아래 여백 (44 - 16 - 18) / 2 = 5 px 씩
+        constexpr int headerLineHeight = 16, valueLineHeight = 18;
+        constexpr int textInsetX = 10;           // 좌우 여백
+        constexpr float headerFontSize = 12.0f;  // 윗줄
+        constexpr float valueFontSize = 13.0f;   // 아랫줄
+
+        inline juce::Colour colourFor (BlockType t)
+        {
+            switch (t)
+            {
+                case BlockType::Nam:  return juce::Colour (0xffd9822b);
+                case BlockType::Ir:   return juce::Colour (0xff2b9bd9);
+                case BlockType::None: break;
+            }
+
+            return juce::Colours::black;
+        }
+
+        inline juce::String labelFor (BlockType t)
+        {
+            switch (t)
+            {
+                case BlockType::Nam:  return "NAM";
+                case BlockType::Ir:   return "IR";
+                case BlockType::None: break;
+            }
+
+            return {};
+        }
+
+        inline juce::Rectangle<int> textBlock (juce::Rectangle<int> area)
+        {
+            return area.reduced (textInsetX, 0).withSizeKeepingCentre (area.getWidth() - 2 * textInsetX, headerLineHeight + valueLineHeight);
+        }
+
+        inline juce::Rectangle<int> headerLine (juce::Rectangle<int> area) { return textBlock (area).removeFromTop (headerLineHeight); }
+        inline juce::Rectangle<int> valueLine (juce::Rectangle<int> area)  { return textBlock (area).withTrimmedTop (headerLineHeight); }
+
+        inline juce::Font valueFont() { return juce::Font (juce::FontOptions (valueFontSize)); }
+
+        // 로딩 실패 표시: 블록 위에 굵은 빨간 대각선 하나 (테두리와 같은 굵기)
+        constexpr float errorThickness = 4.0f;
+
+        inline void drawErrorSlash (juce::Graphics& g, juce::Rectangle<float> bounds)
+        {
+            juce::Graphics::ScopedSaveState save (g);
+            juce::Path clip;
+            clip.addRoundedRectangle (bounds, corner);
+            g.reduceClipRegion (clip);
+
+            g.setColour (juce::Colours::red);
+            g.drawLine (bounds.getX(), bounds.getBottom(), bounds.getRight(), bounds.getY(), errorThickness);
+        }
+
+        inline void drawBlockBackground (juce::Graphics& g, juce::Rectangle<int> area, juce::Colour fill)
+        {
+            g.setColour (fill);
+            g.fillRoundedRectangle (area.toFloat().reduced (1.5f), corner);
+        }
+
+        // rightInset: 윗줄 오른쪽에 비울 폭 (일반 블록의 삭제 칸)
+        inline void drawBlockHeader (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, juce::Colour colour, int rightInset = 0)
+        {
+            g.setColour (colour);
+            g.setFont (juce::FontOptions (headerFontSize, juce::Font::bold));
+            g.drawText (text, headerLine (area).withTrimmedRight (rightInset), juce::Justification::centredLeft, true);
+        }
+
+        // 테두리: 선택 = 흰색 2.5 px, 아니면 border 1.5 px.
+        // 오류 = 굵은 빨간 대각선 + 같은 굵기의 빨간 테두리 (선택까지 되어 있으면 그 바깥에 흰 테두리)
+        inline void drawBlockFrame (juce::Graphics& g, juce::Rectangle<int> area, juce::Colour border, bool selected, bool failed)
+        {
+            const auto bounds = area.toFloat().reduced (1.5f);
+
+            if (failed)
+            {
+                const auto inner = selected ? bounds.reduced (2.5f) : bounds;
+                drawErrorSlash (g, inner);
+                g.setColour (juce::Colours::red);
+                g.drawRoundedRectangle (inner.reduced (errorThickness * 0.5f - 0.75f), corner, errorThickness);
+            }
+
+            if (selected || ! failed)
+            {
+                g.setColour (selected ? juce::Colours::white : border);
+                g.drawRoundedRectangle (bounds, corner, selected ? 2.5f : 1.5f);
+            }
+        }
+
+        // 끌어 놓기 내용 (DragAndDropContainer 의 sourceDescription).
+        //  선택기 항목 : { "source": "library", "type": "nam" / "ir" / "none", "file": 절대 경로 }
+        //  패치맵 블록 : { "source": "map", "slot": 슬롯 id }
+        inline juce::var libraryDrag (BlockType type, const juce::File& file)
+        {
+            auto obj = std::make_unique<juce::DynamicObject>();
+            obj->setProperty ("source", "library");
+            obj->setProperty ("type", toString (type));
+            obj->setProperty ("file", file.getFullPathName());
+            return juce::var (obj.release());
+        }
+
+        inline juce::var mapDrag (juce::uint64 slotId)
+        {
+            auto obj = std::make_unique<juce::DynamicObject>();
+            obj->setProperty ("source", "map");
+            obj->setProperty ("slot", juce::String (slotId));   // var 에 uint64 가 없어서 문자열로
+            return juce::var (obj.release());
+        }
+
+        // 끄는 동안 커서에 붙는 블록 그림의 불투명도 (밑의 놓을 자리 표시가 비쳐 보이게)
+        constexpr float dragImageAlpha = 0.6f;
+
+        // 선택기에서 끌 때 커서에 붙는 블록 그림 (삭제 칸 없음). 미지정 블록은 "Empty"
+        inline juce::Image createImage (BlockType type, const juce::String& name)
+        {
+            const juce::Rectangle<int> area (width, height);
+            juce::Image image (juce::Image::ARGB, width, height, true);
+            juce::Graphics g (image);
+            const bool none = type == BlockType::None;
+            const auto colour = colourFor (type);
+
+            drawBlockBackground (g, area, none ? juce::Colours::black : colour.darker (0.6f));
+            drawBlockHeader (g, area, labelFor (type), colour.brighter (0.4f));
+            g.setColour (none ? juce::Colours::grey : juce::Colours::white);
+            g.setFont (valueFont());
+            g.drawText (none ? juce::String ("Empty") : name, valueLine (area), juce::Justification::centredLeft, true);
+            drawBlockFrame (g, area, none ? juce::Colours::grey.darker() : colour, false, false);
+            image.multiplyAllAlphas (dragImageAlpha);
+            return image;
+        }
     }
 }

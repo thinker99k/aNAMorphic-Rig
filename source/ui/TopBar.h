@@ -8,7 +8,8 @@
 
 namespace rig
 {
-    // 상단 바: [Patch 콤보박스] [이전] [다음]     [패치 이름]     [Settings 버튼]
+    // 상단 바: [Patch 콤보박스] [이전] [다음]     [Undo] [Redo] [패치 이름]     [Settings 버튼]
+    //  - Undo / Redo: 되돌릴 것이 없으면 비활성 (상태는 setUndoRedoEnabled 로 받는다)
     //  [SPECTRUM] 테스트용: Settings 바로 왼쪽에 [Spectrum] 버튼
     //  - 패치 이름 오른쪽 클릭: Rename / Reset 메뉴 (씬 버튼과 같은 방식, 머리글 없음). 왼쪽 클릭과 더블클릭은 동작 없음
     //      Rename : 그 자리에서 편집 (글자 위치는 평소 표시와 같다). 입력칸 오른쪽 끝에 정사각형 체크 버튼.
@@ -26,6 +27,9 @@ namespace rig
         std::function<void (const juce::String&)> onPatchNameChanged;
         std::function<void()> onPatchReset;
         std::function<void()> onSettingsClicked;
+        std::function<void()> onUndo, onRedo;
+
+        void setUndoRedoEnabled (bool canUndo, bool canRedo);
         std::function<void()> onSpectrumClicked;   // [SPECTRUM]
 
         void paint (juce::Graphics&) override;
@@ -46,6 +50,8 @@ namespace rig
         PassThroughLabel patchNameBox;                                        // 이름 편집 (공용, Widgets.h)
         CheckCornerButton saveNameButton { "Save patch name", 0.0f, 0.0f };   // 입력칸 오른쪽 끝, 편집 중에만 보인다
         LeftClickOnly<juce::TextButton> settingsButton { "Settings..." };
+        LeftClickOnly<juce::DrawableButton> undoButton { "Undo", juce::DrawableButton::ImageOnButtonBackground };
+        LeftClickOnly<juce::DrawableButton> redoButton { "Redo", juce::DrawableButton::ImageOnButtonBackground };
         LeftClickOnly<juce::TextButton> spectrumButton { "S" };   // [SPECTRUM]
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TopBar)

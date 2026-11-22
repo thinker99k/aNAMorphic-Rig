@@ -64,12 +64,30 @@ namespace rig
 
         // 행 컨텍스트 메뉴는 파일 표(NAM / IR)만 지원한다. 지금은 임시 항목 (동작 없음)
         fileRowMouse.fillMenu = [] (juce::PopupMenu& menu, int) { menu.addItem ("Temporary item", [] {}); };
+        // 끌어서 패치맵에 놓으면 추가 / 교체 / 병렬 (패치맵이 판단). 커서에는 패치맵 블록과 같은 모양
+        fileRowMouse.dragDescription = [this] (int row)
+        {
+            return juce::isPositiveAndBelow (row, (int) rows.size()) ? block::libraryDrag (shownCategory().fileType, rows[(size_t) row].file)
+                                                                    : juce::var();
+        };
+        fileRowMouse.dragImage = [this] (int row)
+        {
+            return block::createImage (shownCategory().fileType, rows[(size_t) row].file.getFileNameWithoutExtension());
+        };
+        builtInRowMouse.dragDescription = [this] (int row)
+        {
+            const auto& builtIns = shownCategory().builtIns;
+            return juce::isPositiveAndBelow (row, (int) builtIns.size()) ? block::libraryDrag (builtIns[(size_t) row].type, {})
+                                                                        : juce::var();
+        };
+        builtInRowMouse.dragImage = [this] (int row) { return block::createImage (shownCategory().builtIns[(size_t) row].type, {}); };
+
         builtInRowMouse.onDoubleClick = [this] (int row)
         {
             const auto& builtIns = shownCategory().builtIns;
 
             if (model.getSelectedSlot() != nullptr && juce::isPositiveAndBelow (row, (int) builtIns.size()))
-                model.assignBlock (model.getSelectedIndex(), builtIns[(size_t) row].type, {});
+                model.assignBlock (model.getSelectedSlotId(), builtIns[(size_t) row].type, {});
         };
 
         model.addChangeListener (this);
@@ -170,7 +188,9 @@ namespace rig
     void BlockEditor::updateFromModel()
     {
         const auto* slot = model.getSelectedSlot();
-        const bool enabled = slot != nullptr;
+
+        // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 을 고른 동안만 비활성
+        const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none;
 
         for (auto* c : std::initializer_list<juce::Component*> { &namList, &irList, &builtInList })
         {
@@ -181,11 +201,11 @@ namespace rig
         categoryList.setEnabled (enabled);
         categoryList.setAlpha (enabled ? 1.0f : 0.4f);
 
+        // 고른 블록이 없으면 둘러보던 탭과 강조를 그대로 둔다
         if (slot == nullptr)
         {
             shownSlotId = 0;
-            shownCategoryIndex = categoryFor (BlockType::None);
-            showCategory (true);
+            showCategory (false);
             return;
         }
 
@@ -393,7 +413,7 @@ namespace rig
         }
 
         // 같은 파일이어도 막지 않는다 (로딩 실패 후 다시 시도). 중복 로딩은 RigModel::assignBlock 이 막는다
-        model.assignBlock (model.getSelectedIndex(), shownCategory().fileType, file);
+        model.assignBlock (model.getSelectedSlotId(), shownCategory().fileType, file);
     }
 
     void BlockEditor::sortOrderChanged (int, bool)

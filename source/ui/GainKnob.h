@@ -9,7 +9,7 @@
 
 namespace rig
 {
-    // 볼륨 노브 하나: 회전 노브 / 아래쪽 이름 (INPUT, OUTPUT). dB 값은 돌리는 동안만 말풍선으로 표시
+    // 볼륨 노브 하나: 회전 노브 / 아래쪽 이름 (INPUT, OUTPUT). dB 값은 노브 옆(상태바 게이지 오른쪽)에 늘 표시
     class GainKnob final : public juce::Component
     {
     public:
@@ -26,6 +26,9 @@ namespace rig
         // 외부에서 값만 바꾼다 (onValueChanged 는 부르지 않음)
         void setValueDb (float db);
 
+        // 지금 값 글자 ("+1.5 dB", "0.0 dB", 출력 최솟값은 "-inf dB")
+        juce::String getValueText() const { return toText (slider.getValue()); }
+
         // 아래쪽 이름 글자 표시 여부 (기본 true). 상태바처럼 옆에 이름이 있는 곳에서는 숨긴다
         void setNameVisible (bool shouldBeVisible);
 
@@ -33,7 +36,6 @@ namespace rig
 
     private:
         juce::String toText (double db) const;
-        void parentHierarchyChanged() override;
 
         const float minDb;
         const bool minIsInf;

@@ -18,7 +18,12 @@ namespace rig
         {
             model.setPatchName (name);
             topBar.setPatchName (model.getPatchName());
+            updateUndoButtons();   // 이름 바꾸기는 변경 알림을 보내지 않는다
         };
+
+        // 되돌리면 패치 이름도 돌아올 수 있다 (이름은 TopBar 가 들고 있으므로 다시 넣는다)
+        topBar.onUndo = [this] { model.undo(); topBar.setPatchName (model.getPatchName()); updateUndoButtons(); };
+        topBar.onRedo = [this] { model.redo(); topBar.setPatchName (model.getPatchName()); updateUndoButtons(); };
         topBar.onPatchChanged = [this] (int number)
         {
             model.loadPatch (number);
@@ -73,8 +78,26 @@ namespace rig
         statusBar.outputKnob.setValueDb (model.getOutputGainDb());
         updateMuteButton();
 
+        model.addChangeListener (this);
+        updateUndoButtons();
+
         startTimerHz (30);
         setSize (minWidth, minHeight);
+    }
+
+    MainComponent::~MainComponent()
+    {
+        model.removeChangeListener (this);
+    }
+
+    void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*)
+    {
+        updateUndoButtons();
+    }
+
+    void MainComponent::updateUndoButtons()
+    {
+        topBar.setUndoRedoEnabled (model.canUndo(), model.canRedo());
     }
 
     // [SPECTRUM] begin (테스트용)

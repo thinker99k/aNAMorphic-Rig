@@ -28,10 +28,12 @@ namespace rig
     //   - 맨 아래 줄은 둘 다 가운데 높이의 1/8 이라, 모드를 바꿔도 Live 버튼이 같은 자리에 있다
     //  TopBar 와 StatusBar 는 두 모드에서 그대로
     class MainComponent final : public juce::Component,
-                                private juce::Timer
+                                private juce::Timer,
+                                private juce::ChangeListener
     {
     public:
         MainComponent (juce::AudioDeviceManager& deviceManager, AudioEngine& engine, RigModel& model);
+        ~MainComponent() override;
 
         // 창 크기 (고정)
         static constexpr int minWidth  = 1024;
@@ -48,6 +50,8 @@ namespace rig
         void openSettings();
         void openSpectrum();   // [SPECTRUM]
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
+        void updateUndoButtons();  // 되돌릴 것 / 다시 할 것이 있을 때만 TopBar 의 Undo / Redo 활성
+        void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태
 
         juce::AudioDeviceManager& deviceManager;
         AudioEngine& engine;

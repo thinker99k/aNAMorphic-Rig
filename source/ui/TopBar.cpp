@@ -26,6 +26,32 @@ namespace rig
         nextPatchIcon.setFill (arrowColour);
         nextPatchButton.setImages (&nextPatchIcon);
 
+        // Undo / Redo: 위로 굽은 화살표 (Redo 는 좌우 반전). 이전/다음 버튼과 같은 색, 같은 크기 틀(10 x 10)
+        juce::Path undoPath;
+        undoPath.startNewSubPath (2.5f, 4.0f);
+        undoPath.cubicTo (7.0f, 1.5f, 11.0f, 4.5f, 9.5f, 9.5f);   // 왼쪽 위에서 오른쪽 아래로 굽은 몸통
+        juce::Path undoStroke;
+        juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded).createStrokedPath (undoStroke, undoPath);
+        undoStroke.addTriangle (0.0f, 4.0f, 4.5f, 0.5f, 4.5f, 7.5f);   // 화살촉 (왼쪽)
+
+        juce::DrawablePath undoIcon;
+        undoIcon.setPath (undoStroke);
+        undoIcon.setFill (arrowColour);
+        undoButton.setImages (&undoIcon);
+
+        auto redoStroke = undoStroke;
+        redoStroke.applyTransform (juce::AffineTransform::scale (-1.0f, 1.0f, 5.0f, 5.0f));   // 좌우 반전
+        juce::DrawablePath redoIcon;
+        redoIcon.setPath (redoStroke);
+        redoIcon.setFill (arrowColour);
+        redoButton.setImages (&redoIcon);
+
+        undoButton.setTooltip ("Undo");
+        redoButton.setTooltip ("Redo");
+        undoButton.onClick = [this] { if (onUndo) onUndo(); };
+        redoButton.onClick = [this] { if (onRedo) onRedo(); };
+        setUndoRedoEnabled (false, false);
+
         patchBox.onChange = [this]
         {
             patchNameBox.hideEditor (true);   // 패치를 바꾸면 편집 중이던 이름은 버린다
@@ -95,6 +121,8 @@ namespace rig
         addAndMakeVisible (patchNameBox);
         addChildComponent (saveNameButton);
         addAndMakeVisible (settingsButton);
+        addAndMakeVisible (undoButton);
+        addAndMakeVisible (redoButton);
         addAndMakeVisible (spectrumButton);   // [SPECTRUM]
 
         updateNavigationButtons();
@@ -119,6 +147,12 @@ namespace rig
         const auto patchNumber = patchBox.getSelectedId();
         previousPatchButton.setEnabled (patchNumber > 1);
         nextPatchButton.setEnabled (patchNumber > 0 && patchNumber < patchBox.getNumItems());
+    }
+
+    void TopBar::setUndoRedoEnabled (bool canUndo, bool canRedo)
+    {
+        undoButton.setEnabled (canUndo);
+        redoButton.setEnabled (canRedo);
     }
 
     void TopBar::setPatchName (const juce::String& name)
@@ -149,6 +183,12 @@ namespace rig
         const int sideMargin = juce::jmax (area.getX(), getWidth() - area.getRight()) + 48;
         const int nameWidth = juce::jlimit (0, 420, getWidth() - 2 * sideMargin);
         patchNameBox.setBounds ((getWidth() - nameWidth) / 2, area.getY(), nameWidth, area.getHeight());
+
+        // Undo / Redo: 패치 이름 바로 왼쪽, 이전/다음 버튼과 같은 크기와 간격
+        auto undoArea = juce::Rectangle<int> (patchNameBox.getX() - 4 - 28 - 4 - 28, area.getY(), 28 + 4 + 28, area.getHeight());
+        undoButton.setBounds (undoArea.removeFromLeft (28));
+        undoArea.removeFromLeft (4);
+        redoButton.setBounds (undoArea);
 
         // 체크 버튼: 입력칸 오른쪽 끝, 입력칸 높이의 정사각형 (세로 가운데)
         const auto nameBounds = patchNameBox.getBounds();

@@ -1,29 +1,33 @@
 #pragma once
 
 #include "Block.h"
+#include "Merge.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
+#include <array>
 #include <atomic>
 #include <memory>
 #include <vector>
 
 namespace rig
 {
-    // 오디오 장치 콜백 + 직렬 체인 처리기.
+    // 오디오 장치 콜백 + 직렬/병렬 체인 처리기.
     //
     // 스레드 모델
-    //  - 메시지(UI) 스레드가 처리할 블록 순서(프로그램)를 setProgram() 으로 넘긴다.
+    //  - 메시지(UI) 스레드가 처리할 블록 트리(프로그램)를 setProgram() 으로 넘긴다.
     //  - 엔진은 지금 소리와 새 프로그램을 비교해 Transition 을 만들어 원자 포인터(live)로 오디오 스레드에 넘긴다. 락 없음.
     //  - 교체된 옛 Transition 은 바로 지우지 않고 retired 목록에 두었다가,
     //    오디오 콜백이 충분히 지나간 뒤 메시지 스레드에서 collectGarbage() 로 해제한다.
     //    (오디오 스레드에서 delete 가 일어나지 않게 하기 위함. Transition 이 블록도 소유하므로 블록 수명도 같이 해결됨)
     //
-    // 크로스페이드 (소리가 바뀌는 모든 편집: 파일 교체, 삭제, 이동, 패치 전환. On/Off 는 Block 의 wet/dry 로)
-    //  - 옛 프로그램과 새 프로그램에서 앞뒤로 같은 블록(같은 인스턴스, 같은 순서)은 prefix / suffix 로 한 번만 처리하고,
-    //    달라진 가운데 구간만 옛 구간(oldMiddle)과 새 구간(newMiddle)을 같은 입력으로 함께 돌려 crossfadeSeconds 동안 섞는다.
-    //  - 같은 인스턴스를 두 번 처리할 수 없으므로, newMiddle 에 oldMiddle 의 블록이 있으면(이동 등) 보내지 않고 기다린다.
-    //    (이동은 RigModel 이 새 인스턴스를 로딩해서 해결한다)
+    // 크로스페이드 (소리가 바뀌는 모든 편집: 추가, 파일 교체, 삭제, 이동, 병렬 생성/해제, 패치 전환. On/Off 는 Block 의 wet/dry,
+    // 병렬 갈래 On/Off·레벨은 Merge 의 게인으로)
+    //  - 옛/새 프로그램의 각 목록(본 줄, 병렬 안의 각 갈래)에서 양쪽에 같은 순서로 남은 노드(같은 블록 인스턴스, 같은 Merge)는
+    //    한 번만 처리하고, 그 사이사이의 달라진 구간(gap)마다 옛 구간과 새 구간을 같은 입력으로 함께 돌려 crossfadeSeconds 동안
+    //    등전력으로 섞는다. 빈 구간은 통과이므로 추가 = dry → wet, 삭제 = wet → dry, 교체 = 옛 → 새.
+    //  - 같은 인스턴스를 두 번 처리할 수 없으므로, 새 구간에 지금 소리의 블록/Merge 가 들어 있으면(이동, 병렬 생성/해제)
+    //    보내지 않고 기다린다. (RigModel 이 자리가 바뀐 블록을 새 인스턴스로 로딩해서 해결한다)
     //  - 페이드 중에 온 새 프로그램은 페이드가 끝난 뒤 최신 것 하나만 적용한다.
     //
     // 입출력 채널 (Routing, 패치별)
@@ -33,7 +37,18 @@ namespace rig
     class AudioEngine final : public juce::AudioIODeviceCallback
     {
     public:
-        using Program = std::vector<std::shared_ptr<Block>>;   // 실제로 처리할 블록만 순서대로
+        // 프로그램의 노드 하나: 블록 하나, 또는 병렬(두 갈래 + 합류 Merge). 병렬은 한 단계만 (갈래 안에 병렬 없음)
+        struct Node
+        {
+            std::shared_ptr<Block> block;                    // 블록이면
+            std::shared_ptr<Merge> merge;                    // 병렬이면 (block 은 nullptr)
+            std::array<std::vector<Node>, 2> branches;       // 병렬의 위 / 아래 갈래 (빈 갈래 = 통과)
+
+            bool isParallel() const noexcept { return merge != nullptr; }
+            bool sameNode (const Node& o) const noexcept { return block == o.block && merge == o.merge; }   // 갈래 내용은 비교 안 함
+        };
+
+        using Program = std::vector<Node>;   // 실제로 처리할 노드만 순서대로
 
         // 채널 번호는 0부터. 출력은 stereoOutput 이면 output, output + 1 두 채널
         struct Routing
@@ -97,17 +112,29 @@ namespace rig
         void audioDeviceStopped() override;
 
     private:
+        // 페이드 중 처리 순서의 한 칸: 양쪽에 남은 노드 하나, 또는 달라진 구간(gap) 하나
+        struct Step
+        {
+            bool gap = false;
+            Node node;                                   // 남은 노드 (gap 이 아닐 때). 병렬이면 갈래는 아래 branches 로 처리
+            std::array<std::vector<Step>, 2> branches;   // 남은 병렬의 위 / 아래 갈래
+            Program oldPart, newPart;                    // gap: 같은 입력으로 함께 돌려 섞는다 (빈 쪽 = 통과)
+        };
+
         // 메시지 스레드가 만들고, 공개된 뒤에는 바뀌지 않는다
         struct Transition
         {
-            Program prefix, oldMiddle, newMiddle, suffix;
+            Program program;               // 새 프로그램. 페이드가 없거나 끝나면 이것만 처리한다
+            std::vector<Step> steps;       // 페이드 중 처리 순서 (crossfade 일 때만)
             Routing oldRouting, newRouting;
-            bool crossfade = false;   // false 면 oldMiddle, oldRouting 은 쓰지 않는다
+            bool crossfade = false;   // false 면 steps, oldRouting 은 쓰지 않는다
             juce::uint64 id = 0;      // settled 비교용 (주소 재사용과 헷갈리지 않도록)
 
-            Program result() const;   // 페이드가 끝난 뒤의 프로그램 = prefix + newMiddle + suffix
             template <typename Fn> void forEachBlock (Fn&& fn) const;
         };
+
+        // 핑퐁 버퍼 쌍의 수: 본 줄 1 + gap 의 옛 구간 1 + 병렬 아래 갈래 1 (병렬은 한 단계라 이 이상 겹치지 않는다)
+        static constexpr int numScratchPairs = 3;
 
         static void storeMax (std::atomic<float>& target, float value) noexcept;
 
@@ -119,8 +146,12 @@ namespace rig
         };
 
         static Channels resolve (const Routing&, int numInputs, int numOutputs) noexcept;
-        void processBlocks (const Program&, float*& a, float*& b, int n) const noexcept;
+        // 결과는 항상 a. free = 아직 쓰지 않은 첫 버퍼 쌍 (병렬 아래 갈래, gap 의 옛 구간이 차례로 가져간다)
+        void processProgram (const Program&, float*& a, float*& b, int free, int n) noexcept;
+        void processSteps (const std::vector<Step>&, float*& a, float*& b, int free, int n) noexcept;
+        float fadeAngle (int i) const noexcept;   // 페이드 진행 각도 (0 = 옛 소리, halfPi = 새 소리)
         void dispatch();   // 기다리던 프로그램을 보낼 수 있으면 보낸다
+        static void diff (const Program& oldList, const Program& newList, std::vector<Step>& out);   // 페이드 중 처리 순서 만들기
         void publish (std::unique_ptr<Transition> next);
 
         std::atomic<Transition*> live { nullptr };
@@ -145,7 +176,7 @@ namespace rig
         std::atomic<double> sampleRate { 48000.0 };
         std::atomic<int> maxBlockSize { 512 };
 
-        juce::AudioBuffer<float> scratch;        // 4채널: 핑퐁 버퍼 2쌍 (새 구간 / 옛 구간)
+        juce::AudioBuffer<float> scratch;        // numScratchPairs * 2 채널 (핑퐁 버퍼 쌍)
 
         // 오디오 스레드 전용 크로스페이드 상태
         Transition* current = nullptr;

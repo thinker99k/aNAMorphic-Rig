@@ -59,14 +59,4 @@ namespace rig
         g.strokePath (pointer, juce::PathStrokeType (juce::jlimit (1.5f, 2.5f, radius * 0.1f),
                                                      juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
-
-    void KnobLookAndFeel::drawBubble (juce::Graphics& g, juce::BubbleComponent& bubble,
-                                      const juce::Point<float>&, const juce::Rectangle<float>& body)
-    {
-        const auto r = body.reduced (0.5f);
-        g.setColour (bubble.findColour (juce::BubbleComponent::backgroundColourId));
-        g.fillRoundedRectangle (r, 4.0f);
-        g.setColour (bubble.findColour (juce::BubbleComponent::outlineColourId));
-        g.drawRoundedRectangle (r, 4.0f, 1.0f);
-    }
 }

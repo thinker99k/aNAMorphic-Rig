@@ -8,20 +8,51 @@ namespace rig
         live.store (nullptr);
     }
 
-    AudioEngine::Program AudioEngine::Transition::result() const
+    namespace
     {
-        Program p (prefix);
-        p.insert (p.end(), newMiddle.begin(), newMiddle.end());
-        p.insert (p.end(), suffix.begin(), suffix.end());
-        return p;
+        // 노드 하나와 그 안(병렬 갈래)의 모든 블록 / Merge
+        template <typename Fn>
+        void forEachNode (const AudioEngine::Program& program, Fn&& fn)
+        {
+            for (const auto& node : program)
+            {
+                fn (node);
+
+                for (const auto& branch : node.branches)
+                    forEachNode (branch, fn);
+            }
+        }
+
+        // steps 안 모든 gap 의 한쪽 구간(part = &Step::oldPart 또는 &Step::newPart)의 노드
+        template <typename StepList, typename Part, typename Fn>
+        void forEachPartNode (const StepList& steps, Part part, Fn&& fn)
+        {
+            for (const auto& step : steps)
+            {
+                forEachNode (step.*part, fn);
+
+                for (const auto& branch : step.branches)
+                    forEachPartNode (branch, part, fn);
+            }
+        }
+
+        // 같은 노드가 같은 순서로 (병렬은 갈래 내용까지)
+        bool sameProgram (const AudioEngine::Program& a, const AudioEngine::Program& b)
+        {
+            return std::equal (a.begin(), a.end(), b.begin(), b.end(), [] (const auto& x, const auto& y)
+            {
+                return x.sameNode (y) && sameProgram (x.branches[0], y.branches[0]) && sameProgram (x.branches[1], y.branches[1]);
+            });
+        }
     }
 
     template <typename Fn>
     void AudioEngine::Transition::forEachBlock (Fn&& fn) const
     {
-        for (const auto* list : { &prefix, &oldMiddle, &newMiddle, &suffix })
-            for (const auto& block : *list)
-                fn (*block);
+        const auto visit = [&] (const Node& node) { if (node.block != nullptr) fn (*node.block); };
+
+        forEachNode (program, visit);
+        forEachPartNode (steps, &Step::oldPart, visit);   // 페이드 중에만 처리하는 옛 구간
     }
 
     void AudioEngine::setProgram (Program program, Routing routing)
@@ -47,48 +78,113 @@ namespace rig
         if (running && owned != nullptr && settled.load (std::memory_order_acquire) != owned->id)
             return;
 
-        const auto active = owned != nullptr ? owned->result() : Program();
+        static const Program none;
+        const auto& active = owned != nullptr ? owned->program : none;
         const auto activeRouting = owned != nullptr ? owned->newRouting : Routing();
 
-        if (active == wanted && activeRouting == wantedRouting)
+        if (sameProgram (active, wanted) && activeRouting == wantedRouting)
         {
             hasWanted = false;
             return;
         }
 
-        // 같은 인스턴스는 두 번 처리할 수 없다: 새 블록이 지금 소리에 들어 있으면(이동) 새 인스턴스가 올 때까지 기다린다
-        size_t front = 0, back = 0;
-
-        while (front < active.size() && front < wanted.size() && active[front] == wanted[front])
-            ++front;
-
-        while (back < active.size() - front && back < wanted.size() - front
-               && active[active.size() - 1 - back] == wanted[wanted.size() - 1 - back])
-            ++back;
-
         auto next = std::make_unique<Transition>();
-        next->prefix.assign (active.begin(), active.begin() + (std::ptrdiff_t) front);
-        next->oldMiddle.assign (active.begin() + (std::ptrdiff_t) front, active.end() - (std::ptrdiff_t) back);
-        next->newMiddle.assign (wanted.begin() + (std::ptrdiff_t) front, wanted.end() - (std::ptrdiff_t) back);
-        next->suffix.assign (active.end() - (std::ptrdiff_t) back, active.end());
+        next->program = wanted;
         next->oldRouting = activeRouting;
         next->newRouting = wantedRouting;
         next->crossfade = running;
+        diff (active, wanted, next->steps);
 
-        for (const auto& block : next->newMiddle)
-            if (std::find (active.begin(), active.end(), block) != active.end())
-                return;
+        // 같은 인스턴스는 두 번 처리할 수 없다: 새 구간의 블록/Merge 가 지금 소리에 들어 있으면(이동 등) 새 인스턴스가 올 때까지 기다린다
+        std::vector<const void*> activeNodes;
+        forEachNode (active, [&] (const Node& node) { activeNodes.push_back (node.block != nullptr ? (const void*) node.block.get()
+                                                                                                    : (const void*) node.merge.get()); });
+
+        bool conflict = false;
+        std::vector<Block*> added;
+
+        const auto checkNew = [&] (const Node& node)
+        {
+            const void* key = node.block != nullptr ? (const void*) node.block.get() : (const void*) node.merge.get();
+            conflict = conflict || std::find (activeNodes.begin(), activeNodes.end(), key) != activeNodes.end();
+
+            if (node.block != nullptr)
+                added.push_back (node.block.get());
+        };
+
+        forEachPartNode (next->steps, &Step::newPart, checkNew);
+
+        if (conflict)
+            return;
 
         // 장치 설정이 바뀐 뒤 로딩된 블록 등: 아직 오디오 스레드가 쓰지 않으므로 여기서 다시 준비해도 된다
         const auto sr = sampleRate.load();
         const auto bs = maxBlockSize.load();
 
-        for (auto& block : next->newMiddle)
+        for (auto* block : added)
             if (block->needsPrepare (sr, bs))
                 block->prepare (sr, bs);
 
+        if (! running)
+            next->steps.clear();   // 페이드가 없으면 옛 구간을 붙잡아 둘 이유가 없다
+
         hasWanted = false;
         publish (std::move (next));
+    }
+
+    void AudioEngine::diff (const Program& oldList, const Program& newList, std::vector<Step>& out)
+    {
+        // 양쪽에 같은 순서로 남은 노드 = 최장 공통 부분열 (노드 수가 적어 O(n*m) 표로 충분)
+        const size_t n = oldList.size(), m = newList.size();
+        std::vector<size_t> lcs ((n + 1) * (m + 1), 0);
+        const auto at = [&] (size_t i, size_t j) -> size_t& { return lcs[i * (m + 1) + j]; };
+
+        for (size_t i = n; i-- > 0;)
+            for (size_t j = m; j-- > 0;)
+                at (i, j) = oldList[i].sameNode (newList[j]) ? at (i + 1, j + 1) + 1 : std::max (at (i + 1, j), at (i, j + 1));
+
+        Step gap;
+        gap.gap = true;
+
+        const auto flushGap = [&]
+        {
+            if (! gap.oldPart.empty() || ! gap.newPart.empty())
+                out.push_back (std::move (gap));
+
+            gap = {};
+            gap.gap = true;
+        };
+
+        size_t i = 0, j = 0;
+
+        while (i < n || j < m)
+        {
+            if (i < n && j < m && oldList[i].sameNode (newList[j]))
+            {
+                flushGap();
+
+                Step keep;
+                keep.node = newList[j];
+
+                if (keep.node.isParallel())
+                    for (size_t b = 0; b < 2; ++b)
+                        diff (oldList[i].branches[b], newList[j].branches[b], keep.branches[b]);
+
+                out.push_back (std::move (keep));
+                ++i;
+                ++j;
+            }
+            else if (j < m && (i == n || at (i, j + 1) >= at (i + 1, j)))
+            {
+                gap.newPart.push_back (newList[j++]);
+            }
+            else
+            {
+                gap.oldPart.push_back (oldList[i++]);
+            }
+        }
+
+        flushGap();
     }
 
     void AudioEngine::publish (std::unique_ptr<Transition> next)
@@ -158,7 +254,7 @@ namespace rig
 
         sampleRate.store (sr);
         maxBlockSize.store (bs);
-        scratch.setSize (4, bs);
+        scratch.setSize (numScratchPairs * 2, bs);
         fadeLength = juce::jmax (1, juce::roundToInt (sr * crossfadeSeconds));
 
         inputSmoothed.reset (sr, 0.02);
@@ -186,13 +282,69 @@ namespace rig
         deviceRunning.store (false);
     }
 
-    void AudioEngine::processBlocks (const Program& blocks, float*& a, float*& b, int n) const noexcept
+    float AudioEngine::fadeAngle (int i) const noexcept
+    {
+        return juce::jmin (1.0f, (float) (fadePosition + i) / (float) fadeLength) * juce::MathConstants<float>::halfPi;
+    }
+
+    void AudioEngine::processProgram (const Program& program, float*& a, float*& b, int free, int n) noexcept
     {
         // 직렬: a -> 블록 -> b, 그다음 a/b 를 바꿔가며 진행 (결과는 항상 a). 꺼진 블록도 계산하고 dry 로 섞는다
-        for (auto& block : blocks)
+        for (const auto& node : program)
         {
-            block->processMixed (a, b, n, fadeLength);
-            std::swap (a, b);
+            if (! node.isParallel())
+            {
+                node.block->processMixed (a, b, n, fadeLength);
+                std::swap (a, b);
+                continue;
+            }
+
+            if (free >= numScratchPairs) { jassertfalse; continue; }   // 병렬이 한 단계면 생기지 않는다
+
+            // 병렬: 아래 갈래는 입력을 복사한 다음 버퍼 쌍에서, 위 갈래는 a 에서 처리하고 Merge 로 합친다
+            float* c = scratch.getWritePointer (free * 2);
+            float* d = scratch.getWritePointer (free * 2 + 1);
+            juce::FloatVectorOperations::copy (c, a, n);
+
+            processProgram (node.branches[0], a, b, free + 1, n);
+            processProgram (node.branches[1], c, d, free + 1, n);
+            node.merge->process (a, c, a, n, fadeLength);
+        }
+    }
+
+    void AudioEngine::processSteps (const std::vector<Step>& steps, float*& a, float*& b, int free, int n) noexcept
+    {
+        for (const auto& step : steps)
+        {
+            if (! step.gap && ! step.node.isParallel())
+            {
+                step.node.block->processMixed (a, b, n, fadeLength);
+                std::swap (a, b);
+                continue;
+            }
+
+            if (free >= numScratchPairs) { jassertfalse; continue; }
+
+            float* c = scratch.getWritePointer (free * 2);
+            float* d = scratch.getWritePointer (free * 2 + 1);
+            juce::FloatVectorOperations::copy (c, a, n);
+
+            if (step.gap)
+            {
+                // 달라진 구간: 같은 입력으로 새 구간(a)과 옛 구간(c)을 함께 돌려 등전력으로 섞는다. 새 쪽 = sin, 옛 쪽 = cos
+                processProgram (step.newPart, a, b, free + 1, n);
+                processProgram (step.oldPart, c, d, free + 1, n);
+
+                for (int i = 0; i < n; ++i)
+                    a[i] = a[i] * std::sin (fadeAngle (i)) + c[i] * std::cos (fadeAngle (i));
+            }
+            else
+            {
+                // 남은 병렬: 갈래 안에서도 달라진 구간만 섞는다
+                processSteps (step.branches[0], a, b, free + 1, n);
+                processSteps (step.branches[1], c, d, free + 1, n);
+                step.node.merge->process (a, c, a, n, fadeLength);
+            }
         }
     }
 
@@ -283,22 +435,15 @@ namespace rig
             const int n = juce::jmin (blockSize, numSamples - offset);
             const bool fading = current != nullptr && fadePosition < fadeLength;
 
-            // 등전력 곡선: 새 쪽 = sin, 옛 쪽 = cos
-            const float step = 1.0f / (float) fadeLength;
-            const auto angle = [&] (int i)
-            {
-                return juce::jmin (1.0f, (float) (fadePosition + i) * step) * juce::MathConstants<float>::halfPi;
-            };
-
             float* a = scratch.getWritePointer (0);
             float* b = scratch.getWritePointer (1);
 
             if (fading && newInput != oldInput)
             {
-                // 입력 채널이 바뀌었다: 옛 채널에서 새 채널로 넘어간다 (없는 쪽은 무음)
+                // 입력 채널이 바뀌었다: 옛 채널에서 새 채널로 등전력으로 넘어간다 (새 쪽 = sin, 옛 쪽 = cos, 없는 쪽은 무음)
                 for (int i = 0; i < n; ++i)
-                    a[i] = (newInput != nullptr ? newInput[offset + i] * std::sin (angle (i)) : 0.0f)
-                         + (oldInput != nullptr ? oldInput[offset + i] * std::cos (angle (i)) : 0.0f);
+                    a[i] = (newInput != nullptr ? newInput[offset + i] * std::sin (fadeAngle (i)) : 0.0f)
+                         + (oldInput != nullptr ? oldInput[offset + i] * std::cos (fadeAngle (i)) : 0.0f);
             }
             else if (newInput != nullptr)
             {
@@ -317,27 +462,10 @@ namespace rig
 
             if (current != nullptr)
             {
-                processBlocks (current->prefix, a, b, n);
-
                 if (fading)
-                {
-                    // 바뀐 구간만 옛/새 두 갈래로 같은 입력을 처리해서 섞는다
-                    float* c = scratch.getWritePointer (2);
-                    float* d = scratch.getWritePointer (3);
-                    juce::FloatVectorOperations::copy (c, a, n);
-
-                    processBlocks (current->newMiddle, a, b, n);
-                    processBlocks (current->oldMiddle, c, d, n);
-
-                    for (int i = 0; i < n; ++i)
-                        a[i] = a[i] * std::sin (angle (i)) + c[i] * std::cos (angle (i));
-                }
+                    processSteps (current->steps, a, b, 1, n);   // 버퍼 쌍 0 = a, b
                 else
-                {
-                    processBlocks (current->newMiddle, a, b, n);
-                }
-
-                processBlocks (current->suffix, a, b, n);
+                    processProgram (current->program, a, b, 1, n);
             }
 
             // 출력 볼륨 (OUT 미터는 게인 뒤에서 잰다)
@@ -366,7 +494,7 @@ namespace rig
                     juce::FloatVectorOperations::copy (out + offset, a, n);
                 else if (inNew || inOld)
                     for (int i = 0; i < n; ++i)
-                        out[offset + i] = a[i] * (inNew ? std::sin (angle (i)) : std::cos (angle (i)));
+                        out[offset + i] = a[i] * (inNew ? std::sin (fadeAngle (i)) : std::cos (fadeAngle (i)));
                 else
                     juce::FloatVectorOperations::clear (out + offset, n);
             }
