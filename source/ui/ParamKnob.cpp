@@ -100,8 +100,8 @@ namespace rig
         if (hz < 1000)
             return juce::String (hz) + " Hz";
 
-        // kHz: 소수 둘째 자리까지, 끝의 0 과 점은 지운다 (1.25 kHz, 3.15 kHz, 20 kHz)
-        auto khz = juce::String (value / 1000.0, 2);
+        // kHz: 정수 Hz 를 그대로 보이도록 소수 셋째 자리까지, 끝의 0 과 점은 지운다 (1.234 kHz, 2.5 kHz, 20 kHz)
+        auto khz = juce::String (hz / 1000.0, 3);
         if (khz.containsChar ('.'))
             khz = khz.trimCharactersAtEnd ("0").trimCharactersAtEnd (".");
         return khz + " kHz";
