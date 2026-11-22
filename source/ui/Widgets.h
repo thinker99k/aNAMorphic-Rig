@@ -474,8 +474,11 @@ namespace rig
 
     // 초기화 경고: File not found 창과 같은 모양. [Reset] / [Cancel] 버튼으로만 닫힌다 (ESC, X 없음).
     // Reset 을 누르면 onReset 을 부른다. 프로그램 창 가운데에 띄운다.
-    // 기준: 두 개 이상 항목을 동시에 초기화하면 경고 (패치 리셋, Scene Reset).
-    //   씬 하나 Reset (오른쪽 클릭 메뉴) 은 경고 없이 바로
+    // 리셋 단계 (CLAUDE.md 6절):
+    //   큰 리셋   = 씬 여러 개가 한꺼번에 바뀜 (패치 이름 메뉴 Reset, Scene Reset) -> 항상 이 경고. 버튼이면 바 위아래를 꽉 채움
+    //   중간 리셋 = 한 씬 안에서 값 여러 개 (씬 메뉴 Reset, Param Reset, Level Reset) -> 경고 없음 (의도한 동작일 가능성이 큼).
+    //               버튼이면 큰 리셋 높이의 2/3
+    //   작은 리셋 = 값 하나 (노브·슬라이더 더블클릭) -> 경고 없음
     inline void showResetWarning (juce::Component& origin, const juce::String& title, const juce::String& message,
                                   std::function<void()> onReset)
     {

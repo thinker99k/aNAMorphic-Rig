@@ -211,7 +211,7 @@ namespace rig
         showContextMenu (menu, click);
     }
 
-    // 블록 전체와 씬 8개를 함께 초기화하는 큰 리셋이므로 경고를 띄운다 (기준은 Widgets.h showResetWarning)
+    // 씬 8개가 함께 바뀌는 큰 리셋이므로 경고를 띄운다 (리셋 단계는 Widgets.h showResetWarning)
     void TopBar::resetPatchWithWarning()
     {
         juce::Component::SafePointer<TopBar> safeThis (this);

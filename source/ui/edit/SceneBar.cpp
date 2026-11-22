@@ -182,7 +182,7 @@ namespace rig
 
         juce::PopupMenu menu;
         menu.addItem ("Rename", [this, scene] { startRename (scene); });
-        menu.addItem ("Reset", [this, scene] { model.resetScene (scene); });   // 씬 하나라 경고 없이 바로
+        menu.addItem ("Reset", [this, scene] { model.resetScene (scene); });   // 씬 하나 = 중간 리셋이라 경고 없이 바로
         showContextMenu (menu, click);
     }
 

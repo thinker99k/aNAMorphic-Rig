@@ -277,11 +277,13 @@ namespace rig
 
     void ParamBar::resized()
     {
-        // 리셋(Param Reset / Level Reset)은 왼쪽 끝 (전체 리셋은 왼쪽). 씬 바와 같은 바깥 여백 6 px 의 정사각형이라
-        // 바로 아래 씬 바의 Scene Reset 과 줄이 맞는다. 리셋 오른쪽부터 내용, 오른쪽 끝 = 블록 전원 버튼
+        // 리셋(Param Reset / Level Reset)은 왼쪽 끝 (리셋은 왼쪽). 중간 리셋이라 높이 = 큰 리셋(씬 바 Scene Reset,
+        // 바깥 여백 6 px 로 바를 꽉 채운 정사각형)의 2/3, 세로 가운데. 폭은 큰 리셋과 같아 아래 Scene Reset 과 줄이 맞는다.
+        // 리셋 오른쪽부터 내용, 오른쪽 끝 = 블록 전원 버튼
         constexpr int resetMargin = 6, contentGap = 12;
-        const int resetSize = getHeight() - 2 * resetMargin;
-        const juce::Rectangle<int> resetArea (resetMargin, resetMargin, resetSize, resetSize);
+        const int bigResetSize = getHeight() - 2 * resetMargin;
+        const auto resetArea = juce::Rectangle<int> (resetMargin, 0, bigResetSize, getHeight())
+                                   .withSizeKeepingCentre (bigResetSize, bigResetSize * 2 / 3);
         paramResetButton.setBounds (resetArea);
         levelResetButton.setBounds (resetArea);
 
