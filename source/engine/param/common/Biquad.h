@@ -49,7 +49,7 @@ namespace rig
             Terms (double sr, double hz, double q) noexcept
             {
                 // 샘플레이트의 0.45 배(= 나이퀴스트의 0.9 배) 위는 막는다: 낮은 샘플레이트에서 20 kHz 설정이 불안정해지지 않게.
-                // (나이퀴스트의 0.45 배로 하면 48 kHz 에서 10.8 kHz 로 막혀 RC 20 kHz 범위와 맞지 않는다)
+                // (나이퀴스트의 0.45 배로 하면 48 kHz 에서 10.8 kHz 로 막혀 H. Cut 20 kHz 범위와 맞지 않는다)
                 const double f = std::clamp (hz, 1.0, sr * 0.45);
                 const double w0 = 2.0 * 3.14159265358979323846 * f / sr;
                 cosw = std::cos (w0);

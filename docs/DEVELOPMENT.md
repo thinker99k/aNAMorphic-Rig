@@ -65,33 +65,44 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 │   ├── Main.cpp                        앱 시작, 메인 창, 오디오 장치 초기화
 │   ├── AppPaths.*                      사용자 데이터(~/Documents/aNAMorphic-Rig) 경로 모음
 │   ├── Defaults.*                      처음 실행 시 기본 폴더/패치/설정 파일 생성, 깨진 파일 복구
+│   ├── ValueSteps.h                    값 단위 (dB 소수 1자리, Hz 정수, Q 소수 2자리): 노브 조작과 저장
 │   ├── engine/                         오디오 처리 (UI 모름)
-│   │   ├── Block.h                     블록 공통 인터페이스, 블록 종류 (None / NAM / IR)
-│   │   ├── NamBlock.*                  .nam 캡처 (NAM Core)
-│   │   ├── IrBlock.*                   .wav IR (juce::dsp::Convolution)
+│   │   ├── Block.h                     블록 공통 인터페이스, 블록 종류 (None / NAM / IR), 전환 시간 20 ms
+│   │   ├── BlockFactory.*              블록 종류별 로딩 (블록 종류를 늘릴 때 여기에 한 줄)
+│   │   ├── NamBlock.*                  .nam 캡처 (NAM Core) + 뒤에 EQ
+│   │   ├── IrBlock.*                   .wav IR (juce::dsp::Convolution) + 뒤에 L. Cut / H. Cut
 │   │   ├── Merge.h                     병렬 두 갈래 합류 (갈래별 게인)
-│   │   └── AudioEngine.*               오디오 콜백 + 직렬/병렬 체인 처리, 크로스페이드, 입출력 볼륨
+│   │   ├── AudioEngine.*               오디오 콜백 + 직렬/병렬 체인 처리, 크로스페이드, 입출력 볼륨
+│   │   └── param/                      블록 파라미터
+│   │       ├── common/                 BlockParams (파라미터 정의 + 지금 씬 값), ParamStage (블록 뒤 처리 틀), Biquad
+│   │       ├── nam/                    NamParams (B / M / T, Freq, Middle Q), EqStage (3밴드 peak EQ)
+│   │       └── ir/                     IrParams (L. Cut / H. Cut), CutStage (Butterworth 24 dB/oct)
 │   ├── library/
 │   │   └── NamMetadata.*               .nam 파일의 메타데이터(이름, 장비 종류 등)만 읽기
 │   ├── model/
 │   │   └── RigModel.*                  체인(직렬/병렬 트리) 편집 상태, 패치·씬, 자동 저장, 백그라운드 로딩
 │   └── ui/                             화면
 │       ├── MainComponent.*             전체 배치, Edit / Live 모드 전환
-│       ├── TopBar.*                    패치 콤보박스, 이전/다음, 패치 이름(Rename / Reset), 설정 버튼
+│       ├── TopBar.*                    패치 콤보박스, 이전/다음, Undo / Redo, 패치 이름(Rename / Patch Reset), 설정 버튼
 │       ├── StatusBar.*                 입출력 볼륨 노브, IN / OUT 미터, CPU, 출력 뮤트
 │       ├── GainKnob.*                  볼륨 노브
+│       ├── ParamKnob.*                 블록 파라미터 노브 ([노브][이름 / 값])
 │       ├── SettingsDialog.*            설정 모달 (드라이버, 입출력 장치, 저장/취소)
-│       ├── Widgets.h                   공용 위젯, 마우스 규칙, 기본 LookAndFeel
+│       ├── SpectrumWindow.*            출력 주파수 분석 창 (실행 인자 --spectrum 일 때만, 테스트용)
+│       ├── Widgets.h                   공용 위젯, 마우스 규칙, 기본 LookAndFeel, 노브 외형, 전원 버튼
 │       ├── edit/                       Edit 모드 화면
 │       │   ├── EditView.*              Edit 화면 배치
-│       │   ├── ChainView.*             패치 맵 (직렬/병렬 체인, Split / Merge 점)
-│       │   ├── ParamBar.*              선택 블록 / 합류 / IN·OUT 파라미터, 오류·경고 문구
+│       │   ├── ChainView.*             패치 맵 (직렬/병렬 체인, 합류 버튼), 왼쪽 위 오류·경고 문구
+│       │   ├── ParamBar.*              선택 블록 / 합류 / IN·OUT 파라미터, Param Reset / Level Reset
+│       │   ├── ParamPanel.h            블록 종류별 파라미터 패널 틀, 영역 묶음(ParamGroup)
+│       │   ├── NamParamPanel.*         NAM 파라미터 패널
+│       │   ├── IrParamPanel.*          IR 파라미터 패널
 │       │   ├── BlockEditor.*           블록 선택기
 │       │   └── SceneBar.*              씬 버튼, Copy / Swap, Scene Reset, Live 버튼
 │       └── live/                       Live 모드 화면
 │           ├── LiveView.*              Live 화면 배치
 │           ├── ScenePads.*             씬 패드 4 x 2
-│           └── PatchBar.*              Live ON, 이전/다음 패치
+│           └── PatchBar.*              이전/다음 패치, Live
 ├── build.*                             <- 각 플랫폼용 빌드 스크립트 (Windows - ps1, macOS - zsh, Linux - bash)
 ├── build2.*                            <- 클린 빌드 스크립트
 ├── CMakeLists.txt

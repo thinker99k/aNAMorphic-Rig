@@ -15,7 +15,7 @@ namespace rig
     {
     public:
         // 파일을 읽어 블록을 만든다. 백그라운드 스레드에서 호출할 것.
-        // params 가 있으면 블록 소리 뒤에 LC/RC 컷을 건다
+        // params 가 있으면 블록 소리 뒤에 L. Cut / H. Cut 을 건다
         static std::unique_ptr<IrBlock> load (const juce::File& file, juce::String& error,
                                               std::shared_ptr<BlockParams> params = nullptr);
 
