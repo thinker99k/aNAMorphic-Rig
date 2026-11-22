@@ -14,13 +14,13 @@
 namespace rig
 {
     // 패치 맵 아래: 선택된 블록 / 합류 / IN·OUT 의 파라미터.
-    //   블록  : [ 블록 종류별 파라미터 패널 (ParamPanel) ...  (오류: 전원 왼쪽 위, 오른쪽 정렬)  (전원) ]
+    //   블록  : [ 블록 종류별 파라미터 패널 (ParamPanel) ...                                      (전원) ]
     //   합류  : [ (빨간 전원) Upper  -3.0 dB   (빨간 전원) Lower  -3.0 dB      [Level Reset] ]   현재 씬의 값
     //                   ━━━━━━●━━               ━━━━━━●━━
-    //   IN    : [ Input channel  [1: ...    v]          (오류) ]   장치 입력 채널 하나
-    //   OUT   : [ Output channel [1+2: ...  v]          (오류) ]   스테레오 쌍 먼저, 그다음 단일 채널
+    //   IN    : [ Input channel  [1: ...    v] ]   장치 입력 채널 하나
+    //   OUT   : [ Output channel [1+2: ...  v] ]   스테레오 쌍 먼저, 그다음 단일 채널
     // 블록의 파라미터는 on 하나뿐: 오른쪽 끝 전원 버튼. 미지정 블록이나 선택된 블록이 없으면 비활성.
-    // 오류(빨강) = 블록 로딩 실패, 장치에 없는 채널. 샘플레이트 경고(노랑)는 패치 맵 왼쪽 위 (ChainView).
+    // 오류(빨강)·샘플레이트 경고(노랑) 문구는 패치 맵 왼쪽 위 (ChainView).
     // 합류 레벨 슬라이더: -inf(-60) ~ 0 dB, 오디오 테이퍼(위치 절반마다 -10 dB), 상대 드래그(클릭한 곳으로 뛰지 않음),
     // 더블클릭 = -3 dB, 저장은 드래그 끝에.
     // 슬라이더 위 글자(왼쪽 = 갈래 이름 굵게, 오른쪽 = dB)의 양 끝은 홈의 양 끝에 맞춘다.
@@ -40,7 +40,6 @@ namespace rig
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
         void updateFromModel();
         void updateMerge (const RigModel::Parallel&);
-        void setError (const juce::String& error);
         void fillChannelBox (RigModel::Endpoint);
         void channelChosen();
 
@@ -49,7 +48,6 @@ namespace rig
         PowerButton powerButton;
         juce::Label channelLabel;
         LeftClickOnly<juce::ComboBox> channelBox;
-        juce::Label errorLabel;
 
         // 합류 레벨 슬라이더 모양: 콘솔 페이더 (가는 어두운 홈 + 세로로 긴 사각 손잡이, 가운데 흰 선)
         struct FaderLookAndFeel final : juce::LookAndFeel_V4

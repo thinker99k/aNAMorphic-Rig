@@ -9,7 +9,6 @@ namespace rig
         // channelBox 항목 id: 단일 채널은 1 + 채널(0부터), 출력 스테레오 쌍은 pairIdBase + 첫 채널(0부터)
         constexpr int pairIdBase = 1000;
 
-        const juce::Colour errorColour (juce::Colours::red.brighter (0.2f));
 
         // 합류 레벨: 오디오 테이퍼. 위치 p 에서 dB = 10 * log2 (p) → 절반마다 -10 dB, -3 dB ≈ 81 %,
         // p ≤ 2^-6 (= -60 dB) 는 -inf (mergeMinDb 에 붙임). 0.1 dB 단위
@@ -48,11 +47,6 @@ namespace rig
         channelBox.onChange = [this] { channelChosen(); };
         addChildComponent (channelBox);
 
-        errorLabel.setColour (juce::Label::textColourId, errorColour);
-        errorLabel.setJustificationType (juce::Justification::topRight);
-        errorLabel.setBorderSize ({});
-        errorLabel.setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
-        addChildComponent (errorLabel);
 
         for (int b = 0; b < 2; ++b)
         {
@@ -138,16 +132,12 @@ namespace rig
         if (isMerge)
         {
             updateMerge (*parallel);
-            setError ({});
             return;
         }
 
         if (isEndpoint)
         {
             fillChannelBox (endpoint);
-            setError (model.isChannelMissing (endpoint, deviceManager.getCurrentAudioDevice())
-                          ? "Channel not available on the current device" : juce::String());
-            resized();
             return;
         }
 
@@ -175,9 +165,6 @@ namespace rig
         {
             panel->refresh();
         }
-
-        setError (slot != nullptr ? slot->error : juce::String());
-        resized();
     }
 
     void ParamBar::updateMerge (const RigModel::Parallel& parallel)
@@ -189,12 +176,6 @@ namespace rig
             levelSlider[(size_t) b].setValue (level, juce::dontSendNotification);
             levelValue[(size_t) b].setText (levelText (level), juce::dontSendNotification);
         }
-    }
-
-    void ParamBar::setError (const juce::String& error)
-    {
-        errorLabel.setText (error, juce::dontSendNotification);
-        errorLabel.setVisible (error.isNotEmpty());
     }
 
     void ParamBar::fillChannelBox (RigModel::Endpoint endpoint)
@@ -307,14 +288,6 @@ namespace rig
         channelLabel.setBounds (row.removeFromLeft (110));
         row.removeFromLeft (8);
         channelBox.setBounds (row.removeFromLeft (320));
-
-        // 오류 문구(빨강): 전원 버튼 자리 왼쪽에 오른쪽 정렬, 윗변 = 전원 버튼 윗변 (IN / OUT 일 때도 같은 자리).
-        // 글자의 줄바꿈(\n)만큼 줄 수
-        constexpr int messageWidth = 420, messageLineHeight = 18;
-        const auto& error = errorLabel.getText();
-        const int lines = error.length() - error.removeCharacters ("\n").length() + 1;
-        errorLabel.setBounds (area.withTrimmedRight (12).removeFromRight (messageWidth).withTop (powerButton.getY())
-                                  .withHeight (messageLineHeight * lines));
 
         // 합류 선택 시: [빨간 전원 40] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
         constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;

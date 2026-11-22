@@ -54,7 +54,9 @@ namespace rig
         RigModel& model;
         juce::AudioDeviceManager& deviceManager;   // 장치가 바뀌면 IN / OUT 빗금(없는 채널)을 다시 따진다
         juce::Viewport viewport;
-        juce::Label warningLabel;   // 왼쪽 위 고정 (스크롤 안 됨): 선택된 NAM 블록의 모델 샘플레이트 ≠ 장치 샘플레이트일 때만
+        // 왼쪽 위 고정 문구 (스크롤 안 됨, 클릭 통과). 선택된 블록 / IN·OUT 기준, 위에서부터 오류 → 경고
+        //  오류(빨강) = 블록 로딩 실패, 장치에 없는 채널. 경고(노랑) = NAM 모델 샘플레이트 ≠ 장치 샘플레이트
+        juce::Label errorLabel, warningLabel;
         std::unique_ptr<Strip> strip;
         juce::uint64 shownSelectedId = 0;   // 선택이 바뀌었을 때만 그 블록이 보이도록 스크롤
         MarqueeKey marqueeKey;

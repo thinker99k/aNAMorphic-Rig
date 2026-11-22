@@ -841,12 +841,17 @@ namespace rig
         viewport.setScrollBarsShown (false, true);
         addAndMakeVisible (viewport);
 
+        errorLabel.setColour (juce::Label::textColourId, juce::Colours::red.brighter (0.2f));
         warningLabel.setColour (juce::Label::textColourId, juce::Colours::yellow);
-        warningLabel.setJustificationType (juce::Justification::topLeft);
-        warningLabel.setBorderSize ({});
-        warningLabel.setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
-        warningLabel.setInterceptsMouseClicks (false, false);   // 아래 패치 맵 조작을 막지 않는다
-        addChildComponent (warningLabel);   // viewport 다음에 넣어 위에 그린다
+
+        for (auto* label : { &errorLabel, &warningLabel })
+        {
+            label->setJustificationType (juce::Justification::topLeft);
+            label->setBorderSize ({});
+            label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
+            label->setInterceptsMouseClicks (false, false);   // 아래 패치 맵 조작을 막지 않는다
+            addChildComponent (label);   // viewport 다음에 넣어 위에 그린다
+        }
         model.addChangeListener (this);
         deviceManager.addChangeListener (this);
         rebuild();
@@ -914,6 +919,18 @@ namespace rig
             stopTimer();
         }
 
+        // 오류: 선택된 블록의 로딩 실패, 선택된 IN / OUT 의 채널이 지금 장치에 없음
+        juce::String error;
+        const auto endpoint = model.getSelectedEndpoint();
+
+        if (current != nullptr)
+            error = current->error;
+        else if (endpoint == RigModel::Endpoint::input ? inputFailed : endpoint == RigModel::Endpoint::output && outputFailed)
+            error = "Channel not available on the current device";
+
+        errorLabel.setText (error, juce::dontSendNotification);
+        errorLabel.setVisible (error.isNotEmpty());
+
         // 모델 레이트와 장치 레이트가 다르면 소리가 틀어진다 (리샘플 미구현)
         juce::String warning;
         const auto deviceRate = model.getDeviceSampleRate();
@@ -957,11 +974,16 @@ namespace rig
     {
         viewport.setBounds (getLocalBounds());
 
-        // 경고: 왼쪽 위 (IN 노드와 같은 여백), 글자의 줄바꿈(\n)만큼 줄 수. 두 줄(병렬)일 때도 블록 줄 위에 들어간다
-        constexpr int warningWidth = 420, warningLineHeight = 18;
-        const auto& text = warningLabel.getText();
-        const int lines = text.length() - text.removeCharacters ("\n").length() + 1;
-        warningLabel.setBounds (margin, margin, warningWidth, warningLineHeight * lines);
+        // 오류 / 경고: 왼쪽 위 (IN 노드와 같은 여백), 위에서부터 오류 → 경고. 글자의 줄바꿈(\n)만큼 줄 수
+        constexpr int messageWidth = 420, messageLineHeight = 18;
+        auto messages = juce::Rectangle<int> (margin, margin, messageWidth, getHeight());
+
+        for (auto* label : { &errorLabel, &warningLabel })
+        {
+            const auto& text = label->getText();
+            const int lines = label->isVisible() ? text.length() - text.removeCharacters ("\n").length() + 1 : 0;
+            label->setBounds (messages.removeFromTop (messageLineHeight * lines));
+        }
 
         if (strip != nullptr)
             strip->setSize (juce::jmax (strip->idealWidth(), viewport.getWidth()),
