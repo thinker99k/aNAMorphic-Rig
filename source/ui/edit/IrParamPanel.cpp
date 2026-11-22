@@ -59,7 +59,7 @@ namespace rig
 
     void IrParamPanel::resized()
     {
-        // [전원] 8 [노브 칸]  64  [전원] 8 [노브 칸] : 전원은 빨간 SubPowerButton (합류 갈래와 같다), 노브 칸은 NAM 노브와 같은 폭
+        // [전원] 8 [노브]  64  [전원] 8 [노브] : 전원은 빨간 SubPowerButton (합류 갈래와 같다), 노브는 NAM 과 같은 크기
         auto area = getLocalBounds();
         const int size = juce::jmin (SubPowerButton::size, getHeight() - 8);
 
@@ -67,7 +67,7 @@ namespace rig
         {
             power.setBounds (area.removeFromLeft (size).withSizeKeepingCentre (size, size));
             area.removeFromLeft (powerGap);
-            knob.setBounds (area.removeFromLeft (knobWidth()).reduced (0, knobMargin));
+            knob.setBounds (area.removeFromLeft (ParamKnob::width));
         };
 
         place (lowCutPower, lowCut);

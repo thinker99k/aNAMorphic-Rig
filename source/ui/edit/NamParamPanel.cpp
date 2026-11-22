@@ -51,10 +51,20 @@ namespace rig
 
     void NamParamPanel::resized()
     {
-        // 노브 6개, 왼쪽부터 같은 폭
-        auto area = getLocalBounds().reduced (0, knobMargin);
+        // 왼쪽부터 [B][B. Freq]  [M][M. Freq]  [T][T. Freq] : 같은 영역끼리는 pairGap, 영역 사이는 groupGap
+        auto area = getLocalBounds();
 
-        for (auto* knob : { &bass, &bassFreq, &middle, &middleFreq, &treble, &trebleFreq })
-            knob->setBounds (area.removeFromLeft (knobWidth()));
+        auto place = [&] (ParamKnob& gain, ParamKnob& freq)
+        {
+            gain.setBounds (area.removeFromLeft (ParamKnob::width));
+            area.removeFromLeft (pairGap);
+            freq.setBounds (area.removeFromLeft (ParamKnob::width));
+        };
+
+        place (bass, bassFreq);
+        area.removeFromLeft (groupGap);
+        place (middle, middleFreq);
+        area.removeFromLeft (groupGap);
+        place (treble, trebleFreq);
     }
 }

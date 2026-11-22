@@ -17,13 +17,10 @@ namespace rig
         virtual void refresh() = 0;   // 모델 값(선택된 블록의 현재 씬) -> 화면
 
     protected:
-        // 배치 공용: 노브 칸 폭 = 패널 폭 / knobColumns (NAM 노브 6개가 한 줄을 채우고, IR 노브도 같은 크기)
-        static constexpr int knobColumns = 6;
-        static constexpr int knobMargin = 4;   // 노브 칸 위아래 여백
+        // 배치 공용 (노브 묶음 폭은 ParamKnob::width, 높이는 패널 전체라 묶음이 세로 가운데에 온다)
+        static constexpr int pairGap = 12;     // 같은 영역을 다루는 노브 사이 (예: B 와 B. Freq)
         static constexpr int powerGap = 8;     // 전원 버튼과 노브 사이 (합류 화면과 같다)
-        static constexpr int groupGap = 64;    // [전원][노브] 묶음 사이 (합류 화면의 갈래 사이와 같다)
-
-        int knobWidth() const { return getWidth() / knobColumns; }
+        static constexpr int groupGap = 64;    // 영역 사이 (Bass / Middle / Treble, L. Cut / H. Cut). 합류 화면의 갈래 사이와 같다
     };
 
     // 블록 종류에 맞는 패널. 파라미터가 없는 종류는 nullptr.

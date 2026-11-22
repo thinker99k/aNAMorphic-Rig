@@ -9,7 +9,8 @@
 
 namespace rig
 {
-    // 파라미터 노브: 위에 이름, 그 아래 [노브] 오른쪽에 값. 이름과 값은 항상 보인다. 비활성(setEnabled false)이면 흐리고 조작 안 됨.
+    // 파라미터 노브 묶음: [노브] 오른쪽에 두 줄 (위 이름, 아래 값), 묶음은 세로 가운데. 폭은 width 고정.
+    // 이름과 값은 항상 보인다. 비활성(setEnabled false)이면 흐리고 조작 안 됨.
     // 왼쪽 클릭 드래그만, 더블클릭 = 기본값, 휠·글자 입력 없음 (볼륨 노브와 같은 규칙)
     class ParamKnob final : public juce::Component
     {
@@ -19,6 +20,10 @@ namespace rig
             Db,      // 세기: 선형 매핑, "+3.0 dB"
             HzLog    // 주파수: 로그 매핑(노브 가운데 = 기하 평균), "250 Hz" / "1.25 kHz"
         };
+
+        // 크기: 노브 지름 55 (상태바 볼륨 노브 56 과 비슷하게) + 간격 8 + 글자 칸 64
+        static constexpr int knobDiameter = 55, textGap = 8, textWidth = 64;
+        static constexpr int width = knobDiameter + textGap + textWidth;
 
         ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType type);
         ~ParamKnob() override;

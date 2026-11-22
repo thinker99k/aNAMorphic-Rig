@@ -9,10 +9,8 @@ namespace rig
     namespace
     {
         constexpr float dimmedAlpha = 0.4f;    // 비활성일 때
-        constexpr float textSize = 14.0f;      // 이름(굵게) / 값 글자 (합류 화면과 같은 크기)
-        constexpr int nameHeight = 18;         // 노브 위 이름 줄
-        constexpr int nameGap = 2;             // 이름 줄과 노브 사이
-        constexpr int valueGap = 8;            // 노브와 오른쪽 값 사이
+        constexpr float textSize = 13.0f;      // 이름(굵게) / 값 글자 (상태바 IN / OUT 과 같은 크기)
+        constexpr int lineHeight = 16;         // 이름 / 값 한 줄 (상태바 이름 줄과 같다)
     }
 
     ParamKnob::ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType t) : type (t)
@@ -115,17 +113,14 @@ namespace rig
 
     void ParamKnob::resized()
     {
-        // 이름 (노브 왼쪽 끝부터)
-        // [노브] [값]   : 노브 지름은 남은 높이와 폭의 절반 중 작은 쪽
+        // [노브] [이름 / 값] : 노브와 두 줄 글자 모두 세로 가운데
         auto area = getLocalBounds();
-        nameLabel.setBounds (area.removeFromTop (nameHeight));
-        area.removeFromTop (nameGap);
+        const int diameter = juce::jmin (knobDiameter, getHeight());
+        slider.setBounds (area.removeFromLeft (diameter).withSizeKeepingCentre (diameter, diameter));
+        area.removeFromLeft (textGap);
 
-        const int diameter = juce::jmax (0, juce::jmin (area.getHeight(), area.getWidth() / 2));
-        const auto knob = area.removeFromLeft (diameter).withSizeKeepingCentre (diameter, diameter);
-        slider.setBounds (knob);
-
-        area.removeFromLeft (valueGap);
-        valueLabel.setBounds (area.withSizeKeepingCentre (area.getWidth(), nameHeight).withY (knob.getCentreY() - nameHeight / 2));
+        auto text = area.withSizeKeepingCentre (area.getWidth(), lineHeight * 2);
+        nameLabel.setBounds (text.removeFromTop (lineHeight));
+        valueLabel.setBounds (text);
     }
 }
