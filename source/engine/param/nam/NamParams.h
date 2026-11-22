@@ -13,13 +13,14 @@ namespace rig
         // 범위·경계선·폭 상수는 여기에만 둔다 (UI 도 이 값을 쓴다)
         static constexpr double gainMinDb = -18.0, gainMaxDb = 18.0, gainDefaultDb = 0.0;
 
-        // 세 밴드 모두 peak 필터, Freq = 중심 주파수
-        static constexpr double bassMinHz   = 40.0,   bassMaxHz   = 200.0,   bassDefaultHz   = 100.0;
-        static constexpr double middleMinHz = 315.0,  middleMaxHz = 2000.0,  middleDefaultHz = 800.0;
-        static constexpr double trebleMinHz = 2500.0, trebleMaxHz = 10000.0, trebleDefaultHz = 4000.0;
-
         static constexpr double h1Hz = 250.0;    // Bass / Middle 경계
         static constexpr double h2Hz = 2500.0;   // Middle / Treble 경계
+
+        // 세 밴드 모두 peak 필터, Freq = 중심 주파수. 범위 끝 = 경계 (Treble 위는 기타 앰프 소리가 거의 없어 10 kHz 까지)
+        // 기본값 = 노브 12시 = 로그 범위의 가운데 √(min × max) 를 정수 Hz 로 (√5000 = 70.7, √625000 = 790.6, √25000000 = 5000)
+        static constexpr double bassMinHz   = 20.0, bassMaxHz   = h1Hz,    bassDefaultHz   = 71.0;
+        static constexpr double middleMinHz = h1Hz, middleMaxHz = h2Hz,    middleDefaultHz = 791.0;
+        static constexpr double trebleMinHz = h2Hz, trebleMaxHz = 10000.0, trebleDefaultHz = 5000.0;
 
         static constexpr double eqQ = 0.8;       // Bass / Middle / Treble 공통 폭 (약 1.5~2 옥타브)
 
@@ -38,9 +39,10 @@ namespace rig
         }
     };
 
-    // 침범 금지: 어떤 조합에서도 Bass Freq < Middle Freq < Treble Freq
-    static_assert (NamParams::bassMaxHz   <  NamParams::h1Hz && NamParams::h1Hz < NamParams::middleMinHz);   // 200 < 250 < 315
-    static_assert (NamParams::middleMinHz >= NamParams::bassMaxHz   * 1.5);                                  // 최소 간격
-    // Middle / Treble 은 순서만 보장한다 (Treble Freq 를 2.5 kHz 부터 쓰기 위해 H2 여유와 1.5 배 간격 규칙은 뺐다)
-    static_assert (NamParams::middleMaxHz < NamParams::trebleMinHz);                                         // 2000 < 2500
+    // 침범 금지: 어떤 조합에서도 Bass Freq <= H1 <= Middle Freq <= H2 <= Treble Freq
+    static_assert (NamParams::bassMaxHz <= NamParams::h1Hz && NamParams::h1Hz <= NamParams::middleMinHz);     // 250 = 250 = 250
+    static_assert (NamParams::middleMaxHz <= NamParams::h2Hz && NamParams::h2Hz <= NamParams::trebleMinHz);   // 2500 = 2500 = 2500
+    static_assert (NamParams::bassMinHz < NamParams::bassDefaultHz && NamParams::bassDefaultHz < NamParams::bassMaxHz);
+    static_assert (NamParams::middleMinHz < NamParams::middleDefaultHz && NamParams::middleDefaultHz < NamParams::middleMaxHz);
+    static_assert (NamParams::trebleMinHz < NamParams::trebleDefaultHz && NamParams::trebleDefaultHz < NamParams::trebleMaxHz);
 }
