@@ -69,7 +69,7 @@ namespace rig
 
         refreshDeviceTypes();
         refreshFormatOptions();
-        setSize (500, 224);
+        setSize (500, 224);   // 16 + 장치 줄 3개·샘플레이트/버퍼 줄 1개 (28 + 8) + 여백 20 + 버튼 28 + 16
     }
 
     void SettingsDialog::show (juce::AudioDeviceManager& dm,
@@ -346,7 +346,7 @@ namespace rig
         auto formats = row();
         rateLabel.setBounds (formats.removeFromLeft (110));
         formats.removeFromLeft (8);
-        const int boxWidth = (formats.getWidth() - 96) / 2;
+        const int boxWidth = (formats.getWidth() - 80 - 8 * 2) / 2;   // 버퍼 라벨 80 + 간격 8 두 번을 빼고 두 콤보가 나눠 가짐
         rateBox.setBounds (formats.removeFromLeft (boxWidth));
         formats.removeFromLeft (8);
         bufferLabel.setBounds (formats.removeFromLeft (80));
