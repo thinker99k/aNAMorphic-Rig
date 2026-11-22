@@ -45,12 +45,18 @@ namespace rig
 
     void RigModel::saveSettings() const
     {
-        auto root = std::make_unique<juce::DynamicObject>();
+        // 파일에 이미 있는 다른 키(예: tunerPitch)를 지우지 않도록, 읽은 뒤 세 키만 바꾼다
+        auto json = juce::JSON::parse (paths::settingsFile());
+
+        if (json.getDynamicObject() == nullptr)
+            json = juce::var (new juce::DynamicObject());
+
+        auto* root = json.getDynamicObject();
         root->setProperty ("version", 1);
         root->setProperty ("inputGainDb", inputGainDb);
         root->setProperty ("outputGainDb", outputGainDb);
 
-        paths::settingsFile().replaceWithText (juce::JSON::toString (juce::var (root.release())));
+        paths::settingsFile().replaceWithText (juce::JSON::toString (json));
     }
 
     //==============================================================================

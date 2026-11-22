@@ -148,7 +148,8 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/GainKnob.cpp)
 
 target_sources(aNAMorphic-Rig PRIVATE
-        source/tuner/PitchDetector.cpp)
+        source/tuner/PitchDetector.cpp
+        source/tuner/TunerSettings.cpp)
 
 target_include_directories(aNAMorphic-Rig PRIVATE source)
 
