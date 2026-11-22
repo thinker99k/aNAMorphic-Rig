@@ -304,14 +304,8 @@ namespace rig
             return;
         }
 
-        const auto xml = deviceManager.createStateXml();
-        if (xml == nullptr || ! xml->writeTo (paths::deviceSettingsFile()))
-        {
-            showAlert (*this, "Could not save audio settings",
-                       juce::String::fromUTF8 ("장치에는 적용됐지만 설정 파일에 저장하지 못했습니다"),
-                       { { "OK", 0 } }, true);
-            return;
-        }
+        if (auto xml = deviceManager.createStateXml())
+            xml->writeTo (paths::deviceSettingsFile());
 
         close (true);
     }
