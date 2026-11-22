@@ -8,7 +8,7 @@
 
 namespace rig
 {
-    class IrParams;
+    class BlockParams;
 
     // .wav 임펄스 응답(캐비닛 IR 등) 하나를 감싸는 블록 (JUCE dsp::Convolution 사용)
     class IrBlock final : public Block
@@ -17,7 +17,7 @@ namespace rig
         // 파일을 읽어 블록을 만든다. 백그라운드 스레드에서 호출할 것.
         // params 가 있으면 블록 소리 뒤에 LC/RC 컷을 건다
         static std::unique_ptr<IrBlock> load (const juce::File& file, juce::String& error,
-                                              std::shared_ptr<IrParams> params = nullptr);
+                                              std::shared_ptr<BlockParams> params = nullptr);
 
         BlockType type() const noexcept override { return BlockType::Ir; }
         void prepare (double sampleRate, int maxBlockSize) override;

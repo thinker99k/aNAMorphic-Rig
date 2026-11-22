@@ -133,8 +133,6 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/engine/IrBlock.cpp
         source/engine/BlockFactory.cpp
         source/engine/param/common/BlockParams.cpp
-        source/engine/param/nam/NamParams.cpp
-        source/engine/param/ir/IrParams.cpp
         source/engine/param/nam/EqStage.cpp
         source/engine/param/ir/CutStage.cpp
         source/model/RigModel.cpp

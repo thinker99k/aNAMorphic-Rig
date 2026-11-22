@@ -17,29 +17,26 @@ namespace rig
           treble     ("Treble",      P::gainMinDb,   P::gainMaxDb,   VT::Db),
           trebleFreq ("Treble Freq", P::trebleMinHz, P::trebleMaxHz, VT::HzLog)
     {
-        // 노브 -> 원자 변수 (돌리는 동안은 알림·저장 없음), 드래그가 끝나면 저장
-        auto connect = [this] (ParamKnob& knob, std::atomic<float> P::* field)
+        // 노브 -> 선택된 블록의 현재 씬 값 (돌리는 동안은 알림·저장 없음), 드래그가 끝나면 저장
+        auto connect = [this] (ParamKnob& knob, int index)
         {
-            knob.onValueChanged = [this, field] (double v) { if (params != nullptr) ((*params).*field).store ((float) v); };
-            knob.onDragEnded = [this] { model.saveParams(); };
+            knob.onValueChanged = [this, index] (double v) { model.setParam (model.getSelectedSlotId(), index, (float) v, false); };
+            knob.onDragEnded = [this, index, &knob] { model.setParam (model.getSelectedSlotId(), index, (float) knob.getValue()); };
             addAndMakeVisible (knob);
         };
 
-        connect (bass,       &P::bassDb);
-        connect (bassFreq,   &P::bassHz);
-        connect (middle,     &P::middleDb);
-        connect (middleFreq, &P::middleHz);
-        connect (treble,     &P::trebleDb);
-        connect (trebleFreq, &P::trebleHz);
+        connect (bass,       P::bassDb);
+        connect (bassFreq,   P::bassHz);
+        connect (middle,     P::middleDb);
+        connect (middleFreq, P::middleHz);
+        connect (treble,     P::trebleDb);
+        connect (trebleFreq, P::trebleHz);
 
         // 스위치는 누르는 즉시 저장
         eqSwitch.onClick = [this]
         {
-            if (params != nullptr)
-                params->eqOn.store (eqSwitch.getToggleState());
-
+            model.setParam (model.getSelectedSlotId(), P::eqOn, eqSwitch.getToggleState() ? 1.0f : 0.0f);
             refresh();
-            model.saveParams();
         };
         addAndMakeVisible (eqSwitch);
 
@@ -48,18 +45,18 @@ namespace rig
 
     void NamParamPanel::refresh()
     {
-        params = std::dynamic_pointer_cast<NamParams> (model.getSelectedParams());
-        if (params == nullptr)
+        const auto* slot = model.getSelectedSlot();
+        if (slot == nullptr || slot->type != BlockType::Nam)
             return;
 
-        bass.setValue       (params->bassDb.load());
-        bassFreq.setValue   (params->bassHz.load());
-        middle.setValue     (params->middleDb.load());
-        middleFreq.setValue (params->middleHz.load());
-        treble.setValue     (params->trebleDb.load());
-        trebleFreq.setValue (params->trebleHz.load());
+        bass.setValue       (model.getParam (*slot, P::bassDb));
+        bassFreq.setValue   (model.getParam (*slot, P::bassHz));
+        middle.setValue     (model.getParam (*slot, P::middleDb));
+        middleFreq.setValue (model.getParam (*slot, P::middleHz));
+        treble.setValue     (model.getParam (*slot, P::trebleDb));
+        trebleFreq.setValue (model.getParam (*slot, P::trebleHz));
 
-        const bool on = params->eqOn.load();
+        const bool on = model.getParam (*slot, P::eqOn) >= 0.5f;
         eqSwitch.setToggleState (on, juce::dontSendNotification);
 
         for (auto* knob : { &bass, &bassFreq, &middle, &middleFreq, &treble, &trebleFreq })

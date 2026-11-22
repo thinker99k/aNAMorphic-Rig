@@ -19,11 +19,11 @@ namespace rig
     // 체인 = IN → 직렬/병렬 트리 → OUT. 본 줄은 블록과 병렬이 섞인 목록, 병렬은 위/아래 두 갈래(각각 블록 1개 이상)와
     // 합류(Merge). 병렬은 한 단계만 (갈래 안에 병렬 없음), 갈래는 반드시 다시 합쳐진다.
     //
-    // 씬: 패치마다 8개. 씬은 블록별 On/Off, 병렬 갈래별 On/Off·레벨, 이름을 가진다.
+    // 씬: 패치마다 8개. 씬은 블록별 On/Off·파라미터, 병렬 갈래별 On/Off·레벨, 이름을 가진다.
     //  - 현재 씬 번호는 저장하지 않는다 (패치는 항상 씬 1 로 열린다). 씬 전환은 디스크에 쓰지 않는다
     //  - 씬 편집(On/Off, 복사/교환/초기화/이름)은 패치에 저장한다
     //
-    // 블록 파라미터(BlockParams, NAM EQ / IR 컷)는 블록마다 한 벌이고 씬과 무관하다. 블록을 옮기면 따라가고, 교체하면 기본값
+    // 블록 파라미터(NAM EQ / IR 컷)는 블록마다, 씬별 값(On/Off 와 같다). 블록을 옮기면 따라가고, 교체하면 기본값
     //
     // UI 는 RigModel 만 보고 편집하고, RigModel 은 변경될 때마다
     //  1) 현재 패치를 ~/Documents/aNAMorphic-Rig/patch/config<NN> 에 자동 저장하고
@@ -48,7 +48,8 @@ namespace rig
             BlockType type = BlockType::None;
             juce::File file;                     // None 이면 비어 있고, NAM / IR 이면 항상 지정되어 있다
             std::array<bool, numScenes> on = allScenesOn();   // 씬별 On/Off: 블록을 옮기거나 종류가 바뀌어도 블록에 남는다
-            std::shared_ptr<BlockParams> params; // 블록 파라미터 (없는 종류면 nullptr). DSP 가 같은 객체를 읽는다. 교체하면 새 객체(기본값)
+            std::array<std::vector<float>, numScenes> paramValues;   // 씬별 블록 파라미터 (BlockParams::specs 순서, 없는 종류면 비어 있다)
+            std::shared_ptr<BlockParams> params; // 지금 씬의 파라미터 값 (DSP 가 같은 객체를 읽는다. 없는 종류면 nullptr). 교체하면 새 객체
 
             std::shared_ptr<Block> dsp;          // 소리를 내는 DSP (없으면 통과). 새 파일을 로딩하는 동안은 옛 DSP 를 그대로 둔다
             bool loading = false;
@@ -187,9 +188,9 @@ namespace rig
         // 오디오 장치(샘플레이트 등)가 바뀐 뒤 호출: 꺼진(Off) 블록까지 다시 준비
         void deviceChanged();
 
-        // 선택된 블록의 파라미터 (블록이 없거나 파라미터가 없는 종류면 nullptr). UI 는 값을 직접 읽고 쓴다 (원자 변수, 변경 알림 없음)
-        std::shared_ptr<BlockParams> getSelectedParams() const;
-        void saveParams();   // 노브 드래그가 끝났을 때, 스위치를 눌렀을 때 -> 패치 파일에 저장
+        // 블록 파라미터 (현재 씬의 값). index 는 BlockParams::specs (slot.type) 순서, 스위치는 0 / 1
+        float getParam (const Slot& slot, int index) const noexcept { return slot.paramValues[(size_t) currentScene][(size_t) index]; }
+        void setParam (juce::uint64 slotId, int index, float value, bool save = true);   // 노브 드래그 중에는 save = false, 끝에 true
 
     private:
         Slot* editSlot (juce::uint64 id);              // findSlot 의 수정용 (0 이나 없는 id 면 nullptr)
@@ -211,6 +212,8 @@ namespace rig
         // 씬별 값의 초기화·복사·교환 (값만 바꾼다. Undo·저장·DSP 반영·알림은 부르는 쪽이 한 번).
         // Level Reset, 씬 Reset / Copy / Swap, All Reset 이 모두 이것을 쓴다. 씬별 값을 더하면 여기에만 더한다
         static void resetSceneValues (Slot&, size_t scene);
+        static void resetParams (Slot&);   // 지금 종류의 새 파라미터 (8 씬 모두 기본값). 새 블록, 교체
+        void applyParams (Slot&);          // 현재 씬의 파라미터 값을 DSP 가 읽는 값으로
         static void resetSceneValues (Parallel&, size_t scene);
         static void resetLevelValues (Parallel&, size_t scene);   // 합류 레벨만 (Level Reset)
         static void copySceneValues (Slot&, size_t source, size_t destination);

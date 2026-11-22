@@ -7,7 +7,7 @@
 
 namespace rig
 {
-    std::unique_ptr<NamBlock> NamBlock::load (const juce::File& file, juce::String& error, std::shared_ptr<NamParams> params)
+    std::unique_ptr<NamBlock> NamBlock::load (const juce::File& file, juce::String& error, std::shared_ptr<BlockParams> params)
     {
         if (! file.existsAsFile())
         {

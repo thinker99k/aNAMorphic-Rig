@@ -10,11 +10,11 @@
 
 namespace rig
 {
-    // NAM 블록 뒤의 3밴드 EQ (Bass / Middle / Treble 모두 peak, 각 Freq 가 중심 주파수). 값은 그 블록의 NamParams, 필터 상태는 DSP 인스턴스마다 따로
+    // NAM 블록 뒤의 3밴드 EQ (Bass / Middle / Treble 모두 peak, 각 Freq 가 중심 주파수). 값은 그 블록의 지금 씬 BlockParams (번호는 NamParams), 필터 상태는 DSP 인스턴스마다 따로
     class EqStage final : public ParamStage
     {
     public:
-        explicit EqStage (std::shared_ptr<NamParams> params);
+        explicit EqStage (std::shared_ptr<BlockParams> params);
 
         void prepare (double sampleRate, int maxBlockSize) override;
         void process (float* inOut, int numSamples) noexcept override;
@@ -26,7 +26,7 @@ namespace rig
         void jumpToTargets() noexcept;
         void setTargets() noexcept;
 
-        std::shared_ptr<NamParams> params;
+        std::shared_ptr<BlockParams> params;
         Biquad low, middle, high;
         Linear bassDb, middleDb, trebleDb;
         Multiplicative bassHz, middleHz, trebleHz;

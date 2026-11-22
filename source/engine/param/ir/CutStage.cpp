@@ -9,7 +9,7 @@ namespace rig
         constexpr double rampSeconds = 0.02;   // 값 변경과 스위치 전환 모두 약 20 ms
     }
 
-    CutStage::CutStage (std::shared_ptr<IrParams> p) : params (std::move (p))
+    CutStage::CutStage (std::shared_ptr<BlockParams> p) : params (std::move (p))
     {
         lowCut.highPass = true;
 
@@ -26,12 +26,12 @@ namespace rig
 
         // 오디오 스레드가 쓰기 전이므로 바로 맞춘다
         lowCut.hz.reset (sr, rampSeconds);
-        lowCut.hz.setCurrentAndTargetValue (params->lowCutHz.load (std::memory_order_relaxed));
-        lowCut.mix = params->lowCutOn.load (std::memory_order_relaxed) ? 1.0 : 0.0;
+        lowCut.hz.setCurrentAndTargetValue (params->get (IrParams::lowCutHz));
+        lowCut.mix = params->isOn (IrParams::lowCutOn) ? 1.0 : 0.0;
 
         highCut.hz.reset (sr, rampSeconds);
-        highCut.hz.setCurrentAndTargetValue (params->highCutHz.load (std::memory_order_relaxed));
-        highCut.mix = params->highCutOn.load (std::memory_order_relaxed) ? 1.0 : 0.0;
+        highCut.hz.setCurrentAndTargetValue (params->get (IrParams::highCutHz));
+        highCut.mix = params->isOn (IrParams::highCutOn) ? 1.0 : 0.0;
 
         for (auto* s : { &lowCut, &highCut })
             for (auto& b : s->stages)
@@ -40,10 +40,10 @@ namespace rig
 
     void CutStage::process (float* io, int n) noexcept
     {
-        processSection (lowCut,  params->lowCutOn.load (std::memory_order_relaxed),
-                        params->lowCutHz.load (std::memory_order_relaxed), io, n);
-        processSection (highCut, params->highCutOn.load (std::memory_order_relaxed),
-                        params->highCutHz.load (std::memory_order_relaxed), io, n);
+        processSection (lowCut,  params->isOn (IrParams::lowCutOn),
+                        params->get (IrParams::lowCutHz), io, n);
+        processSection (highCut, params->isOn (IrParams::highCutOn),
+                        params->get (IrParams::highCutHz), io, n);
     }
 
     void CutStage::processSection (Section& s, bool on, double targetHz, float* io, int n) noexcept

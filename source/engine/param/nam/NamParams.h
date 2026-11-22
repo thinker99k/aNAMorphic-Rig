@@ -2,14 +2,13 @@
 
 #include "engine/param/common/BlockParams.h"
 
-#include <atomic>
+#include <vector>
 
 namespace rig
 {
-    // NAM 블록용 3밴드 EQ 값 (NAM 블록마다 한 벌)
-    class NamParams final : public BlockParams
+    // NAM 블록용 3밴드 EQ 파라미터 정의 (값은 BlockParams, 번호는 Index)
+    struct NamParams
     {
-    public:
         // 범위·경계선·폭 상수는 여기에만 둔다 (UI 도 이 값을 쓴다)
         static constexpr double gainMinDb = -18.0, gainMaxDb = 18.0, gainDefaultDb = 0.0;
 
@@ -23,13 +22,20 @@ namespace rig
 
         static constexpr double eqQ = 0.8;       // Bass / Middle / Treble 공통 폭 (약 1.5~2 옥타브)
 
-        std::atomic<bool> eqOn { false };
-        std::atomic<float> bassDb   { (float) gainDefaultDb }, bassHz   { (float) bassDefaultHz };
-        std::atomic<float> middleDb { (float) gainDefaultDb }, middleHz { (float) middleDefaultHz };
-        std::atomic<float> trebleDb { (float) gainDefaultDb }, trebleHz { (float) trebleDefaultHz };
+        enum Index : int { eqOn, bassDb, bassHz, middleDb, middleHz, trebleDb, trebleHz };
 
-        juce::var toVar() const override;
-        void fromVar (const juce::var&) override;
+        static const std::vector<ParamSpec>& specs()
+        {
+            static const std::vector<ParamSpec> s {
+                { "eqOn",     0.0f, 1.0f, 0.0f, true },
+                { "bassDb",   (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb },
+                { "bassHz",   (float) bassMinHz,   (float) bassMaxHz,   (float) bassDefaultHz },
+                { "middleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb },
+                { "middleHz", (float) middleMinHz, (float) middleMaxHz, (float) middleDefaultHz },
+                { "trebleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb },
+                { "trebleHz", (float) trebleMinHz, (float) trebleMaxHz, (float) trebleDefaultHz } };
+            return s;
+        }
     };
 
     // 침범 금지: 어떤 조합에서도 Bass Freq < Middle Freq < Treble Freq

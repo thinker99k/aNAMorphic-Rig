@@ -76,8 +76,8 @@ namespace rig
     //                                { "on": [ ... ], "level": [ ... ],
     //                                  "blocks": [ { "type": "nam", "file": "/path/lead.nam", "on": [ ... ] } ] } ] },
     //                { "type": "ir", "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ],
-    //                  "params": { "lowCutOn": false, "lowCutHz": 20, ... } } ]
-    //  블록의 "params" = 블록 파라미터 (NAM / IR 만). 필드는 각 BlockParams 가 정한다. 없거나 이상한 값은 기본값
+    //                  "params": { "lowCutOn": [ false, ... 8개 ], "lowCutHz": [ 20, ... 8개 ], ... } } ]
+    //  블록의 "params" = 씬별 블록 파라미터 (NAM / IR 만). 이름은 각 종류의 specs. 없거나 이상한 값은 기본값, 숫자는 범위 안으로
     //  }
 
     juce::String RigModel::sanitizePatchName (const juce::var& value, const juce::String& fallback)
@@ -229,7 +229,11 @@ namespace rig
             }
         }
 
-        forEachSlot ([this] (Slot& slot) { startLoading (slot); });
+        forEachSlot ([this] (Slot& slot)
+        {
+            applyParams (slot);   // 로딩 전에: 새 DSP 가 준비할 때 이 값에서 시작한다
+            startLoading (slot);
+        });
 
         if (! chain.empty())
         {
@@ -311,9 +315,24 @@ namespace rig
         else
             slot.type = BlockType::None;
 
-        slot.params = BlockParams::create (slot.type);
-        if (slot.params != nullptr)
-            slot.params->fromVar (json.getProperty ("params", {}));
+        resetParams (slot);
+        const auto params = json.getProperty ("params", {});
+        const auto& specs = BlockParams::specs (slot.type);
+
+        for (size_t k = 0; k < specs.size(); ++k)
+        {
+            const auto& spec = specs[k];
+            const auto* values = params.getProperty (spec.key, {}).getArray();
+
+            for (size_t i = 0; i < (size_t) numScenes; ++i)
+            {
+                const auto v = values != nullptr ? (*values)[(int) i] : juce::var();
+
+                if (spec.isSwitch ? v.isBool() : (v.isDouble() || v.isInt()))
+                    slot.paramValues[i][k] = spec.isSwitch ? ((bool) v ? 1.0f : 0.0f)
+                                                           : juce::jlimit (spec.minValue, spec.maxValue, (float) v);
+            }
+        }
 
         return slot;
     }
@@ -330,8 +349,22 @@ namespace rig
 
         obj->setProperty ("on", on);
 
-        if (slot.params != nullptr)
-            obj->setProperty ("params", slot.params->toVar());
+        if (const auto& specs = BlockParams::specs (slot.type); ! specs.empty())
+        {
+            auto params = std::make_unique<juce::DynamicObject>();
+
+            for (size_t k = 0; k < specs.size(); ++k)
+            {
+                juce::Array<juce::var> values;
+
+                for (const auto& scene : slot.paramValues)
+                    values.add (specs[k].isSwitch ? juce::var (scene[k] >= 0.5f) : juce::var ((double) scene[k]));
+
+                params->setProperty (specs[k].key, values);
+            }
+
+            obj->setProperty ("params", juce::var (params.release()));
+        }
 
         return juce::var (obj.release());
     }
@@ -407,15 +440,24 @@ namespace rig
         paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release()), false, 0));
     }
 
-    std::shared_ptr<BlockParams> RigModel::getSelectedParams() const
+    void RigModel::setParam (juce::uint64 slotId, int index, float value, bool save)
     {
-        const auto* slot = getSelectedSlot();
-        return slot != nullptr ? slot->params : nullptr;
-    }
+        auto* slot = editSlot (slotId);
+        const auto& specs = BlockParams::specs (slot != nullptr ? slot->type : BlockType::None);
 
-    void RigModel::saveParams()
-    {
-        savePatch();
+        if (slot == nullptr || ! juce::isPositiveAndBelow (index, (int) specs.size()))
+            return;
+
+        const auto& spec = specs[(size_t) index];
+        slot->paramValues[(size_t) currentScene][(size_t) index] = spec.isSwitch ? (value >= 0.5f ? 1.0f : 0.0f)
+                                                                                 : juce::jlimit (spec.minValue, spec.maxValue, value);
+        applyParams (*slot);   // 소리는 바로 따라간다 (DSP 가 20 ms 스무딩)
+
+        if (save)
+        {
+            savePatch();
+            sendChangeMessage();
+        }
     }
 
 
@@ -557,7 +599,8 @@ namespace rig
         slot.id = nextId++;
         slot.type = usesFile (type) && file != juce::File() ? type : BlockType::None;
         slot.file = slot.type == BlockType::None ? juce::File() : file;
-        slot.params = BlockParams::create (slot.type);   // 기본값
+        resetParams (slot);
+        applyParams (slot);
         return slot;
     }
 
@@ -1071,6 +1114,24 @@ namespace rig
     void RigModel::resetSceneValues (Slot& slot, size_t scene)
     {
         slot.on[scene] = true;
+        slot.paramValues[scene] = BlockParams::defaults (slot.type);
+    }
+
+    void RigModel::resetParams (Slot& slot)
+    {
+        slot.params = BlockParams::create (slot.type);
+        slot.paramValues.fill (BlockParams::defaults (slot.type));
+    }
+
+    void RigModel::applyParams (Slot& slot)
+    {
+        if (slot.params == nullptr)
+            return;
+
+        const auto& values = slot.paramValues[(size_t) currentScene];
+
+        for (size_t k = 0; k < values.size(); ++k)
+            slot.params->set ((int) k, values[k]);
     }
 
     void RigModel::resetSceneValues (Parallel& p, size_t scene)
@@ -1090,6 +1151,7 @@ namespace rig
     void RigModel::copySceneValues (Slot& slot, size_t source, size_t destination)
     {
         slot.on[destination] = slot.on[source];
+        slot.paramValues[destination] = slot.paramValues[source];
     }
 
     void RigModel::copySceneValues (Parallel& p, size_t source, size_t destination)
@@ -1104,6 +1166,7 @@ namespace rig
     void RigModel::swapSceneValues (Slot& slot, size_t a, size_t b)
     {
         std::swap (slot.on[a], slot.on[b]);
+        std::swap (slot.paramValues[a], slot.paramValues[b]);
     }
 
     void RigModel::swapSceneValues (Parallel& p, size_t a, size_t b)
@@ -1130,6 +1193,8 @@ namespace rig
         {
             if (slot.dsp != nullptr)
                 slot.dsp->setOn (isOn (slot));
+
+            applyParams (slot);   // DSP 가 20 ms 동안 새 씬의 값으로 따라간다
         });
 
         forEachParallel ([this] (Parallel& p) { applyMerge (p); });
@@ -1153,13 +1218,18 @@ namespace rig
 
         remember();
 
-        // 교체 = 같은 종류여도 기본값. 같은 파일을 다시 시도할 때만 (로딩 실패 후) 값을 둔다
+        // 교체 = 같은 종류여도 8 씬 모두 기본값. 같은 파일을 다시 시도할 때만 (로딩 실패 후) 값을 둔다
         // 옛 DSP 는 옛 객체를 들고 있어서 크로스페이드가 끝날 때까지 옛 값으로 소리를 낸다
-        if (slot->type != type || slot->file != newFile)
-            slot->params = BlockParams::create (type);
-
+        const bool replaced = slot->type != type || slot->file != newFile;
         slot->type = type;
         slot->file = newFile;
+
+        if (replaced)
+        {
+            resetParams (*slot);
+            applyParams (*slot);
+        }
+
         startLoading (*slot);
         changed();
     }

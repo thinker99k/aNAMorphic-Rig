@@ -12,11 +12,11 @@
 namespace rig
 {
     // IR 블록 뒤의 LC(high-pass) / RC(low-pass) 컷. 각각 Butterworth cutOrder 차 = 2차 필터 cutOrder/2 단 직렬.
-    // 값은 그 블록의 IrParams, 필터 상태는 DSP 인스턴스마다 따로. LC 와 RC 는 각자 스위치와 혼합 비율을 가진다
+    // 값은 그 블록의 지금 씬 BlockParams (번호는 IrParams), 필터 상태는 DSP 인스턴스마다 따로. LC 와 RC 는 각자 스위치와 혼합 비율을 가진다
     class CutStage final : public ParamStage
     {
     public:
-        explicit CutStage (std::shared_ptr<IrParams> params);
+        explicit CutStage (std::shared_ptr<BlockParams> params);
 
         void prepare (double sampleRate, int maxBlockSize) override;
         void process (float* inOut, int numSamples) noexcept override;
@@ -34,7 +34,7 @@ namespace rig
 
         void processSection (Section&, bool on, double targetHz, float* io, int n) noexcept;
 
-        std::shared_ptr<IrParams> params;
+        std::shared_ptr<BlockParams> params;
         Section lowCut, highCut;
         std::array<double, numStages> q {};   // Butterworth 단별 Q
 

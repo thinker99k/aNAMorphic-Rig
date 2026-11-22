@@ -5,32 +5,40 @@
 
 namespace rig
 {
+    BlockParams::BlockParams (BlockType type) : values (specs (type).size())
+    {
+        const auto& s = specs (type);
+
+        for (size_t i = 0; i < s.size(); ++i)
+            values[i].store (s[i].defaultValue, std::memory_order_relaxed);
+    }
+
     std::shared_ptr<BlockParams> BlockParams::create (BlockType type)
     {
+        return specs (type).empty() ? nullptr : std::make_shared<BlockParams> (type);
+    }
+
+    const std::vector<ParamSpec>& BlockParams::specs (BlockType type)
+    {
+        static const std::vector<ParamSpec> none;
+
         switch (type)
         {
-            case BlockType::Nam:  return std::make_shared<NamParams>();
-            case BlockType::Ir:   return std::make_shared<IrParams>();
+            case BlockType::Nam:  return NamParams::specs();
+            case BlockType::Ir:   return IrParams::specs();
             case BlockType::None: break;
         }
 
-        return nullptr;
+        return none;
     }
 
-    double BlockParams::readNumber (const juce::var& obj, const juce::Identifier& key, double def, double lo, double hi)
+    std::vector<float> BlockParams::defaults (BlockType type)
     {
-        const auto v = obj.getProperty (key, {});
+        std::vector<float> v;
 
-        if (! (v.isDouble() || v.isInt() || v.isInt64()))
-            return def;
+        for (const auto& s : specs (type))
+            v.push_back (s.defaultValue);
 
-        const auto d = (double) v;
-        return std::isfinite (d) ? juce::jlimit (lo, hi, d) : def;
-    }
-
-    bool BlockParams::readBool (const juce::var& obj, const juce::Identifier& key, bool def)
-    {
-        const auto v = obj.getProperty (key, {});
-        return v.isBool() ? (bool) v : def;
+        return v;
     }
 }

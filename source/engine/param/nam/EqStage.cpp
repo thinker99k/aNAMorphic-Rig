@@ -7,7 +7,7 @@ namespace rig
         constexpr double rampSeconds = 0.02;   // 값 변경과 스위치 전환 모두 약 20 ms
     }
 
-    EqStage::EqStage (std::shared_ptr<NamParams> p) : params (std::move (p)) {}
+    EqStage::EqStage (std::shared_ptr<BlockParams> p) : params (std::move (p)) {}
 
     void EqStage::prepare (double sr, int)
     {
@@ -21,32 +21,32 @@ namespace rig
 
         jumpToTargets();
         low.reset(); middle.reset(); high.reset();
-        mix = params->eqOn.load (std::memory_order_relaxed) ? 1.0 : 0.0;   // 오디오 스레드가 쓰기 전이므로 바로 맞춘다
+        mix = params->isOn (NamParams::eqOn) ? 1.0 : 0.0;   // 오디오 스레드가 쓰기 전이므로 바로 맞춘다
     }
 
     void EqStage::jumpToTargets() noexcept
     {
-        bassDb.setCurrentAndTargetValue   (params->bassDb.load (std::memory_order_relaxed));
-        middleDb.setCurrentAndTargetValue (params->middleDb.load (std::memory_order_relaxed));
-        trebleDb.setCurrentAndTargetValue (params->trebleDb.load (std::memory_order_relaxed));
-        bassHz.setCurrentAndTargetValue   (params->bassHz.load (std::memory_order_relaxed));
-        middleHz.setCurrentAndTargetValue (params->middleHz.load (std::memory_order_relaxed));
-        trebleHz.setCurrentAndTargetValue (params->trebleHz.load (std::memory_order_relaxed));
+        bassDb.setCurrentAndTargetValue   (params->get (NamParams::bassDb));
+        middleDb.setCurrentAndTargetValue (params->get (NamParams::middleDb));
+        trebleDb.setCurrentAndTargetValue (params->get (NamParams::trebleDb));
+        bassHz.setCurrentAndTargetValue   (params->get (NamParams::bassHz));
+        middleHz.setCurrentAndTargetValue (params->get (NamParams::middleHz));
+        trebleHz.setCurrentAndTargetValue (params->get (NamParams::trebleHz));
     }
 
     void EqStage::setTargets() noexcept
     {
-        bassDb.setTargetValue   (params->bassDb.load (std::memory_order_relaxed));
-        middleDb.setTargetValue (params->middleDb.load (std::memory_order_relaxed));
-        trebleDb.setTargetValue (params->trebleDb.load (std::memory_order_relaxed));
-        bassHz.setTargetValue   (params->bassHz.load (std::memory_order_relaxed));
-        middleHz.setTargetValue (params->middleHz.load (std::memory_order_relaxed));
-        trebleHz.setTargetValue (params->trebleHz.load (std::memory_order_relaxed));
+        bassDb.setTargetValue   (params->get (NamParams::bassDb));
+        middleDb.setTargetValue (params->get (NamParams::middleDb));
+        trebleDb.setTargetValue (params->get (NamParams::trebleDb));
+        bassHz.setTargetValue   (params->get (NamParams::bassHz));
+        middleHz.setTargetValue (params->get (NamParams::middleHz));
+        trebleHz.setTargetValue (params->get (NamParams::trebleHz));
     }
 
     void EqStage::process (float* io, int n) noexcept
     {
-        const double target = params->eqOn.load (std::memory_order_relaxed) ? 1.0 : 0.0;
+        const double target = params->isOn (NamParams::eqOn) ? 1.0 : 0.0;
 
         if (mix <= 0.0 && target <= 0.0)
             return;   // 꺼져 있음: 신호를 건드리지 않는다

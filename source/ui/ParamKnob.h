@@ -27,6 +27,7 @@ namespace rig
         std::function<void()> onDragEnded;             // 드래그가 끝났을 때 (저장은 여기서)
 
         void setValue (double value);                  // 콜백을 부르지 않는다
+        double getValue() const { return slider.getValue(); }
         void setDimmed (bool shouldBeDimmed);          // 흐리게 그리되 조작은 그대로 된다
 
         void resized() override;

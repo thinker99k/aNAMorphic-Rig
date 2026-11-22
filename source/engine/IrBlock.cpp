@@ -5,7 +5,7 @@
 
 namespace rig
 {
-    std::unique_ptr<IrBlock> IrBlock::load (const juce::File& file, juce::String& error, std::shared_ptr<IrParams> params)
+    std::unique_ptr<IrBlock> IrBlock::load (const juce::File& file, juce::String& error, std::shared_ptr<BlockParams> params)
     {
         juce::AudioFormatManager formats;
         formats.registerBasicFormats();
