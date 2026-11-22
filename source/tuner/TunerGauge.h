@@ -16,7 +16,7 @@ namespace rig
 
     // 튜너 반원 게이지 (Figma "Tuner 설계"). 상태만 받아서 그린다. 마우스 입력 없음
     //  - 도면 좌표는 404 x 254 기준 (TunerGauge.cpp 의 상수), 크기가 달라도 비율대로 늘린다
-    //  - No signal: 바늘/부채꼴 없음, 회색 / In tune (|cents| <= 3): 초록 + IN TUNE 배지 / 그 밖: 주황
+    //  - No signal: 바늘/부채꼴 없음, 회색 / In tune (|cents| <= 3): 초록 (별도 글자 없음) / 그 밖: 주황
     class TunerGauge final : public juce::Component
     {
     public:

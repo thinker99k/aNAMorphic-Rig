@@ -33,14 +33,11 @@ namespace rig
         const juce::Rectangle<float> noteArea    { 146.0f, 186.0f, 112.0f, 60.0f };
         const juce::Rectangle<float> hzArea      { 16.0f, 206.0f, 120.0f, 22.0f };
         const juce::Rectangle<float> centsArea   { 268.0f, 206.0f, 120.0f, 22.0f };
-        const juce::Rectangle<float> badgeArea   { 12.0f, 12.0f, 96.0f, 22.0f };
         const juce::Rectangle<float> noSignalArea { 0.0f, 150.0f, 404.0f, 22.0f };
 
         constexpr float noteFontSize  = 40.0f;
         constexpr float smallFontSize = 14.0f;
         constexpr float numberFontSize = 11.0f;
-        constexpr float badgeFontSize  = 12.0f;
-
         const juce::Colour inTuneColour = juce::Colour (0xff32cd32);   // 전원 버튼과 같은 초록
         const juce::Colour offColour    = juce::Colour (0xffffa500);   // 앱 강조색 주황
         const juce::Colour idleColour   = juce::Colours::grey;
@@ -157,14 +154,6 @@ namespace rig
         {
             g.drawText ("- Hz", hzArea, juce::Justification::centred, false);
             g.drawText ("- cents", centsArea, juce::Justification::centred, false);
-        }
-
-        if (inTune)
-        {
-            g.setColour (inTuneColour);
-            g.drawRoundedRectangle (badgeArea.reduced (0.5f), badgeArea.getHeight() * 0.5f, 1.0f);
-            g.setFont (juce::FontOptions (badgeFontSize, juce::Font::bold));
-            g.drawText ("IN TUNE", badgeArea, juce::Justification::centred, false);
         }
 
         if (! state.hasSignal)

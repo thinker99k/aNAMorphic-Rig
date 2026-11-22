@@ -21,10 +21,9 @@ namespace rig
         const juce::Rectangle<int> gaugeBounds  { 8, 8, 404, 254 };
         const juce::Rectangle<int> barBounds    { 0, 270, 420, 48 };
         // 하단 바 안 (barBounds 기준)
-        const juce::Rectangle<int> a4Bounds     { 12, 0, 24, 48 };
-        const juce::Rectangle<int> downBounds   { 40, 12, 24, 24 };
-        const juce::Rectangle<int> pitchBounds  { 68, 12, 84, 24 };
-        const juce::Rectangle<int> upBounds     { 156, 12, 24, 24 };
+        const juce::Rectangle<int> downBounds   { 12, 12, 24, 24 };    // 왼쪽 여백 12 에 붙인다
+        const juce::Rectangle<int> pitchBounds  { 40, 12, 84, 24 };
+        const juce::Rectangle<int> upBounds     { 128, 12, 24, 24 };
         const juce::Rectangle<int> ledBounds    { 288, 18, 8, 8 };
         const juce::Rectangle<int> sourceBounds { 300, 0, 108, 48 };
 
@@ -79,13 +78,22 @@ namespace rig
     {
         addAndMakeVisible (gauge);
 
-        a4Label.setJustificationType (juce::Justification::centredLeft);
-        addAndMakeVisible (a4Label);
-
+        // 기준음 값: 클릭하면 Hz 숫자를 직접 입력 (Enter 또는 바깥 클릭 = 적용, Esc = 취소). 범위 밖은 끝 값으로
         pitchLabel.setJustificationType (juce::Justification::centred);
         pitchLabel.setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.25f));
         pitchLabel.setColour (juce::Label::outlineColourId, juce::Colours::grey);
-        pitchLabel.setEditable (false, false, false);   // 읽기 전용 (± 버튼으로만)
+        pitchLabel.setEditable (true, false, false);
+        pitchLabel.onEditorShow = [this]
+        {
+            if (auto* ed = pitchLabel.getCurrentTextEditor())
+            {
+                ed->setInputRestrictions (5, "0123456789.");   // 예: 442.5
+                ed->setJustification (juce::Justification::centred);
+                ed->setText (juce::String (TunerSettings::toHz (pitchTenths), 1), false);
+                ed->selectAll();
+            }
+        };
+        pitchLabel.onTextChange = [this] { pitchTyped(); };
         addAndMakeVisible (pitchLabel);
 
         for (auto* button : { &downButton, &upButton })
@@ -152,6 +160,17 @@ namespace rig
     {
         pitchTenths = TunerSettings::clampTenths (pitchTenths + direction * TunerSettings::stepTenths);
         updatePitchControls();
+    }
+
+    void TunerDialog::pitchTyped()
+    {
+        const auto typed = pitchLabel.getText().retainCharacters ("0123456789.");
+        const double hz = typed.getDoubleValue();
+
+        if (typed.isNotEmpty() && hz > 0.0)
+            pitchTenths = TunerSettings::clampTenths ((int) std::lround (hz * 10.0));
+
+        updatePitchControls();   // 잘못된 값이면 원래 값으로 되돌려 보인다
     }
 
     void TunerDialog::updatePitchControls()
@@ -238,7 +257,6 @@ namespace rig
         gauge.setBounds (gaugeBounds);
 
         const auto origin = barBounds.getPosition();
-        a4Label.setBounds (a4Bounds + origin);
         downButton.setBounds (downBounds + origin);
         pitchLabel.setBounds (pitchBounds + origin);
         upButton.setBounds (upBounds + origin);

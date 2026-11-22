@@ -16,7 +16,7 @@
 namespace rig
 {
     // 튜너 모달 대화상자 내용물 (420 x 318, 제목 표시줄 22 를 더해 창 420 x 340)
-    //  - [게이지 패널 404 x 254] 아래 [A4 (-) 440.0 Hz (+)    ● Source: IN 1]
+    //  - [게이지 패널 404 x 254] 아래 [(-) 440.0 Hz (+)    ● Source: IN 1]
     //  - 열려 있는 동안만 입력 콜백(TunerInput)을 등록하고 20 Hz 로 분석한다
     //  - 오른쪽 위 X 로만 닫는다 (ESC, 키보드로는 닫히지 않는다). 바뀐 기준음은 닫을 때 저장
     class TunerDialog final : public juce::Component,
@@ -42,6 +42,7 @@ namespace rig
     private:
         void timerCallback() override;
         void stepPitch (int direction);
+        void pitchTyped();   // 값 상자에 직접 입력한 Hz 적용
         void updatePitchControls();
 
         juce::AudioDeviceManager& deviceManager;
@@ -62,9 +63,8 @@ namespace rig
         int pitchTenths, loadedTenths;   // A4 기준음 (0.1 Hz 단위)
 
         TunerGauge gauge;
-        juce::Label a4Label { {}, "A4" };
         LeftClickOnly<juce::TextButton> downButton { juce::String::fromUTF8 ("\xe2\x88\x92") };   // −
-        juce::Label pitchLabel;
+        LeftClickOnly<juce::Label> pitchLabel;   // 클릭하면 직접 입력
         LeftClickOnly<juce::TextButton> upButton { "+" };
         juce::Label sourceLabel;
 
