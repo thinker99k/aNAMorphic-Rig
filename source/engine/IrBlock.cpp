@@ -1,10 +1,11 @@
 #include "IrBlock.h"
+#include "engine/param/ir/CutStage.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
 namespace rig
 {
-    std::unique_ptr<IrBlock> IrBlock::load (const juce::File& file, juce::String& error)
+    std::unique_ptr<IrBlock> IrBlock::load (const juce::File& file, juce::String& error, std::shared_ptr<BlockParams> params)
     {
         juce::AudioFormatManager formats;
         formats.registerBasicFormats();
@@ -39,6 +40,10 @@ namespace rig
                                                 juce::dsp::Convolution::Stereo::no,
                                                 juce::dsp::Convolution::Trim::yes,
                                                 juce::dsp::Convolution::Normalise::yes);
+
+        if (params != nullptr)
+            block->setStage (std::make_unique<CutStage> (std::move (params)));
+
         return block;
     }
 

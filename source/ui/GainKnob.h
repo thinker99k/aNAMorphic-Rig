@@ -40,15 +40,6 @@ namespace rig
         const bool minIsInf;
         bool nameVisible = true;
 
-        // 노브 몸통 + 호(맨 왼쪽 ~ 현재 값) + 지시선
-        struct KnobLookAndFeel final : juce::LookAndFeel_V4
-        {
-            void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
-                                   float sliderPosProportional, float rotaryStartAngle,
-                                   float rotaryEndAngle, juce::Slider&) override;
-
-        };
-
         // slider 보다 먼저 선언: 멤버는 역순으로 소멸하므로 slider 가 먼저 사라진다
         KnobLookAndFeel knobLnf;
         LeftClickOnly<juce::Slider> slider;

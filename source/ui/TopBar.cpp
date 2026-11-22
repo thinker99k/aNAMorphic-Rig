@@ -202,15 +202,16 @@ namespace rig
     {
         juce::PopupMenu menu;   // 씬 버튼 메뉴와 같은 모양 (머리글 없음)
         menu.addItem ("Rename", [this] { patchNameBox.showEditor(); });
-        menu.addItem ("Reset", [this] { resetPatchWithWarning(); });
+        menu.addSeparator();    // 큰 리셋: 구분선 아래 + 말줄임표 (경고창이 뜬다)
+        menu.addItem ("Patch Reset...", [this] { resetPatchWithWarning(); });
         showContextMenu (menu, click);
     }
 
-    // 블록 전체와 씬 8개를 함께 초기화하는 큰 리셋이므로 경고를 띄운다 (기준은 Widgets.h showResetWarning)
+    // 씬 8개가 함께 바뀌는 큰 리셋이므로 경고를 띄운다 (리셋 단계는 Widgets.h showResetWarning)
     void TopBar::resetPatchWithWarning()
     {
         juce::Component::SafePointer<TopBar> safeThis (this);
-        showResetWarning (*this, "Reset patch",
+        showResetWarning (*this, "Patch Reset",
                           "Reset patch " + juce::String (patchBox.getSelectedId()).paddedLeft ('0', 2) + " (\""
                               + patchNameBox.getText() + "\")?\n\nAll blocks are removed, the 8 scenes go back to "
                               "their defaults and the name goes back to the file name.",

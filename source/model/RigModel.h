@@ -2,6 +2,7 @@
 
 #include "engine/AudioEngine.h"
 #include "engine/Block.h"
+#include "engine/param/common/BlockParams.h"
 
 #include <juce_events/juce_events.h>
 
@@ -18,9 +19,11 @@ namespace rig
     // 체인 = IN → 직렬/병렬 트리 → OUT. 본 줄은 블록과 병렬이 섞인 목록, 병렬은 위/아래 두 갈래(각각 블록 1개 이상)와
     // 합류(Merge). 병렬은 한 단계만 (갈래 안에 병렬 없음), 갈래는 반드시 다시 합쳐진다.
     //
-    // 씬: 패치마다 8개. 씬은 블록별 On/Off, 병렬 갈래별 On/Off·레벨, 이름을 가진다.
+    // 씬: 패치마다 8개. 씬은 블록별 On/Off·파라미터, 병렬 갈래별 On/Off·레벨, 이름을 가진다.
     //  - 현재 씬 번호는 저장하지 않는다 (패치는 항상 씬 1 로 열린다). 씬 전환은 디스크에 쓰지 않는다
     //  - 씬 편집(On/Off, 복사/교환/초기화/이름)은 패치에 저장한다
+    //
+    // 블록 파라미터(NAM EQ / IR 컷)는 블록마다, 씬별 값(On/Off 와 같다). 블록을 옮기면 따라가고, 교체하면 기본값
     //
     // UI 는 RigModel 만 보고 편집하고, RigModel 은 변경될 때마다
     //  1) 현재 패치를 ~/Documents/aNAMorphic-Rig/patch/config<NN> 에 자동 저장하고
@@ -45,6 +48,8 @@ namespace rig
             BlockType type = BlockType::None;
             juce::File file;                     // None 이면 비어 있고, NAM / IR 이면 항상 지정되어 있다
             std::array<bool, numScenes> on = allScenesOn();   // 씬별 On/Off: 블록을 옮기거나 종류가 바뀌어도 블록에 남는다
+            std::array<std::vector<float>, numScenes> paramValues;   // 씬별 블록 파라미터 (BlockParams::specs 순서, 없는 종류면 비어 있다)
+            std::shared_ptr<BlockParams> params; // 지금 씬의 파라미터 값 (DSP 가 같은 객체를 읽는다. 없는 종류면 nullptr). 교체하면 새 객체
 
             std::shared_ptr<Block> dsp;          // 소리를 내는 DSP (없으면 통과). 새 파일을 로딩하는 동안은 옛 DSP 를 그대로 둔다
             bool loading = false;
@@ -168,6 +173,7 @@ namespace rig
         void setBranchOn (juce::uint64 parallelId, int branch, bool shouldBeOn);
         void setBranchLevel (juce::uint64 parallelId, int branch, float db, bool save = true);   // 슬라이더 드래그 중에는 save = false, 끝에 true
         void resetLevels (juce::uint64 parallelId);   // Level Reset: 현재 씬의 두 갈래를 mergeDefaultDb 로
+        void resetBlockParams (juce::uint64 slotId);  // Param Reset: 블록의 현재 씬 파라미터를 기본값으로 (경고 없음, Undo 1단계)
         bool isBranchOn (const Parallel& p, int branch) const noexcept { return p.branchOn[(size_t) branch][(size_t) currentScene]; }
         float getBranchLevel (const Parallel& p, int branch) const noexcept { return p.levelDb[(size_t) branch][(size_t) currentScene]; }
 
@@ -182,6 +188,10 @@ namespace rig
 
         // 오디오 장치(샘플레이트 등)가 바뀐 뒤 호출: 꺼진(Off) 블록까지 다시 준비
         void deviceChanged();
+
+        // 블록 파라미터 (현재 씬의 값). index 는 BlockParams::specs (slot.type) 순서, 스위치는 0 / 1
+        float getParam (const Slot& slot, int index) const noexcept { return slot.paramValues[(size_t) currentScene][(size_t) index]; }
+        void setParam (juce::uint64 slotId, int index, float value, bool save = true);   // 노브 드래그 중에는 save = false, 끝에 true. 드래그 한 번 = Undo 한 단계
 
     private:
         Slot* editSlot (juce::uint64 id);              // findSlot 의 수정용 (0 이나 없는 id 면 nullptr)
@@ -200,6 +210,19 @@ namespace rig
         void applyMerge (Parallel&, bool immediately = false);   // 현재 씬의 갈래 On/Off·레벨을 Merge 게인으로
         void mergeEdited (Parallel&);   // 합류 값 편집 후: DSP 반영, 저장, UI 알림
 
+        // 씬별 값의 초기화·복사·교환 (값만 바꾼다. Undo·저장·DSP 반영·알림은 부르는 쪽이 한 번).
+        // Level Reset, 씬 Reset / Copy / Swap, Scene Reset(씬 8개) 이 모두 이것을 쓴다. 씬별 값을 더하면 여기에만 더한다
+        static void resetSceneValues (Slot&, size_t scene);
+        static void resetParams (Slot&);   // 지금 종류의 새 파라미터 (8 씬 모두 기본값). 새 블록, 교체
+        void applyParams (Slot&);          // 현재 씬의 파라미터 값을 DSP 가 읽는 값으로
+        static void resetSceneValues (Parallel&, size_t scene);
+        static void resetLevelValues (Parallel&, size_t scene);   // 합류 레벨만 (Level Reset)
+        static void resetParamValues (Slot&, size_t scene);       // 블록 파라미터만 (Param Reset)
+        static void copySceneValues (Slot&, size_t source, size_t destination);
+        static void copySceneValues (Parallel&, size_t source, size_t destination);
+        static void swapSceneValues (Slot&, size_t a, size_t b);
+        static void swapSceneValues (Parallel&, size_t a, size_t b);
+
         static Slot readSlot (const juce::var& json, juce::uint64 id);
         static juce::var writeSlot (const Slot&);
         static juce::var writeParallel (const Parallel&);
@@ -217,7 +240,13 @@ namespace rig
         };
 
         Snapshot snapshot (int scene) const;
-        void remember();   // 편집 함수가 바꾸기 직전에 부른다
+        // 되돌리기 원칙: 실제로 바뀐 편집만 이력에 남긴다 (아무것도 안 바뀐 조작은 Undo / Redo 를 건드리지 않는다)
+        //  - remember()   : 편집 함수가 바꾸기 직전에 부른다. 직전 상태를 잡아 두기만 한다 (이미 잡혀 있으면 = 드래그 중이면 그대로)
+        //  - saveEdit()   : 편집이 끝나 저장할 때. 잡아 둔 상태와 지금이 다르면 그때 Undo 에 넣고 Redo 를 비운 뒤 저장
+        //  - 슬라이더·노브 드래그는 첫 값에서 잡고 끝(save)에서 닫으므로 한 번 끌기 = 한 단계, 제자리로 돌아오면 남지 않는다
+        void remember();
+        void saveEdit();
+        bool sameContent (const Snapshot&) const;   // 편집 내용(체인 값, 채널, 씬 이름, 패치 이름)이 같은지. 선택·DSP 는 보지 않는다
         void step (std::vector<Snapshot>& from, std::vector<Snapshot>& to);
 
         void startLoading (Slot& slot);
@@ -250,7 +279,7 @@ namespace rig
         bool waitingForLoads = false;           // 로딩을 시작한 블록(패치 전환, 추가, 이동 등)이 다 준비될 때까지 옛 소리 유지
         juce::uint64 nextId = 1;                // 슬롯과 병렬의 id (0 = 없음)
         std::vector<Snapshot> undoStack, redoStack;
-        bool levelEditOpen = false;             // 합류 레벨 슬라이더를 끄는 중 (한 번 끌기 = 되돌리기 한 단계)
+        std::optional<Snapshot> pendingUndo;    // remember() 로 잡아 둔 편집 직전 상태 (saveEdit 에서 닫는다)
 
         JUCE_DECLARE_WEAK_REFERENCEABLE (RigModel)
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RigModel)

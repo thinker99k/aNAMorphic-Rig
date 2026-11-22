@@ -10,10 +10,10 @@
 
 namespace rig
 {
-    // 화면 아래 씬 바: [Live]      [1] [2] ... [8]      [Copy / Swap][All Reset]
-    //  - 씬 버튼과 Live 는 정사각형. 오른쪽 묶음은 씬 버튼의 1.75 배 폭 (씬 묶음과 겹치지 않는 만큼까지).
-    //    바깥 여백과 묶음 안 간격은 6 px. 씬 버튼: 번호는 왼쪽 위, 이름은 아래 가운데
-    //  - Live 는 왼쪽 끝, 씬 버튼 8개는 가로 가운데, [Copy/Swap | All Reset] 는 오른쪽 끝
+    // 화면 아래 씬 바: [Scene Reset]      [1] [2] ... [8] [Copy / Swap]      [Live]
+    //  - 버튼 폭은 모두 같은 정사각형 (Copy / Swap 은 한 칸을 위아래로 나눔). 바깥 여백과 버튼 사이는 6 px.
+    //    씬 버튼: 번호는 왼쪽 위, 이름은 아래 가운데
+    //  - Scene Reset 은 왼쪽 끝 (전체 리셋은 왼쪽), 씬 8개 + Copy / Swap 묶음은 가로 가운데, Live 는 오른쪽 끝
     //  - Live 를 누르면 onLiveClicked (Live 화면으로 전환)
     //  - 버튼은 왼쪽 클릭에만 반응한다 (앱 전체 마우스 규칙, Widgets.h LeftClickOnly). 가운데 클릭은 씬 버튼에서도 동작 없음
     //  - 왼쪽 버튼을 누르는 순간 그 씬으로 전환 (더블클릭 기능 없음)
@@ -27,7 +27,7 @@ namespace rig
     //      현재 씬 번호는 바뀌지 않는다
     //  - 표시: 평소에는 현재 씬을 밝게 채운다. 모드 중에는 1~8 강조를 끄고 Copy / Swap 버튼을 켜며,
     //      고른 src 는 밝기가 오르내린다. 실행 뒤 테두리가 부드럽게 두 번 깜빡인다 (Copy = dst, Swap = 둘 다)
-    //  - All Reset: 씬 8개를 한꺼번에 초기화하므로 경고창에서 Reset 을 눌러야 초기화 (모든 블록 On, 기본 이름).
+    //  - Scene Reset: 씬 8개를 한꺼번에 초기화하므로 경고창에서 Reset 을 눌러야 초기화 (모든 블록 On, 기본 이름).
     //      모드 중이면 모드를 끝낸다. 오른쪽 클릭 메뉴의 씬 하나 Reset 은 경고 없이 바로
     class SceneBar final : public juce::Component,
                            private juce::ChangeListener,
@@ -75,7 +75,7 @@ namespace rig
 
         std::array<juce::Rectangle<int>, RigModel::numScenes> sceneBounds;
         LeftClickOnly<juce::TextButton> liveButton { "Live" };
-        LeftClickOnly<juce::TextButton> copyButton { "Copy" }, swapButton { "Swap" }, resetAllButton { "All\nReset" };
+        LeftClickOnly<juce::TextButton> copyButton { "Copy" }, swapButton { "Swap" }, sceneResetButton { "Scene\nReset..." };   // 큰 리셋: 말줄임표 (경고창이 뜬다)
 
         Mode mode = Mode::none;
         int sourceScene = -1;                   // 모드 중 고른 src (-1 = 아직)

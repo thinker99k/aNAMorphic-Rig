@@ -42,6 +42,10 @@ namespace rig
             topBar.setPatchName (model.getPatchName());
         };
         topBar.onSettingsClicked = [this] { openSettings(); };
+        // [SPECTRUM] begin (테스트용) 실행 인자 --spectrum 을 줬을 때만 패치맵 오른쪽 위에 버튼
+        if (juce::JUCEApplicationBase::getCommandLineParameterArray().contains ("--spectrum"))
+            editView.showSpectrumButton ([this] { openSpectrum(); });
+        // [SPECTRUM] end
 
         statusBar.inputKnob.onValueChanged  = [this] (float db) { model.setInputGainDb (db); };
         statusBar.outputKnob.onValueChanged = [this] (float db)
@@ -98,6 +102,31 @@ namespace rig
     {
         topBar.setUndoRedoEnabled (model.canUndo(), model.canRedo());
     }
+
+    // [SPECTRUM] begin (테스트용)
+    void MainComponent::openSpectrum()
+    {
+        if (spectrumWindow == nullptr)
+        {
+            spectrumWindow = std::make_unique<SpectrumWindow> (engine);
+
+            // 처음 열 때: 메인 창 바로 아래에 들어가면 거기, 아니면 메인 창 가운데
+            const auto mainBounds = getTopLevelComponent()->getScreenBounds();
+            const juce::Rectangle<int> below (mainBounds.getX(), mainBounds.getBottom() + 8,
+                                              spectrumWindow->getWidth(), spectrumWindow->getHeight());
+            const auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect (mainBounds);
+
+            if (display != nullptr && display->userBounds.contains (below.toFloat()))
+                spectrumWindow->setBounds (below);
+            else
+                spectrumWindow->centreAroundComponent (this, spectrumWindow->getWidth(), spectrumWindow->getHeight());
+        }
+
+        // 이미 있으면(숨겨져 있든 보이든) 새로 만들지 않고 앞으로 가져온다
+        spectrumWindow->setVisible (true);
+        spectrumWindow->toFront (true);
+    }
+    // [SPECTRUM] end
 
     void MainComponent::openSettings()
     {
