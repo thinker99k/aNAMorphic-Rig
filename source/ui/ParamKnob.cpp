@@ -13,21 +13,21 @@ namespace rig
         constexpr int lineHeight = 16;         // 이름 / 값 한 줄 (상태바 이름 줄과 같다)
     }
 
-    ParamKnob::ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType t) : type (t)
+    ParamKnob::ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType valueType) : type (valueType)
     {
         slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
 
         if (type != ValueType::Db)
         {
-            // 로그 매핑: value = min * (max / min)^t  (노브 가운데 = 기하 평균). Hz 는 1 Hz, Q 는 0.01 단위
+            // 로그 매핑: 값 = 최솟값 * (최댓값 / 최솟값)^위치  (위치 0~1, 노브 가운데 = 기하 평균). Hz 는 1 Hz, Q 는 0.01 단위
             const double ratio = maxValue / minValue;
             const int decimals = type == ValueType::HzLog ? steps::hzDecimals : steps::qDecimals;
             slider.setNormalisableRange (juce::NormalisableRange<double> (
                 minValue, maxValue,
-                [ratio] (double start, double, double t) { return start * std::pow (ratio, t); },
-                [ratio] (double start, double, double v) { return juce::jlimit (0.0, 1.0, std::log (v / start) / std::log (ratio)); },
-                [decimals] (double start, double end, double v) { return juce::jlimit (start, end, steps::roundTo (v, decimals)); }));
+                [ratio] (double start, double, double proportion) { return start * std::pow (ratio, proportion); },                      // 위치 -> 값
+                [ratio] (double start, double, double value) { return juce::jlimit (0.0, 1.0, std::log (value / start) / std::log (ratio)); },   // 값 -> 위치
+                [decimals] (double start, double end, double value) { return juce::jlimit (start, end, steps::roundTo (value, decimals)); })); // 단위로 반올림
         }
         else
         {

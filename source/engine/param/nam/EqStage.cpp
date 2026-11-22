@@ -13,10 +13,10 @@ namespace rig
     {
         sampleRate = sr;
 
-        for (auto* s : { &bassDb, &middleDb, &trebleDb })
-            s->reset (sr, rampSeconds);
-        for (auto* s : { &bassHz, &middleHz, &trebleHz, &middleQ })
-            s->reset (sr, rampSeconds);
+        for (auto* smoother : { &bassDb, &middleDb, &trebleDb })
+            smoother->reset (sr, rampSeconds);
+        for (auto* smoother : { &bassHz, &middleHz, &trebleHz, &middleQ })
+            smoother->reset (sr, rampSeconds);
 
         jumpToTargets();
         low.reset(); middle.reset(); high.reset();

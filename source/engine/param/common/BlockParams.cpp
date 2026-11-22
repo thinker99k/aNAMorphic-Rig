@@ -17,10 +17,10 @@ namespace rig
 
     BlockParams::BlockParams (BlockType type) : values (specs (type).size())
     {
-        const auto& s = specs (type);
+        const auto& specList = specs (type);
 
-        for (size_t i = 0; i < s.size(); ++i)
-            values[i].store (s[i].defaultValue, std::memory_order_relaxed);
+        for (size_t i = 0; i < specList.size(); ++i)
+            values[i].store (specList[i].defaultValue, std::memory_order_relaxed);
     }
 
     std::shared_ptr<BlockParams> BlockParams::create (BlockType type)
@@ -44,11 +44,11 @@ namespace rig
 
     std::vector<float> BlockParams::defaults (BlockType type)
     {
-        std::vector<float> v;
+        std::vector<float> values;
 
-        for (const auto& s : specs (type))
-            v.push_back (s.defaultValue);
+        for (const auto& spec : specs (type))
+            values.push_back (spec.defaultValue);
 
-        return v;
+        return values;
     }
 }

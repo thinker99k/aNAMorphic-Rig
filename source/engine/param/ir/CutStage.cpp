@@ -33,9 +33,9 @@ namespace rig
         highCut.hz.setCurrentAndTargetValue (params->get (IrParams::highCutHz));
         highCut.mix = params->isOn (IrParams::highCutOn) ? 1.0 : 0.0;
 
-        for (auto* s : { &lowCut, &highCut })
-            for (auto& b : s->stages)
-                b.reset();
+        for (auto* section : { &lowCut, &highCut })
+            for (auto& stage : section->stages)
+                stage.reset();
     }
 
     void CutStage::process (float* io, int n) noexcept
@@ -46,22 +46,23 @@ namespace rig
                         params->get (IrParams::highCutHz), io, n);
     }
 
-    void CutStage::processSection (Section& s, bool on, double targetHz, float* io, int n) noexcept
+    void CutStage::processSection (Section& section, bool on, double targetHz, float* io, int n) noexcept
     {
         const double target = on ? 1.0 : 0.0;
 
         // 꺼져 있어도 필터는 계속 계산한다 (출력에는 섞지 않음): 낮은 L. Cut 은 상태가 채워지는 데 전환 시간보다 오래 걸려
         // (25 Hz 약 115 ms), 멈췄다 켜면 저음 쪽이 틀어질 수 있다. 비용은 2차 필터 몇 개라 작다
+
         // 값은 구간 단위로 따라가고 계수는 구간마다 한 번 계산한다 (모든 단이 같은 주파수, Q 만 다름)
-        s.hz.setTargetValue (targetHz);
-        const double hz = s.hz.skip (n);
+        section.hz.setTargetValue (targetHz);
+        const double hz = section.hz.skip (n);
 
         for (int k = 0; k < numStages; ++k)
         {
-            if (s.highPass)
-                s.stages[(size_t) k].setHighPass (sampleRate, hz, q[(size_t) k]);
+            if (section.highPass)
+                section.stages[(size_t) k].setHighPass (sampleRate, hz, q[(size_t) k]);
             else
-                s.stages[(size_t) k].setLowPass (sampleRate, hz, q[(size_t) k]);
+                section.stages[(size_t) k].setLowPass (sampleRate, hz, q[(size_t) k]);
         }
 
         for (int i = 0; i < n; ++i)
@@ -69,11 +70,11 @@ namespace rig
             const double x = io[i];
             double y = x;
 
-            for (auto& b : s.stages)
-                y = b.process (y);
+            for (auto& stage : section.stages)
+                y = stage.process (y);
 
-            s.mix = target > s.mix ? juce::jmin (target, s.mix + mixStep) : juce::jmax (target, s.mix - mixStep);
-            io[i] = (float) (x * (1.0 - s.mix) + y * s.mix);   // 같은 신호의 두 버전이므로 선형 혼합
+            section.mix = target > section.mix ? juce::jmin (target, section.mix + mixStep) : juce::jmax (target, section.mix - mixStep);
+            io[i] = (float) (x * (1.0 - section.mix) + y * section.mix);   // 같은 신호의 두 버전이므로 선형 혼합
         }
     }
 }
