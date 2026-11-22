@@ -298,7 +298,7 @@ namespace rig
             else
                 deviceManager.closeAudioDevice();
 
-            showAlert (*this, "Could not open audio device", message, { { "OK", 0 } }, true);
+            showAlert (*this, "Could not open audio device", message, { { "OK", 0 } });
             return;
         }
 

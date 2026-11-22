@@ -514,13 +514,13 @@ namespace rig
         juce::Component spacer;
     };
 
-    // 경고창을 프로그램 창 가운데에 모달로 띄운다. 버튼을 누르면 onResult (그 버튼의 값). escapeCloses = Esc 로 닫기(값 0)
+    // 경고창을 프로그램 창 가운데에 모달로 띄운다. 버튼으로만 닫힌다 (ESC, X 없음). 버튼을 누르면 onResult (그 버튼의 값)
     inline void showAlert (juce::Component& origin, const juce::String& title, const juce::String& message,
-                           const std::vector<std::pair<juce::String, int>>& buttons, bool escapeCloses,
+                           const std::vector<std::pair<juce::String, int>>& buttons,
                            std::function<void (int)> onResult = nullptr)
     {
         auto* alert = new LeftClickAlertWindow (title, message, origin.getTopLevelComponent(), buttons);
-        alert->setEscapeKeyCancels (escapeCloses);
+        alert->setEscapeKeyCancels (false);
         alert->enterModalState (true, juce::ModalCallbackFunction::create ([onResult] (int result)
         {
             if (onResult != nullptr)
@@ -539,7 +539,7 @@ namespace rig
     inline void showResetWarning (juce::Component& origin, const juce::String& title, const juce::String& message,
                                   std::function<void()> onReset)
     {
-        showAlert (origin, title, message, { { "Reset", 1 }, { "Cancel", 0 } }, false, [onReset] (int result)
+        showAlert (origin, title, message, { { "Reset", 1 }, { "Cancel", 0 } }, [onReset] (int result)
         {
             if (result == 1 && onReset != nullptr)
                 onReset();
