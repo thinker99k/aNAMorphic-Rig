@@ -257,8 +257,8 @@ namespace rig
         scratch.setSize (numScratchPairs * 2, bs);
         fadeLength = juce::jmax (1, juce::roundToInt (sr * crossfadeSeconds));
 
-        inputSmoothed.reset (sr, 0.02);
-        outputSmoothed.reset (sr, 0.02);
+        inputSmoothed.reset (sr, transitionSeconds);
+        outputSmoothed.reset (sr, transitionSeconds);
         inputSmoothed.setCurrentAndTargetValue (inputGain.load (std::memory_order_relaxed));
         outputSmoothed.setCurrentAndTargetValue (outputGain.load (std::memory_order_relaxed));
 

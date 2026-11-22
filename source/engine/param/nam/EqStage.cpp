@@ -4,7 +4,7 @@ namespace rig
 {
     namespace
     {
-        constexpr double rampSeconds = 0.02;   // 값 변경 약 20 ms
+        constexpr double rampSeconds = transitionSeconds;   // 값 변경 20 ms (Block.h)
     }
 
     EqStage::EqStage (std::shared_ptr<BlockParams> p) : params (std::move (p)) {}

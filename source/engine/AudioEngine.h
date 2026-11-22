@@ -63,7 +63,7 @@ namespace rig
         // 장치를 열 때 요청하는 채널 수. 모든 백엔드가 실제 채널 수로 잘라서 열므로 "전부"라는 뜻
         static constexpr int openAllChannels = 256;
 
-        static constexpr double crossfadeSeconds = 0.03;
+        static constexpr double crossfadeSeconds = transitionSeconds;   // 20 ms (Block.h)
 
         // 입력/출력 볼륨 범위 (dB). 입력의 최솟값은 실제 -15 dB, 출력은 outputMinDb 이하가 -inf(무음)
         static constexpr float inputMinDb  = -15.0f;
@@ -189,7 +189,7 @@ namespace rig
         std::atomic<float> inputGain { 1.0f };
         std::atomic<float> outputGain { 1.0f };
 
-        // 오디오 스레드 전용: 게인 변화를 20 ms 동안 선형으로 이어 "틱" 잡음을 막는다
+        // 오디오 스레드 전용: 게인 변화를 transitionSeconds(20 ms) 동안 선형으로 이어 "틱" 잡음을 막는다
         juce::SmoothedValue<float> inputSmoothed { 1.0f }, outputSmoothed { 1.0f };
 
         // [SPECTRUM] begin (테스트용)

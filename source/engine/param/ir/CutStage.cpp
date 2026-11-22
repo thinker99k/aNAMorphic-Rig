@@ -6,7 +6,7 @@ namespace rig
 {
     namespace
     {
-        constexpr double rampSeconds = 0.02;   // 값 변경과 스위치 전환 모두 약 20 ms
+        constexpr double rampSeconds = transitionSeconds;   // 값 변경과 전원 전환 모두 20 ms (Block.h)
     }
 
     CutStage::CutStage (std::shared_ptr<BlockParams> p) : params (std::move (p))

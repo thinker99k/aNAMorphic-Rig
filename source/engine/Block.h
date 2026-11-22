@@ -11,6 +11,10 @@
 
 namespace rig
 {
+    // 소리가 바뀌는 모든 전환 시간: 블록·패치·씬 크로스페이드, 블록 On/Off, 합류 레벨, 채널, 볼륨·블록 파라미터 값 스무딩, 컷 전원.
+    // 모양은 전환마다 고른다 (다른 소리끼리 = 등전력, 같은 소리의 두 버전 = 선형). 시간은 모두 이 값 하나
+    inline constexpr double transitionSeconds = 0.02;
+
     // 지금은 두 종류만. 공간계/다이나믹 등은 나중에 여기에 추가.
     enum class BlockType
     {
