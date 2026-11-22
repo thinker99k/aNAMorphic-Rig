@@ -211,7 +211,7 @@ namespace rig
     void TopBar::resetPatchWithWarning()
     {
         juce::Component::SafePointer<TopBar> safeThis (this);
-        showResetWarning (*this, "Reset patch",
+        showResetWarning (*this, "Patch Reset",
                           "Reset patch " + juce::String (patchBox.getSelectedId()).paddedLeft ('0', 2) + " (\""
                               + patchNameBox.getText() + "\")?\n\nAll blocks are removed, the 8 scenes go back to "
                               "their defaults and the name goes back to the file name.",

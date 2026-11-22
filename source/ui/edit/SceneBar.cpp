@@ -39,7 +39,7 @@ namespace rig
         swapButton.onClick = [this] { toggleMode (Mode::swap); };
 
         // Copy / Swap 모드 중이면 바깥 클릭처럼 모드를 끝낸다. 경고창에서 Reset 을 눌러야 초기화
-        sceneResetButton.setTooltip ("Reset all scenes: every block On, default names");
+        sceneResetButton.setTooltip ("Reset all scenes: every block On with default parameters, branches -3 dB, default names");
         sceneResetButton.onClick = [this]
         {
             cancelMode();
@@ -47,8 +47,8 @@ namespace rig
 
             juce::Component::SafePointer<SceneBar> safeThis (this);
             showResetWarning (*this, "Scene Reset",
-                              "Reset all 8 scenes?\n\nEvery block will be On in every scene and all scene names "
-                              "go back to \"Scene 1\" ... \"Scene 8\".",
+                              "Reset all 8 scenes?\n\nIn every scene, every block will be On with default parameters, "
+                              "parallel branches will be On at -3 dB, and the scene names go back to \"Scene 1\" ... \"Scene 8\".",
                               [safeThis] { if (safeThis != nullptr) safeThis->model.resetAllScenes(); });
         };
 
