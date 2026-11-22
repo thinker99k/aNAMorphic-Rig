@@ -139,8 +139,8 @@ namespace rig
     {
         // [노브] [이름 / 값] : 노브와 두 줄 글자 모두 세로 가운데
         auto area = getLocalBounds();
-        const int diameter = juce::jmin (knobDiameter, getHeight());
-        slider.setBounds (area.removeFromLeft (diameter).withSizeKeepingCentre (diameter, diameter));
+        const int size = juce::jmin (diameter, getHeight());
+        slider.setBounds (area.removeFromLeft (size).withSizeKeepingCentre (size, size));
         area.removeFromLeft (textGap);
 
         auto text = area.withSizeKeepingCentre (area.getWidth(), lineHeight * 2);

@@ -14,7 +14,7 @@ namespace rig
           bassFreq   ("B. Freq",     P::bassMinHz,   P::bassMaxHz,   P::bassDefaultHz,   VT::HzLog),
           middle     ("M",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
           middleFreq ("M. Freq",     P::middleMinHz, P::middleMaxHz, P::middleDefaultHz, VT::HzLog),
-          middleQ    ("M. Q",        P::middleQMin,  P::middleQMax,  P::middleQDefault,  VT::QLog),
+          middleQ    ("Q",           P::middleQMin,  P::middleQMax,  P::middleQDefault,  VT::QLog),
           treble     ("T",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
           trebleFreq ("T. Freq",     P::trebleMinHz, P::trebleMaxHz, P::trebleDefaultHz, VT::HzLog)
     {
@@ -43,7 +43,8 @@ namespace rig
 
         group (bassGroup,   bass,   bassFreq);
         group (middleGroup, middle, middleFreq);
-        middleGroup.addItem (middleQ, middleQ.getIdealWidth(), ParamGroup::knobGap);   // Middle 만 폭(Q) 노브가 있다
+        middleQ.setDiameter (ParamKnob::smallKnobDiameter);   // Middle 만 있는 보조 노브: 조금 작게
+        middleGroup.addItem (middleQ, middleQ.getIdealWidth(), ParamGroup::knobGap);
         group (trebleGroup, treble, trebleFreq);
 
         refresh();

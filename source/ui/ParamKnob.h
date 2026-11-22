@@ -22,11 +22,12 @@ namespace rig
             QLog     // 폭 Q: 로그 매핑, "0.80"
         };
 
-        // 크기: 노브 지름 55 (상태바 볼륨 노브 56 과 비슷하게) + 간격 8 + 글자 칸
-        static constexpr int knobDiameter = 55, textGap = 8;
+        // 크기: 노브 지름 55 (상태바 볼륨 노브 56 과 비슷하게) + 간격 8 + 글자 칸. 보조 노브(M 의 Q 등)는 조금 작게 45
+        static constexpr int knobDiameter = 55, smallKnobDiameter = 45, textGap = 8;
 
         // 노브 + 간격 + 글자 칸. 글자 칸 = 이름과 이 노브에 나올 수 있는 가장 긴 값 중 넓은 쪽 (OS 글꼴이 달라도 맞는다)
-        int getIdealWidth() const { return knobDiameter + textGap + textWidth; }
+        int getIdealWidth() const { return diameter + textGap + textWidth; }
+        void setDiameter (int newDiameter) { diameter = newDiameter; resized(); }   // 기본 knobDiameter
 
         ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType type);
         ~ParamKnob() override;
@@ -46,6 +47,7 @@ namespace rig
 
         const ValueType type;
         int textWidth = 0;   // 생성자에서 한 번 잰다
+        int diameter = knobDiameter;
 
         // slider 보다 먼저 선언: 멤버는 역순으로 소멸하므로 slider 가 먼저 사라진다
         KnobLookAndFeel knobLnf;
