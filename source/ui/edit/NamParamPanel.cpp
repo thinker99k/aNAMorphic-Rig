@@ -22,7 +22,6 @@ namespace rig
         {
             knob.onValueChanged = [this, index] (double v) { model.setParam (model.getSelectedSlotId(), index, (float) v, false); };
             knob.onDragEnded = [this, index, &knob] { model.setParam (model.getSelectedSlotId(), index, (float) knob.getValue()); };
-            addAndMakeVisible (knob);
         };
 
         connect (bass,       P::bassDb);
@@ -31,6 +30,18 @@ namespace rig
         connect (middleFreq, P::middleHz);
         connect (treble,     P::trebleDb);
         connect (trebleFreq, P::trebleHz);
+
+        // 영역 묶음: [세기][주파수]
+        auto group = [this] (ParamGroup& g, ParamKnob& gain, ParamKnob& freq)
+        {
+            g.addItem (gain, ParamKnob::width, 0);
+            g.addItem (freq, ParamKnob::width, ParamGroup::knobGap);
+            addAndMakeVisible (g);
+        };
+
+        group (bassGroup,   bass,   bassFreq);
+        group (middleGroup, middle, middleFreq);
+        group (trebleGroup, treble, trebleFreq);
 
         refresh();
     }
@@ -51,20 +62,6 @@ namespace rig
 
     void NamParamPanel::resized()
     {
-        // 왼쪽부터 [B][B. Freq]  [M][M. Freq]  [T][T. Freq] : 같은 영역끼리는 pairGap, 영역 사이는 groupGap
-        auto area = getLocalBounds();
-
-        auto place = [&] (ParamKnob& gain, ParamKnob& freq)
-        {
-            gain.setBounds (area.removeFromLeft (ParamKnob::width));
-            area.removeFromLeft (pairGap);
-            freq.setBounds (area.removeFromLeft (ParamKnob::width));
-        };
-
-        place (bass, bassFreq);
-        area.removeFromLeft (groupGap);
-        place (middle, middleFreq);
-        area.removeFromLeft (groupGap);
-        place (treble, trebleFreq);
+        layoutGroups ({ &bassGroup, &middleGroup, &trebleGroup });
     }
 }

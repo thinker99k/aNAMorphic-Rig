@@ -33,8 +33,16 @@ namespace rig
         connectPower (lowCutPower,  IrParams::lowCutOn);
         connectPower (highCutPower, IrParams::highCutOn);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &lowCutPower, &lowCut, &highCutPower, &highCut })
-            addAndMakeVisible (c);
+        // 영역 묶음: [빨간 전원][노브]
+        auto group = [this] (ParamGroup& g, SubPowerButton& power, ParamKnob& knob)
+        {
+            g.addItem (power, SubPowerButton::size, 0, SubPowerButton::size);
+            g.addItem (knob, ParamKnob::width, ParamGroup::powerGap);
+            addAndMakeVisible (g);
+        };
+
+        group (lowCutGroup,  lowCutPower,  lowCut);
+        group (highCutGroup, highCutPower, highCut);
 
         refresh();
     }
@@ -59,19 +67,6 @@ namespace rig
 
     void IrParamPanel::resized()
     {
-        // [전원] 8 [노브]  64  [전원] 8 [노브] : 전원은 빨간 SubPowerButton (합류 갈래와 같다), 노브는 NAM 과 같은 크기
-        auto area = getLocalBounds();
-        const int size = juce::jmin (SubPowerButton::size, getHeight() - 8);
-
-        auto place = [&] (PowerButton& power, ParamKnob& knob)
-        {
-            power.setBounds (area.removeFromLeft (size).withSizeKeepingCentre (size, size));
-            area.removeFromLeft (powerGap);
-            knob.setBounds (area.removeFromLeft (ParamKnob::width));
-        };
-
-        place (lowCutPower, lowCut);
-        area.removeFromLeft (groupGap);
-        place (highCutPower, highCut);
+        layoutGroups ({ &lowCutGroup, &highCutGroup });
     }
 }
