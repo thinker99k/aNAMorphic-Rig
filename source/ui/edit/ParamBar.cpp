@@ -10,7 +10,6 @@ namespace rig
         constexpr int pairIdBase = 1000;
 
         const juce::Colour errorColour (juce::Colours::red.brighter (0.2f));
-        const juce::Colour warningColour (juce::Colours::yellow);
 
         // 합류 레벨: 오디오 테이퍼. 위치 p 에서 dB = 10 * log2 (p) → 절반마다 -10 dB, -3 dB ≈ 81 %,
         // p ≤ 2^-6 (= -60 dB) 는 -inf (mergeMinDb 에 붙임). 0.1 dB 단위
@@ -50,15 +49,10 @@ namespace rig
         addChildComponent (channelBox);
 
         errorLabel.setColour (juce::Label::textColourId, errorColour);
-        warningLabel.setColour (juce::Label::textColourId, warningColour);
-
-        for (auto* label : { &errorLabel, &warningLabel })
-        {
-            label->setJustificationType (juce::Justification::topRight);
-            label->setBorderSize ({});
-            label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
-            addChildComponent (label);
-        }
+        errorLabel.setJustificationType (juce::Justification::topRight);
+        errorLabel.setBorderSize ({});
+        errorLabel.setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
+        addChildComponent (errorLabel);
 
         for (int b = 0; b < 2; ++b)
         {
@@ -144,16 +138,15 @@ namespace rig
         if (isMerge)
         {
             updateMerge (*parallel);
-            setMessages ({}, {});
+            setError ({});
             return;
         }
 
         if (isEndpoint)
         {
             fillChannelBox (endpoint);
-            setMessages (model.isChannelMissing (endpoint, deviceManager.getCurrentAudioDevice())
-                             ? "Channel not available on the current device" : juce::String(),
-                         {});
+            setError (model.isChannelMissing (endpoint, deviceManager.getCurrentAudioDevice())
+                          ? "Channel not available on the current device" : juce::String());
             resized();
             return;
         }
@@ -183,16 +176,7 @@ namespace rig
             panel->refresh();
         }
 
-        // 모델 레이트와 장치 레이트가 다르면 소리가 틀어진다 (리샘플 미구현)
-        juce::String warning;
-        const auto deviceRate = model.getDeviceSampleRate();
-
-        if (slot != nullptr && slot->dsp != nullptr)
-            if (const auto modelRate = slot->dsp->expectedSampleRate(); modelRate > 0.0 && std::abs (modelRate - deviceRate) > 0.5)
-                warning = "Sample rate mismatch:\nmodel " + juce::String (juce::roundToInt (modelRate)) + " Hz\ndevice "
-                        + juce::String (juce::roundToInt (deviceRate)) + " Hz";
-
-        setMessages (slot != nullptr ? slot->error : juce::String(), warning);
+        setError (slot != nullptr ? slot->error : juce::String());
         resized();
     }
 
@@ -207,13 +191,10 @@ namespace rig
         }
     }
 
-    // 오류(빨강)와 경고(노랑)는 동시에 보일 수 있다. 하나뿐이면 그 줄만 세로 가운데에
-    void ParamBar::setMessages (const juce::String& error, const juce::String& warning)
+    void ParamBar::setError (const juce::String& error)
     {
         errorLabel.setText (error, juce::dontSendNotification);
-        warningLabel.setText (warning, juce::dontSendNotification);
         errorLabel.setVisible (error.isNotEmpty());
-        warningLabel.setVisible (warning.isNotEmpty());
     }
 
     void ParamBar::fillChannelBox (RigModel::Endpoint endpoint)
@@ -326,16 +307,13 @@ namespace rig
         row.removeFromLeft (8);
         channelBox.setBounds (row.removeFromLeft (320));
 
-        // 오류 / 경고 문구: 전원 버튼 자리 왼쪽에 오른쪽 정렬, 윗변 = 전원 버튼 윗변 (IN / OUT 일 때도 같은 자리).
-        // 오류(빨강) 아래 경고(노랑), 글자의 줄바꿈(\n)만큼 줄 수
+        // 오류 문구(빨강): 전원 버튼 자리 왼쪽에 오른쪽 정렬, 윗변 = 전원 버튼 윗변 (IN / OUT 일 때도 같은 자리).
+        // 글자의 줄바꿈(\n)만큼 줄 수
         constexpr int messageWidth = 420, messageLineHeight = 18;
-        auto messages = area.withTrimmedRight (12).removeFromRight (messageWidth).withTop (powerButton.getY());
-
-        for (auto* label : { &errorLabel, &warningLabel })
-        {
-            const int lines = label->isVisible() ? label->getText().length() - label->getText().removeCharacters ("\n").length() + 1 : 0;
-            label->setBounds (messages.removeFromTop (messageLineHeight * lines));
-        }
+        const auto& error = errorLabel.getText();
+        const int lines = error.length() - error.removeCharacters ("\n").length() + 1;
+        errorLabel.setBounds (area.withTrimmedRight (12).removeFromRight (messageWidth).withTop (powerButton.getY())
+                                  .withHeight (messageLineHeight * lines));
 
         // 합류 선택 시: [전원 50] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
         constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;
