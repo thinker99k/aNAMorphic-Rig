@@ -9,7 +9,7 @@
 
 namespace rig
 {
-    // 파라미터 노브: [노브] 오른쪽에 두 줄 (위 이름, 아래 값). 이름과 값은 항상 보인다.
+    // 파라미터 노브: 위에 이름, 그 아래 [노브] 오른쪽에 값. 이름과 값은 항상 보인다. 비활성(setEnabled false)이면 흐리고 조작 안 됨.
     // 왼쪽 클릭 드래그만, 더블클릭 초기화·휠·글자 입력 없음 (볼륨 노브와 같은 규칙)
     class ParamKnob final : public juce::Component
     {
@@ -28,9 +28,9 @@ namespace rig
 
         void setValue (double value);                  // 콜백을 부르지 않는다
         double getValue() const { return slider.getValue(); }
-        void setDimmed (bool shouldBeDimmed);          // 흐리게 그리되 조작은 그대로 된다
 
         void resized() override;
+        void enablementChanged() override;
 
     private:
         juce::String toText (double value) const;

@@ -125,7 +125,7 @@
   "io": { "in": 0, "out": [0, 1] },
   "blocks": [
     { "type": "nam", "file": "/home/<user>/Documents/aNAMorphic-Rig/nam/drive.nam", "on": [true, true, false, ...8개],
-      "params": { "eqOn": [false, ...8개], "bassDb": [0.0, ...8개], "bassHz": [100, ...8개], ... } },
+      "params": { "bassDb": [0.0, ...8개], "bassHz": [100, ...8개], ... } },
     { "type": "parallel",
       "branches": [
         { "on": [true, ...8개], "level": [-3.0, ...8개],
@@ -145,11 +145,10 @@
 - `on` : 씬 1~8 에서 이 블록의 On/Off (Off = 바이패스)
 - `params` : NAM / IR 블록의 파라미터. 이름마다 씬 1~8 의 값. 스위치는 true / false, dB 는 소수 1자리, Hz 는 정수.
   없거나 이상한 값은 기본값, 범위 밖은 범위 안으로
-  - NAM (블록 뒤 3밴드 EQ, 세 밴드 모두 peak)
+  - NAM (블록 뒤 3밴드 EQ, 세 밴드 모두 peak, 항상 켜짐)
 
     | 이름 | 범위 | 기본 |
     |---|---|---|
-    | `eqOn` | true / false | false |
     | `bassDb` / `middleDb` / `trebleDb` | -18 ~ 18 dB | 0 |
     | `bassHz` | 40 ~ 200 Hz | 100 |
     | `middleHz` | 315 ~ 2000 Hz | 800 |

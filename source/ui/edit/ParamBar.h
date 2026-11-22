@@ -37,13 +37,6 @@ namespace rig
         void resized() override;
 
     private:
-        // 전원 아이콘 토글 버튼: 켜짐 = 초록, 꺼짐 = 흐린 회색
-        struct PowerButton final : public LeftClickOnly<juce::Button>
-        {
-            PowerButton() : LeftClickOnly ("Power") {}
-            void paintButton (juce::Graphics&, bool highlighted, bool down) override;
-        };
-
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
         void updateFromModel();
         void updateMerge (const RigModel::Parallel&);

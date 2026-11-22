@@ -20,20 +20,20 @@ namespace rig
         connect (lowCut,  IrParams::lowCutHz);
         connect (highCut, IrParams::highCutHz);
 
-        // 스위치는 누르는 즉시 저장
-        auto connectSwitch = [this] (ParamSwitch& sw, int index)
+        // 전원은 누르는 즉시 저장
+        auto connectPower = [this] (PowerButton& power, int index)
         {
-            sw.onClick = [this, index, &sw]
+            power.onClick = [this, index, &power]
             {
-                model.setParam (model.getSelectedSlotId(), index, sw.getToggleState() ? 1.0f : 0.0f);
+                model.setParam (model.getSelectedSlotId(), index, power.getToggleState() ? 1.0f : 0.0f);
                 refresh();
             };
         };
 
-        connectSwitch (lowCutSwitch,  IrParams::lowCutOn);
-        connectSwitch (highCutSwitch, IrParams::highCutOn);
+        connectPower (lowCutPower,  IrParams::lowCutOn);
+        connectPower (highCutPower, IrParams::highCutOn);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &lowCutSwitch, &lowCut, &highCutSwitch, &highCut })
+        for (auto* c : std::initializer_list<juce::Component*> { &lowCutPower, &lowCut, &highCutPower, &highCut })
             addAndMakeVisible (c);
 
         refresh();
@@ -51,28 +51,27 @@ namespace rig
         const bool lowOn = model.getParam (*slot, IrParams::lowCutOn) >= 0.5f;
         const bool highOn = model.getParam (*slot, IrParams::highCutOn) >= 0.5f;
 
-        lowCutSwitch.setToggleState (lowOn, juce::dontSendNotification);
-        highCutSwitch.setToggleState (highOn, juce::dontSendNotification);
-        lowCut.setDimmed (! lowOn);
-        highCut.setDimmed (! highOn);
+        lowCutPower.setToggleState (lowOn, juce::dontSendNotification);
+        highCutPower.setToggleState (highOn, juce::dontSendNotification);
+        lowCut.setEnabled (lowOn);
+        highCut.setEnabled (highOn);
     }
 
     void IrParamPanel::resized()
     {
-        // 좌우 절반: [스위치][노브] | [스위치][노브]
+        // [전원] 8 [노브 칸]  64  [전원] 8 [노브 칸] : 전원 버튼은 블록 전원과 같은 크기, 노브 칸은 NAM 노브와 같은 폭
         auto area = getLocalBounds();
-        auto left = area.removeFromLeft (area.getWidth() / 2);
-        auto right = area;
+        const int size = juce::jmin (powerSize, getHeight() - 8);
 
-        auto place = [this] (juce::Rectangle<int> half, ParamSwitch& sw, ParamKnob& knob)
+        auto place = [&] (PowerButton& power, ParamKnob& knob)
         {
-            auto switchArea = half.removeFromLeft (getWidth() / 10);
-            sw.setBounds (switchArea.withSizeKeepingCentre (switchArea.getWidth(), getHeight() / 3));
-            half.removeFromLeft (getWidth() / 60);
-            knob.setBounds (half.removeFromLeft (getWidth() / 6).reduced (0, getHeight() / 10));
+            power.setBounds (area.removeFromLeft (size).withSizeKeepingCentre (size, size));
+            area.removeFromLeft (powerGap);
+            knob.setBounds (area.removeFromLeft (knobWidth()).reduced (0, knobMargin));
         };
 
-        place (left, lowCutSwitch, lowCut);
-        place (right, highCutSwitch, highCut);
+        place (lowCutPower, lowCut);
+        area.removeFromLeft (groupGap);
+        place (highCutPower, highCut);
     }
 }

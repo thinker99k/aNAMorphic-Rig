@@ -41,7 +41,6 @@ namespace rig
 
     ParamBar::ParamBar (RigModel& m, juce::AudioDeviceManager& dm) : model (m), deviceManager (dm)
     {
-        powerButton.setClickingTogglesState (true);
         powerButton.onClick = [this] { model.setOn (model.getSelectedSlotId(), powerButton.getToggleState()); };
         addAndMakeVisible (powerButton);
 
@@ -63,7 +62,6 @@ namespace rig
 
         for (int b = 0; b < 2; ++b)
         {
-            branchPower[(size_t) b].setClickingTogglesState (true);
             branchPower[(size_t) b].onClick = [this, b]
             {
                 model.setBranchOn (model.getSelectedParallelId(), b, branchPower[(size_t) b].getToggleState());
@@ -300,40 +298,6 @@ namespace rig
         g.drawRoundedRectangle (cap.reduced (0.5f), 2.0f, 1.0f);
         g.setColour (juce::Colours::white);
         g.drawLine (sliderPos, cap.getY() + 3.0f, sliderPos, cap.getBottom() - 3.0f, 2.0f);
-    }
-
-    void ParamBar::PowerButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
-    {
-        auto bounds = getLocalBounds().toFloat().reduced (1.5f);
-        const bool on = getToggleState();
-
-        auto colour = on ? juce::Colours::limegreen : juce::Colours::grey.darker (0.3f);
-        if (! isEnabled())
-            colour = juce::Colours::grey.darker (0.8f);
-        else if (down)
-            colour = colour.darker (0.3f);
-        else if (highlighted)
-            colour = colour.brighter (0.3f);
-
-        g.setColour (juce::Colours::black.withAlpha (on && isEnabled() ? 0.35f : 0.2f));
-        g.fillRoundedRectangle (bounds, 6.0f);
-        g.setColour (colour.withAlpha (0.6f));
-        g.drawRoundedRectangle (bounds, 6.0f, 1.0f);
-
-        // 전원 기호: 위가 열린 원 + 세로선
-        const auto icon = bounds.reduced (bounds.getHeight() * 0.25f);
-        const auto centre = icon.getCentre();
-        const float radius = icon.getHeight() * 0.5f;
-        const float gapAngle = juce::MathConstants<float>::pi / 5.0f;
-
-        juce::Path path;
-        path.addCentredArc (centre.x, centre.y, radius, radius, 0.0f,
-                            gapAngle, juce::MathConstants<float>::twoPi - gapAngle, true);
-        path.startNewSubPath (centre.x, icon.getY() - radius * 0.15f);
-        path.lineTo (centre.x, centre.y);
-
-        g.setColour (colour);
-        g.strokePath (path, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
     void ParamBar::paint (juce::Graphics& g)

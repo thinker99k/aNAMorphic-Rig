@@ -227,6 +227,46 @@ namespace rig
         }
     };
 
+    // 전원 아이콘 토글 버튼 (블록 / 합류 갈래 / LC·RC 켜기): 켜짐 = 초록, 꺼짐 = 흐린 회색. 누르면 상태가 바뀐다
+    struct PowerButton final : public LeftClickOnly<juce::Button>
+    {
+        PowerButton() : LeftClickOnly ("Power") { setClickingTogglesState (true); }
+
+        void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+        {
+            auto bounds = getLocalBounds().toFloat().reduced (1.5f);
+            const bool on = getToggleState();
+
+            auto colour = on ? juce::Colours::limegreen : juce::Colours::grey.darker (0.3f);
+            if (! isEnabled())
+                colour = juce::Colours::grey.darker (0.8f);
+            else if (down)
+                colour = colour.darker (0.3f);
+            else if (highlighted)
+                colour = colour.brighter (0.3f);
+
+            g.setColour (juce::Colours::black.withAlpha (on && isEnabled() ? 0.35f : 0.2f));
+            g.fillRoundedRectangle (bounds, 6.0f);
+            g.setColour (colour.withAlpha (0.6f));
+            g.drawRoundedRectangle (bounds, 6.0f, 1.0f);
+
+            // 전원 기호: 위가 열린 원 + 세로선
+            const auto icon = bounds.reduced (bounds.getHeight() * 0.25f);
+            const auto centre = icon.getCentre();
+            const float radius = icon.getHeight() * 0.5f;
+            const float gapAngle = juce::MathConstants<float>::pi / 5.0f;
+
+            juce::Path path;
+            path.addCentredArc (centre.x, centre.y, radius, radius, 0.0f,
+                                gapAngle, juce::MathConstants<float>::twoPi - gapAngle, true);
+            path.startNewSubPath (centre.x, icon.getY() - radius * 0.15f);
+            path.lineTo (centre.x, centre.y);
+
+            g.setColour (colour);
+            g.strokePath (path, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    };
+
     // 이름 편집용 Label. 편집 중에는 모달이 되어 바깥 클릭이 컴포넌트에 닿기 전에 편집을 끝내는데,
     // allowWhileEditing 이 허락한 컴포넌트(저장 체크 버튼)의 클릭만은 그대로 통과시킨다 (그래야 체크로 저장할 수 있다)
     struct PassThroughLabel final : public juce::Label

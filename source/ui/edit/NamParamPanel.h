@@ -2,14 +2,13 @@
 
 #include "ParamPanel.h"
 #include "ui/ParamKnob.h"
-#include "ui/ParamSwitch.h"
 
 namespace rig
 {
     class RigModel;
 
-    // NAM 블록 선택 시: [EQ 스위치] [Bass] [Bass Freq] [Middle] [Middle Freq] [Treble] [Treble Freq]
-    // 값은 선택된 블록의 현재 씬 값 (RigModel::getParam / setParam). 스위치가 꺼져 있으면 노브는 흐리지만 조작은 된다
+    // NAM 블록 선택 시: [Bass] [Bass Freq] [Middle] [Middle Freq] [Treble] [Treble Freq] (왼쪽부터, 같은 폭)
+    // 값은 선택된 블록의 현재 씬 값 (RigModel::getParam / setParam). EQ 는 항상 켜져 있다
     class NamParamPanel final : public ParamPanel
     {
     public:
@@ -21,7 +20,6 @@ namespace rig
     private:
         RigModel& model;
 
-        ParamSwitch eqSwitch { "EQ" };
         ParamKnob bass, bassFreq, middle, middleFreq, treble, trebleFreq;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NamParamPanel)

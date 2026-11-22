@@ -32,7 +32,5 @@ namespace rig
         Multiplicative bassHz, middleHz, trebleHz;
 
         double sampleRate = 48000.0;
-        double mix = 0.0;       // 0 = 필터 건너뜀, 1 = 필터 소리. 스위치를 켜고 끌 때 rampSeconds 동안 선형으로 넘어간다
-        double mixStep = 1.0;
     };
 }

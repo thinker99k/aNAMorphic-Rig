@@ -2,14 +2,13 @@
 
 #include "ParamPanel.h"
 #include "ui/ParamKnob.h"
-#include "ui/ParamSwitch.h"
 
 namespace rig
 {
     class RigModel;
 
-    // IR 블록 선택 시: 왼쪽 절반 [LC 스위치][LC 노브], 오른쪽 절반 [RC 스위치][RC 노브]
-    // 값은 선택된 블록의 현재 씬 값 (RigModel::getParam / setParam). LC 와 RC 는 스위치·흐림이 서로 독립
+    // IR 블록 선택 시: [LC 전원][LC 노브]  [RC 전원][RC 노브] (왼쪽부터)
+    // 값은 선택된 블록의 현재 씬 값 (RigModel::getParam / setParam). 전원이 꺼진 쪽 노브는 흐리고 조작 안 됨
     class IrParamPanel final : public ParamPanel
     {
     public:
@@ -21,7 +20,7 @@ namespace rig
     private:
         RigModel& model;
 
-        ParamSwitch lowCutSwitch { "LC" }, highCutSwitch { "RC" };
+        PowerButton lowCutPower, highCutPower;
         ParamKnob lowCut, highCut;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IrParamPanel)

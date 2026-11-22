@@ -155,7 +155,6 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/GainKnob.cpp
         source/ui/KnobLookAndFeel.cpp
         source/ui/ParamKnob.cpp
-        source/ui/ParamSwitch.cpp
         source/ui/SpectrumWindow.cpp   # [SPECTRUM] 테스트용
 )
 

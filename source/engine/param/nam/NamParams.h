@@ -7,7 +7,7 @@
 
 namespace rig
 {
-    // NAM 블록용 3밴드 EQ 파라미터 정의 (값은 BlockParams, 번호는 Index)
+    // NAM 블록용 3밴드 EQ 파라미터 정의 (값은 BlockParams, 번호는 Index). EQ 는 항상 켜져 있다 (0 dB = 그대로)
     struct NamParams
     {
         // 범위·경계선·폭 상수는 여기에만 둔다 (UI 도 이 값을 쓴다)
@@ -23,12 +23,11 @@ namespace rig
 
         static constexpr double eqQ = 0.8;       // Bass / Middle / Treble 공통 폭 (약 1.5~2 옥타브)
 
-        enum Index : int { eqOn, bassDb, bassHz, middleDb, middleHz, trebleDb, trebleHz };
+        enum Index : int { bassDb, bassHz, middleDb, middleHz, trebleDb, trebleHz };
 
         static const std::vector<ParamSpec>& specs()
         {
             static const std::vector<ParamSpec> s {
-                { "eqOn",     0.0f, 1.0f, 0.0f, 0, true },
                 { "bassDb",   (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },
                 { "bassHz",   (float) bassMinHz,   (float) bassMaxHz,   (float) bassDefaultHz,   steps::hzDecimals },
                 { "middleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },

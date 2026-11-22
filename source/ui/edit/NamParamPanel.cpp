@@ -32,14 +32,6 @@ namespace rig
         connect (treble,     P::trebleDb);
         connect (trebleFreq, P::trebleHz);
 
-        // 스위치는 누르는 즉시 저장
-        eqSwitch.onClick = [this]
-        {
-            model.setParam (model.getSelectedSlotId(), P::eqOn, eqSwitch.getToggleState() ? 1.0f : 0.0f);
-            refresh();
-        };
-        addAndMakeVisible (eqSwitch);
-
         refresh();
     }
 
@@ -55,25 +47,14 @@ namespace rig
         middleFreq.setValue (model.getParam (*slot, P::middleHz));
         treble.setValue     (model.getParam (*slot, P::trebleDb));
         trebleFreq.setValue (model.getParam (*slot, P::trebleHz));
-
-        const bool on = model.getParam (*slot, P::eqOn) >= 0.5f;
-        eqSwitch.setToggleState (on, juce::dontSendNotification);
-
-        for (auto* knob : { &bass, &bassFreq, &middle, &middleFreq, &treble, &trebleFreq })
-            knob->setDimmed (! on);
     }
 
     void NamParamPanel::resized()
     {
-        // [EQ 스위치 영역] [노브 6개, 같은 폭]
-        auto area = getLocalBounds();
-        auto switchArea = area.removeFromLeft (area.getWidth() / 10);
-        eqSwitch.setBounds (switchArea.withSizeKeepingCentre (switchArea.getWidth(), getHeight() / 3));
-
-        area.removeFromLeft (getWidth() / 60);
-        const int knobWidth = area.getWidth() / 6;
+        // 노브 6개, 왼쪽부터 같은 폭
+        auto area = getLocalBounds().reduced (0, knobMargin);
 
         for (auto* knob : { &bass, &bassFreq, &middle, &middleFreq, &treble, &trebleFreq })
-            knob->setBounds (area.removeFromLeft (knobWidth).reduced (0, getHeight() / 10));
+            knob->setBounds (area.removeFromLeft (knobWidth()));
     }
 }

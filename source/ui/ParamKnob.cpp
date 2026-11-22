@@ -8,7 +8,11 @@ namespace rig
 {
     namespace
     {
-        constexpr float dimmedAlpha = 0.4f;
+        constexpr float dimmedAlpha = 0.4f;    // 비활성일 때
+        constexpr float textSize = 14.0f;      // 이름(굵게) / 값 글자 (합류 화면과 같은 크기)
+        constexpr int nameHeight = 18;         // 노브 위 이름 줄
+        constexpr int nameGap = 2;             // 이름 줄과 노브 사이
+        constexpr int valueGap = 8;            // 노브와 오른쪽 값 사이
     }
 
     ParamKnob::ParamKnob (const juce::String& name, double minValue, double maxValue, ValueType t) : type (t)
@@ -48,7 +52,8 @@ namespace rig
         slider.onDragEnd = [this] { if (onDragEnded) onDragEnded(); };
 
         nameLabel.setText (name, juce::dontSendNotification);
-        nameLabel.setColour (juce::Label::textColourId, juce::Colours::grey);
+        nameLabel.setFont (juce::FontOptions (textSize, juce::Font::bold));
+        valueLabel.setFont (juce::FontOptions (textSize));
         valueLabel.setColour (juce::Label::textColourId, juce::Colours::white);
 
         for (auto* label : { &nameLabel, &valueLabel })
@@ -56,7 +61,7 @@ namespace rig
             label->setJustificationType (juce::Justification::centredLeft);
             label->setBorderSize ({});
             label->setInterceptsMouseClicks (false, false);
-            label->setMinimumHorizontalScale (0.7f);
+            label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
             addAndMakeVisible (label);
         }
 
@@ -75,9 +80,9 @@ namespace rig
         updateValueLabel();
     }
 
-    void ParamKnob::setDimmed (bool shouldBeDimmed)
+    void ParamKnob::enablementChanged()
     {
-        setAlpha (shouldBeDimmed ? dimmedAlpha : 1.0f);   // 투명도만 바꾼다: 마우스 조작은 그대로
+        setAlpha (isEnabled() ? 1.0f : dimmedAlpha);   // 비활성이면 마우스는 JUCE 가 막는다
     }
 
     juce::String ParamKnob::toText (double value) const
@@ -109,18 +114,17 @@ namespace rig
 
     void ParamKnob::resized()
     {
-        // [노브] [이름 / 값] : 노브 지름은 높이와 폭에서 정한다
+        // 이름 (노브 왼쪽 끝부터)
+        // [노브] [값]   : 노브 지름은 남은 높이와 폭의 절반 중 작은 쪽
         auto area = getLocalBounds();
-        const int diameter = juce::jmin (area.getHeight(), area.getWidth() / 2);
-        slider.setBounds (area.removeFromLeft (diameter).withSizeKeepingCentre (diameter, diameter));
-        area.removeFromLeft (getWidth() / 20);
+        nameLabel.setBounds (area.removeFromTop (nameHeight));
+        area.removeFromTop (nameGap);
 
-        const int lineHeight = juce::jmax (1, getHeight() / 5);
-        auto text = area.withSizeKeepingCentre (area.getWidth(), lineHeight * 2);
+        const int diameter = juce::jmax (0, juce::jmin (area.getHeight(), area.getWidth() / 2));
+        const auto knob = area.removeFromLeft (diameter).withSizeKeepingCentre (diameter, diameter);
+        slider.setBounds (knob);
 
-        nameLabel.setFont (juce::FontOptions ((float) lineHeight * 0.8f));
-        valueLabel.setFont (juce::FontOptions ((float) lineHeight * 0.9f));
-        nameLabel.setBounds (text.removeFromTop (lineHeight));
-        valueLabel.setBounds (text);
+        area.removeFromLeft (valueGap);
+        valueLabel.setBounds (area.withSizeKeepingCentre (area.getWidth(), nameHeight).withY (knob.getCentreY() - nameHeight / 2));
     }
 }
