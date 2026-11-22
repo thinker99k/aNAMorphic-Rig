@@ -32,6 +32,8 @@ namespace rig
 
         std::function<void()> onLiveClicked;   // 씬 바의 Live 버튼
 
+        void showSpectrumButton (std::function<void()> onClick) { chainView.showSpectrumButton (std::move (onClick)); }   // [SPECTRUM]
+
         void cancelEditing() { sceneBar.cancelEditing(); }   // 씬 바의 Copy / Swap 모드와 씬 이름 편집을 끝낸다
 
         void resized() override;

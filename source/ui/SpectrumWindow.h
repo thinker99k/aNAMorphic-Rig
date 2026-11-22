@@ -1,9 +1,10 @@
 #pragma once
 
 // [SPECTRUM] 테스트용 보조 기능. 제거 방법:
+//   실행 인자 --spectrum 을 줬을 때만 패치맵 오른쪽 위에 [Spectrum] 버튼이 생긴다
 //   1. 이 파일과 SpectrumWindow.cpp 를 지운다
 //   2. 프로젝트에서 "[SPECTRUM]" 을 검색해, "begin" ~ "end" 사이 블록과 "[SPECTRUM]" 이 붙은 한 줄을 지운다
-//      (AudioEngine.h/.cpp, TopBar.h/.cpp, MainComponent.h/.cpp, CMakeLists.txt)
+//      (AudioEngine.h/.cpp, ChainView.h/.cpp, EditView.h, MainComponent.h/.cpp, CMakeLists.txt)
 
 #include "engine/AudioEngine.h"
 

@@ -31,6 +31,9 @@
 | macOS | `build/aNAMorphic-Rig_artefacts/Release/aNAMorphic-Rig.app` |
 | Linux | `build/aNAMorphic-Rig_artefacts/Release/aNAMorphic-Rig` |
 
+실행 인자 `--spectrum` 을 주면 패치맵 오른쪽 위에 **Spectrum** 버튼이 생깁니다 (출력 주파수 분석 창, 개발·테스트용).
+Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args --spectrum`, Linux `./aNAMorphic-Rig --spectrum`.
+
 ## 3. Build Rules
 
 `CMakeLists.txt` 와 빌드 스크립트의 규칙입니다.

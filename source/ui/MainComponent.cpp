@@ -42,7 +42,10 @@ namespace rig
             topBar.setPatchName (model.getPatchName());
         };
         topBar.onSettingsClicked = [this] { openSettings(); };
-        topBar.onSpectrumClicked = [this] { openSpectrum(); };   // [SPECTRUM]
+        // [SPECTRUM] begin (테스트용) 실행 인자 --spectrum 을 줬을 때만 패치맵 오른쪽 위에 버튼
+        if (juce::JUCEApplicationBase::getCommandLineParameterArray().contains ("--spectrum"))
+            editView.showSpectrumButton ([this] { openSpectrum(); });
+        // [SPECTRUM] end
 
         statusBar.inputKnob.onValueChanged  = [this] (float db) { model.setInputGainDb (db); };
         statusBar.outputKnob.onValueChanged = [this] (float db)

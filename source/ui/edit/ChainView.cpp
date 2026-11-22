@@ -869,6 +869,15 @@ namespace rig
             rebuild();
     }
 
+    // [SPECTRUM] begin (테스트용)
+    void ChainView::showSpectrumButton (std::function<void()> onClick)
+    {
+        spectrumButton.onClick = std::move (onClick);
+        addAndMakeVisible (spectrumButton);   // viewport 다음에 넣어 위에 그린다
+        resized();
+    }
+    // [SPECTRUM] end
+
     void ChainView::setUpdatesPaused (bool paused)
     {
         if (paused == updatesPaused)
@@ -973,6 +982,10 @@ namespace rig
     void ChainView::resized()
     {
         viewport.setBounds (getLocalBounds());
+
+        // [SPECTRUM] 오른쪽 위 고정 (스크롤 안 됨). 오류 / 경고 문구(왼쪽 위)와 같은 여백
+        constexpr int spectrumWidth = 90, spectrumHeight = 26;                                                   // [SPECTRUM]
+        spectrumButton.setBounds (getWidth() - margin - spectrumWidth, margin, spectrumWidth, spectrumHeight);   // [SPECTRUM]
 
         // 오류 / 경고: 왼쪽 위 (IN 노드와 같은 여백), 위에서부터 오류 → 경고. 글자의 줄바꿈(\n)만큼 줄 수
         constexpr int messageWidth = 420, messageLineHeight = 18;
