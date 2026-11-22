@@ -2,7 +2,6 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-#include "ui/KnobLookAndFeel.h"
 #include "ui/Widgets.h"
 
 #include <functional>
