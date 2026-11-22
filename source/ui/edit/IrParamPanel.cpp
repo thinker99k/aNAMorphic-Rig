@@ -7,8 +7,8 @@ namespace rig
 {
     IrParamPanel::IrParamPanel (RigModel& m)
         : model (m),
-          lowCut  ("LC", IrParams::lowCutMinHz,  IrParams::lowCutMaxHz,  IrParams::lowCutDefaultHz,  ParamKnob::ValueType::HzLog),
-          highCut ("RC", IrParams::highCutMinHz, IrParams::highCutMaxHz, IrParams::highCutDefaultHz, ParamKnob::ValueType::HzLog)
+          lowCut  ("L. Cut", IrParams::lowCutMinHz,  IrParams::lowCutMaxHz,  IrParams::lowCutDefaultHz,  ParamKnob::ValueType::HzLog),
+          highCut ("H. Cut", IrParams::highCutMinHz, IrParams::highCutMaxHz, IrParams::highCutDefaultHz, ParamKnob::ValueType::HzLog)
     {
         // 노브 -> 선택된 블록의 현재 씬 값 (돌리는 동안은 알림·저장 없음), 드래그가 끝나면 저장. 둘 다 시계 방향으로 값이 커진다
         auto connect = [this] (ParamKnob& knob, int index)

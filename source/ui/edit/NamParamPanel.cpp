@@ -10,12 +10,12 @@ namespace rig
 
     NamParamPanel::NamParamPanel (RigModel& m)
         : model (m),
-          bass       ("Bass",        P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
-          bassFreq   ("Bass Freq",   P::bassMinHz,   P::bassMaxHz,   P::bassDefaultHz,   VT::HzLog),
-          middle     ("Middle",      P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
-          middleFreq ("Middle Freq", P::middleMinHz, P::middleMaxHz, P::middleDefaultHz, VT::HzLog),
-          treble     ("Treble",      P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
-          trebleFreq ("Treble Freq", P::trebleMinHz, P::trebleMaxHz, P::trebleDefaultHz, VT::HzLog)
+          bass       ("B",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
+          bassFreq   ("B. Freq",     P::bassMinHz,   P::bassMaxHz,   P::bassDefaultHz,   VT::HzLog),
+          middle     ("M",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
+          middleFreq ("M. Freq",     P::middleMinHz, P::middleMaxHz, P::middleDefaultHz, VT::HzLog),
+          treble     ("T",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
+          trebleFreq ("T. Freq",     P::trebleMinHz, P::trebleMaxHz, P::trebleDefaultHz, VT::HzLog)
     {
         // 노브 -> 선택된 블록의 현재 씬 값 (돌리는 동안은 알림·저장 없음), 드래그가 끝나면 저장
         auto connect = [this] (ParamKnob& knob, int index)
