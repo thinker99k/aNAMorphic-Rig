@@ -23,7 +23,7 @@ namespace rig
     //  └──────────────────────────────────────────────┘
     //  중앙 = 창에서 TopBar(40) 와 StatusBar(62) 를 뗀 나머지
     //   - Edit 모드: EditView = 패치 맵 : 파라미터 바 : 블록 선택기 : 씬 바 = 3 : 1 : 3 : 1 (EditView.h 참고)
-    //   - Live 모드: LiveView = 씬 패드 4 x 2 (나머지) + 패치 줄 [Live ON][PREV][NEXT] (1/8) (LiveView.h 참고)
+    //   - Live 모드: LiveView = 씬 패드 4 x 2 (나머지) + 패치 줄 [PREV][NEXT][Live ON] (1/8) (LiveView.h 참고)
     //   - 두 뷰는 같은 영역을 받고 setVisible 로 하나만 보인다 (파괴하지 않으므로 편집 상태 유지)
     //   - 맨 아래 줄은 둘 다 가운데 높이의 1/8 이라, 모드를 바꿔도 Live 버튼이 같은 자리에 있다
     //  TopBar 와 StatusBar 는 두 모드에서 그대로

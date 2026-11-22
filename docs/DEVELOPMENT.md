@@ -84,7 +84,7 @@
 │       │   ├── ChainView.*             패치 맵 (직렬/병렬 체인, Split / Merge 점)
 │       │   ├── ParamBar.*              선택 블록 / 합류 / IN·OUT 파라미터, 오류·경고 문구
 │       │   ├── BlockEditor.*           블록 선택기
-│       │   └── SceneBar.*              씬 버튼, Copy / Swap, All Reset, Live 버튼
+│       │   └── SceneBar.*              씬 버튼, Copy / Swap, Scene Reset, Live 버튼
 │       └── live/                       Live 모드 화면
 │           ├── LiveView.*              Live 화면 배치
 │           ├── ScenePads.*             씬 패드 4 x 2

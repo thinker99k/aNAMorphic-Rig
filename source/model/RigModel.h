@@ -211,7 +211,7 @@ namespace rig
         void mergeEdited (Parallel&);   // 합류 값 편집 후: DSP 반영, 저장, UI 알림
 
         // 씬별 값의 초기화·복사·교환 (값만 바꾼다. Undo·저장·DSP 반영·알림은 부르는 쪽이 한 번).
-        // Level Reset, 씬 Reset / Copy / Swap, All Reset 이 모두 이것을 쓴다. 씬별 값을 더하면 여기에만 더한다
+        // Level Reset, 씬 Reset / Copy / Swap, Scene Reset(씬 8개) 이 모두 이것을 쓴다. 씬별 값을 더하면 여기에만 더한다
         static void resetSceneValues (Slot&, size_t scene);
         static void resetParams (Slot&);   // 지금 종류의 새 파라미터 (8 씬 모두 기본값). 새 블록, 교체
         void applyParams (Slot&);          // 현재 씬의 파라미터 값을 DSP 가 읽는 값으로

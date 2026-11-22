@@ -9,8 +9,8 @@
 
 namespace rig
 {
-    // Live 화면의 하단 줄: [Live ON] [◀ PREV PATCH] [NEXT PATCH ▶]
-    //  - 바깥 여백과 버튼 사이 6 px (편집 화면 SceneBar 와 같은 값). Live ON 은 SceneBar 의 Live 버튼과 같은 사각형
+    // Live 화면의 하단 줄: [◀ PREV PATCH] [NEXT PATCH ▶] [Live ON]
+    //  - 바깥 여백과 버튼 사이 6 px (편집 화면 SceneBar 와 같은 값). Live ON 은 SceneBar 의 Live 버튼과 같은 사각형 (오른쪽 끝)
     //  - PREV / NEXT 는 남은 폭을 반반 (NEXT 가 나머지). 바깥쪽 25% 에 화살표와 이웃 패치 번호 (두 자리, 씬 패드 번호와 같은 글꼴),
     //    안쪽 75% 에 이름 (왼쪽 정렬). 위치는 이름 길이와 무관하게 고정
     //  - 이웃 패치가 없으면 비활성 ("—", 눌러도 무시). 순환하지 않는다

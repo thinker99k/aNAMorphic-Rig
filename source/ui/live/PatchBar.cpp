@@ -139,8 +139,8 @@ namespace rig
     void PatchBar::resized()
     {
         auto area = getLocalBounds().reduced (gap);
-        liveBounds = area.removeFromLeft (area.getHeight());   // 정사각형, SceneBar 의 Live 버튼과 같은 자리
-        area.removeFromLeft (gap);
+        liveBounds = area.removeFromRight (area.getHeight());   // 정사각형, SceneBar 의 Live 버튼과 같은 자리 (오른쪽 끝)
+        area.removeFromRight (gap);
         prevBounds = area.removeFromLeft ((area.getWidth() - gap) / 2);
         area.removeFromLeft (gap);
         nextBounds = area;
