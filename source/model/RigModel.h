@@ -191,7 +191,7 @@ namespace rig
 
         // 블록 파라미터 (현재 씬의 값). index 는 BlockParams::specs (slot.type) 순서, 스위치는 0 / 1
         float getParam (const Slot& slot, int index) const noexcept { return slot.paramValues[(size_t) currentScene][(size_t) index]; }
-        void setParam (juce::uint64 slotId, int index, float value, bool save = true);   // 노브 드래그 중에는 save = false, 끝에 true
+        void setParam (juce::uint64 slotId, int index, float value, bool save = true);   // 노브 드래그 중에는 save = false, 끝에 true. 드래그 한 번 = Undo 한 단계
 
     private:
         Slot* editSlot (juce::uint64 id);              // findSlot 의 수정용 (0 이나 없는 id 면 nullptr)

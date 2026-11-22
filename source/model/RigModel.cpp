@@ -450,6 +450,9 @@ namespace rig
         if (slot == nullptr || ! juce::isPositiveAndBelow (index, (int) specs.size()))
             return;
 
+        // 드래그 한 번 = 되돌리기 한 단계 (합류 레벨과 같다): 첫 값에서 잡고 끝(save)의 saveEdit 에서 닫는다.
+        // 전원(L. Cut / H. Cut)은 save = true 한 번이라 누를 때마다 한 단계
+        remember();
         slot->paramValues[(size_t) currentScene][(size_t) index] = (float) specs[(size_t) index].constrain (value);
         applyParams (*slot);   // 소리는 바로 따라간다 (DSP 가 20 ms 스무딩)
 
