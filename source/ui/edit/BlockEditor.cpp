@@ -9,6 +9,19 @@ namespace rig
     {
         juce::String patternFor (BlockType t) { return t == BlockType::Nam ? "*.nam" : "*.wav"; }
         juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::namDir() : paths::irDir(); }
+
+        template <typename TextAt>
+        bool matchesSearch (const juce::StringArray& words, int numFields, TextAt textAt)
+        {
+            return std::all_of (words.begin(), words.end(), [&] (const juce::String& word)
+            {
+                for (int field = 0; field < numFields; ++field)
+                    if (textAt (field).containsIgnoreCase (word))
+                        return true;
+
+                return false;
+            });
+        }
     }
 
     BlockEditor::BlockEditor (RigModel& m) : model (m)
@@ -34,7 +47,7 @@ namespace rig
             list->setHeader (std::make_unique<LeftClickOnly<juce::TableHeaderComponent>>());
             list->getHeader().setStretchToFitActive (true);
             list->getHeader().setLookAndFeel (&headerLookAndFeel);
-            list->setRowHeight (24);
+            list->setRowHeight (rowHeight);
             list->setOutlineThickness (1);
         }
 
@@ -58,6 +71,19 @@ namespace rig
         builtInList.getHeader().addColumn ("Name", 1, 100, 30, -1, juce::TableHeaderComponent::visible);
         builtInList.setModel (&builtInListModel);
         addChildComponent (builtInList);
+
+        searchBox.setMultiLine (false);
+        searchBox.setFont (juce::FontOptions (rowFontSize));
+        searchBox.setTextToShowWhenEmpty ("Search", findColour (juce::TextEditor::textColourId).withAlpha (0.5f));
+        searchBox.setPopupMenuEnabled (false);
+        searchBox.onTextChange = [this]
+        {
+            searchWords = juce::StringArray::fromTokens (searchBox.getText(), false);
+            searchWords.removeEmptyStrings();
+            applyFilter (currentHighlight());
+        };
+        searchBox.onEscapeKey = [this] { searchBox.setText ({}, true); };
+        addAndMakeVisible (searchBox);
 
         // 더블클릭(왼쪽)해야 블록에 지정된다
         fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
@@ -189,14 +215,11 @@ namespace rig
         // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 을 고른 동안만 비활성
         const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none;
 
-        for (auto* c : std::initializer_list<juce::Component*> { &namList, &irList, &builtInList })
+        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox })
         {
             c->setEnabled (enabled);
             c->setAlpha (enabled ? 1.0f : 0.4f);
         }
-
-        categoryList.setEnabled (enabled);
-        categoryList.setAlpha (enabled ? 1.0f : 0.4f);
 
         // 고른 블록이 없으면 둘러보던 탭과 강조를 그대로 둔다
         if (slot == nullptr)
@@ -238,6 +261,8 @@ namespace rig
 
         if (categoryList.getSelectedRow() != shownCategoryIndex)
             categoryList.selectRow (shownCategoryIndex);
+
+        categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);
 
         namList.setVisible (category.usesFiles && category.fileType == BlockType::Nam);
         irList.setVisible (category.usesFiles && category.fileType == BlockType::Ir);
@@ -318,7 +343,7 @@ namespace rig
             list.deselectAllRows();
     }
 
-    // 행 번호는 목록 갱신 때 달라질 수 있으므로 표시 목록을 만든 뒤 같은 항목을 다시 강조한다
+    // 타이핑할 때는 정렬된 메모리 목록만 거른다. 폴더/메타데이터 읽기와 모델 변경은 이 경로에 넣지 않는다
     void BlockEditor::applyFilter (const Highlight& highlight)
     {
         if (updatesPaused)
@@ -329,9 +354,22 @@ namespace rig
         builtInRows.clear();
 
         if (category.usesFiles)
-            rows = allRows;
+        {
+            const int numFields = category.fileType == BlockType::Nam ? modeledByColumn : nameColumn;
+            rows.reserve (allRows.size());
+
+            for (const auto& entry : allRows)
+                if (matchesSearch (searchWords, numFields, [&entry] (int field) -> const juce::String& { return entry.get (nameColumn + field); }))
+                    rows.push_back (entry);
+        }
         else
-            builtInRows = category.builtIns;
+        {
+            builtInRows.reserve (category.builtIns.size());
+
+            for (const auto& builtIn : category.builtIns)
+                if (matchesSearch (searchWords, 1, [&builtIn] (int) -> const juce::String& { return builtIn.name; }))
+                    builtInRows.push_back (builtIn);
+        }
 
         auto& list = category.usesFiles ? activeList() : builtInList;
         list.updateContent();
@@ -542,8 +580,13 @@ namespace rig
         constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 카테고리 목록 열은 고정 폭, 높이는 남은 영역 전체 (넘치면 스크롤)
-        categoryList.setBounds (area.removeFromLeft (categoryListWidth));
+        // 오른쪽 표 높이는 유지하고, 왼쪽 열 위 2/3 는 카테고리, 맨 아래 한 줄은 검색에 쓴다
+        auto leftColumn = area.removeFromLeft (categoryListWidth);
+        const int categoryHeight = juce::jmax (0, juce::jmin (leftColumn.getHeight() * 2 / 3,
+                                                            leftColumn.getHeight() - rowHeight - middleGap));
+        categoryList.setBounds (leftColumn.withHeight (categoryHeight));
+        searchBox.setBounds (leftColumn.removeFromBottom (rowHeight));
+        categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);
         area.removeFromLeft (middleGap);
 
         namList.setBounds (area);
