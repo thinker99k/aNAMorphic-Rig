@@ -75,7 +75,7 @@ namespace rig
 
         std::array<juce::Rectangle<int>, RigModel::numScenes> sceneBounds;
         LeftClickOnly<juce::TextButton> liveButton { "Live" };
-        LeftClickOnly<juce::TextButton> copyButton { "Copy" }, swapButton { "Swap" }, sceneResetButton { "Scene\nReset" };
+        LeftClickOnly<juce::TextButton> copyButton { "Copy" }, swapButton { "Swap" }, sceneResetButton { "Scene\nReset..." };   // 큰 리셋: 말줄임표 (경고창이 뜬다)
 
         Mode mode = Mode::none;
         int sourceScene = -1;                   // 모드 중 고른 src (-1 = 아직)

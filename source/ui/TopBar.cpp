@@ -207,7 +207,8 @@ namespace rig
     {
         juce::PopupMenu menu;   // 씬 버튼 메뉴와 같은 모양 (머리글 없음)
         menu.addItem ("Rename", [this] { patchNameBox.showEditor(); });
-        menu.addItem ("Reset", [this] { resetPatchWithWarning(); });
+        menu.addSeparator();    // 큰 리셋: 구분선 아래 + 말줄임표 (경고창이 뜬다)
+        menu.addItem ("Patch Reset...", [this] { resetPatchWithWarning(); });
         showContextMenu (menu, click);
     }
 
