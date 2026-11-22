@@ -103,7 +103,7 @@
 
 ```
 ~/Documents/aNAMorphic-Rig/             (Windows: C:\Users\<user>\Documents\aNAMorphic-Rig)
-├── settings.json                       앱 전역 설정: 입력/출력 볼륨 (없거나 깨지면 0 dB 로 생성, 노브 드래그 끝/종료 시 저장)
+├── settings.json                       앱 전역 설정: 입력/출력 볼륨 dB, 소수 1자리 (없거나 깨지면 0 dB 로 생성, 노브 드래그 끝/종료 시 저장)
 ├── settings.json.bak                   깨진 settings.json 을 다시 만들 때 남기는 백업
 ├── audio-device.xml                    오디오 장치 설정 (처음 실행 시 기본 장치로 생성, Settings 에서 Save 하거나 종료할 때 저장). 채널은 항상 전부 열고, 쓸 채널은 패치가 정함
 ├── nam/                                *.nam 캡처를 여기에 넣으면 블록 선택기 NAM 목록에 표시
@@ -124,7 +124,8 @@
   "scenes": [ { "name": "Scene 1" }, ... 8개 ],
   "io": { "in": 0, "out": [0, 1] },
   "blocks": [
-    { "type": "nam", "file": "/home/<user>/Documents/aNAMorphic-Rig/nam/drive.nam", "on": [true, true, false, ...8개] },
+    { "type": "nam", "file": "/home/<user>/Documents/aNAMorphic-Rig/nam/drive.nam", "on": [true, true, false, ...8개],
+      "params": { "eqOn": [false, ...8개], "bassDb": [0.0, ...8개], "bassHz": [100, ...8개], ... } },
     { "type": "parallel",
       "branches": [
         { "on": [true, ...8개], "level": [-3.0, ...8개],
@@ -132,7 +133,8 @@
         { "on": [true, false, ...8개], "level": [-3.0, ...8개],
           "blocks": [ { "type": "nam", "file": ".../nam/lead.nam", "on": [true, ...8개] } ] }
       ] },
-    { "type": "ir",  "file": "/home/<user>/Documents/aNAMorphic-Rig/ir/cab.wav",  "on": [true, ...8개] }
+    { "type": "ir",  "file": "/home/<user>/Documents/aNAMorphic-Rig/ir/cab.wav",  "on": [true, ...8개],
+      "params": { "lowCutOn": [false, ...8개], "lowCutHz": [20, ...8개], "highCutOn": [false, ...8개], "highCutHz": [20000, ...8개] } }
   ]
 }
 ```
@@ -141,8 +143,28 @@
 - `type` : `nam` / `ir` / `none`(미지정 블록, 소리 그대로 통과) / `parallel`(병렬)
 - `file` : 절대 경로. 파일이 필요한 종류인데 경로가 비어 있으면 미지정 블록으로 읽음
 - `on` : 씬 1~8 에서 이 블록의 On/Off (Off = 바이패스)
+- `params` : NAM / IR 블록의 파라미터. 이름마다 씬 1~8 의 값. 스위치는 true / false, dB 는 소수 1자리, Hz 는 정수.
+  없거나 이상한 값은 기본값, 범위 밖은 범위 안으로
+  - NAM (블록 뒤 3밴드 EQ, 세 밴드 모두 peak)
+
+    | 이름 | 범위 | 기본 |
+    |---|---|---|
+    | `eqOn` | true / false | false |
+    | `bassDb` / `middleDb` / `trebleDb` | -18 ~ 18 dB | 0 |
+    | `bassHz` | 40 ~ 200 Hz | 100 |
+    | `middleHz` | 315 ~ 2000 Hz | 800 |
+    | `trebleHz` | 2500 ~ 10000 Hz | 4000 |
+
+  - IR (블록 뒤 LC / RC, 48 dB/oct)
+
+    | 이름 | 범위 | 기본 |
+    |---|---|---|
+    | `lowCutOn` / `highCutOn` | true / false | false |
+    | `lowCutHz` | 20 ~ 250 Hz | 20 |
+    | `highCutHz` | 2500 ~ 20000 Hz | 20000 |
+
 - `branches` : 병렬의 위 / 아래 두 갈래. 갈래 안에는 블록만 (병렬은 한 단계). 두 갈래는 합류에서 다시 합쳐짐
   - `on` : 씬 1~8 에서 이 갈래의 On/Off (Off = 그 갈래 무음)
-  - `level` : 씬 1~8 에서 이 갈래의 레벨 dB (-60 = -inf ~ 0, 기본 -3)
+  - `level` : 씬 1~8 에서 이 갈래의 레벨 dB, 소수 1자리 (-60 = -inf ~ 0, 기본 -3)
   - 갈래가 두 개가 아니면 병렬을 버리고, 블록이 없는 갈래가 있으면 남은 갈래의 블록만 본 줄에 둠
 - `io` : 장치 채널 번호(0부터). `in` 은 입력 채널 하나, `out` 은 스테레오 쌍 `[짝수, 짝수+1]` 또는 단일 `[n]`. 이상한 값이면 기본값(`in` 0, `out` [0, 1]). 지금 장치에 없는 번호는 그대로 두고 소리는 기본 채널로 내며, 패치 맵의 IN / OUT 노드에 빨간 빗금
