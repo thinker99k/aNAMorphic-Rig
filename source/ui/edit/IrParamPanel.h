@@ -20,7 +20,7 @@ namespace rig
     private:
         RigModel& model;
 
-        PowerButton lowCutPower, highCutPower;
+        SubPowerButton lowCutPower, highCutPower;   // 빨간 전원 (초록은 블록 켜기 전용)
         ParamKnob lowCut, highCut;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IrParamPanel)

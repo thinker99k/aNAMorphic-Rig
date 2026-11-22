@@ -227,17 +227,24 @@ namespace rig
         }
     };
 
-    // 전원 아이콘 토글 버튼 (블록 / 합류 갈래 / LC·RC 켜기): 켜짐 = 초록, 꺼짐 = 흐린 회색. 누르면 상태가 바뀐다
-    struct PowerButton final : public LeftClickOnly<juce::Button>
+    // 전원 아이콘 토글 버튼. 켜짐 = onColour, 꺼짐 = 흐린 회색. 누르면 상태가 바뀐다
+    //  - PowerButton    : 블록 켜고 끄기 전용 (초록, size)
+    //  - SubPowerButton : 블록 안 기능·합류 갈래 켜고 끄기 (빨강, 조금 작게)
+    struct PowerButton : public LeftClickOnly<juce::Button>
     {
-        PowerButton() : LeftClickOnly ("Power") { setClickingTogglesState (true); }
+        static constexpr int size = 50;   // 보이는 크기 (정사각형)
+
+        explicit PowerButton (juce::Colour on = juce::Colours::limegreen) : LeftClickOnly ("Power"), onColour (on)
+        {
+            setClickingTogglesState (true);
+        }
 
         void paintButton (juce::Graphics& g, bool highlighted, bool down) override
         {
             auto bounds = getLocalBounds().toFloat().reduced (1.5f);
             const bool on = getToggleState();
 
-            auto colour = on ? juce::Colours::limegreen : juce::Colours::grey.darker (0.3f);
+            auto colour = on ? onColour : juce::Colours::grey.darker (0.3f);
             if (! isEnabled())
                 colour = juce::Colours::grey.darker (0.8f);
             else if (down)
@@ -265,6 +272,16 @@ namespace rig
             g.setColour (colour);
             g.strokePath (path, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
+
+    private:
+        const juce::Colour onColour;
+    };
+
+    struct SubPowerButton final : public PowerButton
+    {
+        static constexpr int size = 40;   // 블록 전원(50)보다 조금 작게
+
+        SubPowerButton() : PowerButton (juce::Colours::red) {}
     };
 
     // 이름 편집용 Label. 편집 중에는 모달이 되어 바깥 클릭이 컴포넌트에 닿기 전에 편집을 끝내는데,

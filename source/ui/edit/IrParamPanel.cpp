@@ -59,9 +59,9 @@ namespace rig
 
     void IrParamPanel::resized()
     {
-        // [전원] 8 [노브 칸]  64  [전원] 8 [노브 칸] : 전원 버튼은 블록 전원과 같은 크기, 노브 칸은 NAM 노브와 같은 폭
+        // [전원] 8 [노브 칸]  64  [전원] 8 [노브 칸] : 전원은 빨간 SubPowerButton (합류 갈래와 같다), 노브 칸은 NAM 노브와 같은 폭
         auto area = getLocalBounds();
-        const int size = juce::jmin (powerSize, getHeight() - 8);
+        const int size = juce::jmin (SubPowerButton::size, getHeight() - 8);
 
         auto place = [&] (PowerButton& power, ParamKnob& knob)
         {

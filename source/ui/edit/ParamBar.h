@@ -15,7 +15,7 @@ namespace rig
 {
     // 패치 맵 아래: 선택된 블록 / 합류 / IN·OUT 의 파라미터.
     //   블록  : [ 블록 종류별 파라미터 패널 (ParamPanel) ...  (오류: 전원 왼쪽 위, 오른쪽 정렬)  (전원) ]
-    //   합류  : [ (전원) Upper     -3.0 dB   (전원) Lower     -3.0 dB          [Level Reset] ]   현재 씬의 값
+    //   합류  : [ (빨간 전원) Upper  -3.0 dB   (빨간 전원) Lower  -3.0 dB      [Level Reset] ]   현재 씬의 값
     //                   ━━━━━━●━━               ━━━━━━●━━
     //   IN    : [ Input channel  [1: ...    v]          (오류) ]   장치 입력 채널 하나
     //   OUT   : [ Output channel [1+2: ...  v]          (오류) ]   스테레오 쌍 먼저, 그다음 단일 채널
@@ -65,7 +65,7 @@ namespace rig
 
         // 합류: [0] = 위 갈래, [1] = 아래 갈래. faderLnf 는 슬라이더보다 먼저 선언 (멤버는 역순으로 소멸)
         FaderLookAndFeel faderLnf;
-        std::array<PowerButton, 2> branchPower;
+        std::array<SubPowerButton, 2> branchPower;
         std::array<juce::Label, 2> branchLabel, levelValue;
         std::array<LeftClickOnly<juce::Slider>, 2> levelSlider;
         LeftClickOnly<juce::TextButton> levelResetButton { "Level\nReset" };

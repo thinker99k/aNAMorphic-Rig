@@ -292,7 +292,8 @@ namespace rig
     {
         // 오른쪽 끝 = 전원 버튼. 나머지(왼쪽)는 블록 종류별 파라미터 패널
         auto area = getLocalBounds().reduced (12, 0);
-        const int size = juce::jmin (50, getHeight() - 8);   // 전원 버튼 50 px (예전 40 px 의 1.25 배)
+        const int size = juce::jmin (PowerButton::size, getHeight() - 8);   // 블록 전원 버튼
+        const int subSize = juce::jmin (SubPowerButton::size, getHeight() - 8);   // 합류 갈래 전원 버튼
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
 
         if (panel != nullptr)
@@ -315,16 +316,16 @@ namespace rig
         errorLabel.setBounds (area.withTrimmedRight (12).removeFromRight (messageWidth).withTop (powerButton.getY())
                                   .withHeight (messageLineHeight * lines));
 
-        // 합류 선택 시: [전원 50] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
+        // 합류 선택 시: [빨간 전원 40] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
         constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;
         auto merge = getLocalBounds().reduced (12, 0);
-        // Level Reset: 전원 버튼과 같은 높이, 좁게 (글자 "Level\nReset" 두 줄)
+        // Level Reset: 블록 전원 버튼과 같은 높이(50), 좁게 (글자 "Level\nReset" 두 줄)
         constexpr int resetWidth = 64;
         levelResetButton.setBounds (merge.removeFromRight (resetWidth).withSizeKeepingCentre (resetWidth, size));
 
         for (size_t b = 0; b < 2; ++b)
         {
-            branchPower[b].setBounds (merge.removeFromLeft (size).withSizeKeepingCentre (size, size));
+            branchPower[b].setBounds (merge.removeFromLeft (subSize).withSizeKeepingCentre (subSize, subSize));
             merge.removeFromLeft (8);
 
             auto column = merge.removeFromLeft (columnWidth).withSizeKeepingCentre (columnWidth, textHeight + sliderHeight);
