@@ -298,14 +298,19 @@ namespace rig
             else
                 deviceManager.closeAudioDevice();
 
-            showAlert (*this, "Could not open audio device", message, { { "OK", 0 } }, true);
+            showAlert (*this, "Could not open audio device", message, { { "OK", 0 } });
             return;
         }
 
+        // 장치는 이미 바뀌었으므로 쓰기에 실패해도 창은 닫고 경고만 (설정창은 메인 창 가운데라 경고도 같은 자리)
+        const auto file = paths::deviceSettingsFile();
+        bool written = true;
+
         if (auto xml = deviceManager.createStateXml())
-            xml->writeTo (paths::deviceSettingsFile());
+            written = xml->writeTo (file);
 
         close (true);
+        reportWriteResult (*this, written, file);
     }
 
     void SettingsDialog::close (bool saved)

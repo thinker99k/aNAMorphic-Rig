@@ -51,7 +51,8 @@ namespace rig
         root->setProperty ("outputGainDb", steps::roundTo (outputGainDb, steps::dbDecimals));
 
         // 소수 자릿수 0 = 필요한 만큼 (패치 파일과 같다)
-        paths::settingsFile().replaceWithText (juce::JSON::toString (juce::var (root.release()), false, 0));
+        // 실패는 알리지 않는다 (볼륨 값 두 개뿐, Live 중에 노브를 놓을 때 경고가 뜨지 않게. 종료 때 다시 저장)
+        paths::writeText (paths::settingsFile(), juce::JSON::toString (juce::var (root.release()), false, 0));
     }
 
     //==============================================================================
@@ -444,7 +445,11 @@ namespace rig
         root->setProperty ("blocks", blocks);
 
         // 소수 자릿수 0 = 필요한 만큼 (기본 15 자리면 -23.3 이 -23.300000000000001 로 써진다)
-        paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release()), false, 0));
+        const auto file = paths::patchFile (patchNumber);
+        const bool ok = paths::writeText (file, juce::JSON::toString (juce::var (root.release()), false, 0));
+
+        if (onPatchSaved)
+            onPatchSaved (ok, file);
     }
 
     void RigModel::setParam (juce::uint64 slotId, int index, float value, bool save)

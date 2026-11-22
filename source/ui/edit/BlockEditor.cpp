@@ -548,7 +548,7 @@ namespace rig
         showAlert (*this, "File not found",
                    file.getFullPathName() + "\n\nThe file may have been moved or deleted. "
                                             "It will disappear from the list after the library is refreshed.",
-                   { { "OK", 1 } }, false);
+                   { { "OK", 1 } });
     }
 
     // LookAndFeel_V3::drawTableHeaderBackground 와 같고, 마지막 열의 오른쪽 경계선만 뺐다

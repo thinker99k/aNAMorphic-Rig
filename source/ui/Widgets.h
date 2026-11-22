@@ -514,18 +514,40 @@ namespace rig
         juce::Component spacer;
     };
 
-    // 경고창을 프로그램 창 가운데에 모달로 띄운다. 버튼을 누르면 onResult (그 버튼의 값). escapeCloses = Esc 로 닫기(값 0)
+    // 경고창을 프로그램 창 가운데에 모달로 띄운다. 버튼으로만 닫힌다 (ESC, X 없음). 버튼을 누르면 onResult (그 버튼의 값)
     inline void showAlert (juce::Component& origin, const juce::String& title, const juce::String& message,
-                           const std::vector<std::pair<juce::String, int>>& buttons, bool escapeCloses,
+                           const std::vector<std::pair<juce::String, int>>& buttons,
                            std::function<void (int)> onResult = nullptr)
     {
         auto* alert = new LeftClickAlertWindow (title, message, origin.getTopLevelComponent(), buttons);
-        alert->setEscapeKeyCancels (escapeCloses);
+        alert->setEscapeKeyCancels (false);
         alert->enterModalState (true, juce::ModalCallbackFunction::create ([onResult] (int result)
         {
             if (onResult != nullptr)
                 onResult (result);
         }), true);
+    }
+
+    // 파일 쓰기 결과 알림 (패치 저장, 설정창 Save 의 audio-device.xml). 앱 전체에 상태 하나:
+    // 성공하다가 실패로 바뀔 때만 경고 한 번. 실패가 이어지는 동안은 다시 띄우지 않고, 쓰기가 성공하면 다음 실패에 또 띄운다.
+    // 시작·종료 때의 쓰기와 settings.json(볼륨)은 알리지 않는다
+    inline void reportWriteResult (juce::Component& origin, bool ok, const juce::File& file)
+    {
+        static bool failing = false;
+
+        if (ok)
+        {
+            failing = false;
+            return;
+        }
+
+        if (failing)
+            return;
+
+        failing = true;
+        showAlert (origin, "Could not save file",
+                   file.getFullPathName() + "\n\nCheck disk space and folder permissions. Changes may be lost.",
+                   { { "OK", 0 } });
     }
 
     // 초기화 경고: File not found 창과 같은 모양. [Reset] / [Cancel] 버튼으로만 닫힌다 (ESC, X 없음).
@@ -539,7 +561,7 @@ namespace rig
     inline void showResetWarning (juce::Component& origin, const juce::String& title, const juce::String& message,
                                   std::function<void()> onReset)
     {
-        showAlert (origin, title, message, { { "Reset", 1 }, { "Cancel", 0 } }, false, [onReset] (int result)
+        showAlert (origin, title, message, { { "Reset", 1 }, { "Cancel", 0 } }, [onReset] (int result)
         {
             if (result == 1 && onReset != nullptr)
                 onReset();
