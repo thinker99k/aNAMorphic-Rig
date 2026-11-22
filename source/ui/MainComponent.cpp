@@ -42,6 +42,7 @@ namespace rig
             topBar.setPatchName (model.getPatchName());
         };
         topBar.onSettingsClicked = [this] { openSettings(); };
+        topBar.onTunerClicked = [this] { openTuner(); };
 
         statusBar.inputKnob.onValueChanged  = [this] (float db) { model.setInputGainDb (db); };
         statusBar.outputKnob.onValueChanged = [this] (float db)
@@ -161,5 +162,37 @@ namespace rig
 
         editView.setVisible (! live);
         liveView.setVisible (live);
+    }
+
+    void MainComponent::openTuner()
+    {
+        // 튜너가 열려 있는 동안 출력을 끈다 (3-3절). 닫으면 열기 전 뮤트 상태로 되돌린다
+        const bool wasMuted = model.isOutputMuted();
+
+        if (TunerDialog::mutesOutput)
+            setOutputMuted (true);
+
+        topBar.setTunerActive (true);
+
+        juce::Component::SafePointer<MainComponent> safeThis (this);
+
+        TunerDialog::show (deviceManager, model.getRouting().input, this, [safeThis, wasMuted]
+        {
+            if (safeThis == nullptr)
+                return;
+
+            safeThis->topBar.setTunerActive (false);
+
+            if (TunerDialog::mutesOutput)
+                safeThis->setOutputMuted (wasMuted);
+        });
+    }
+
+    void MainComponent::setOutputMuted (bool muted)
+    {
+        model.setOutputMuted (muted);
+        statusBar.outputKnob.setValueDb (model.isOutputMuted() ? AudioEngine::outputMinDb
+                                                               : model.getOutputGainDb());
+        updateMuteButton();
     }
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/Widgets.h"
+#include "tuner/TunerButton.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -8,7 +9,7 @@
 
 namespace rig
 {
-    // 상단 바: [Patch 콤보박스] [이전] [다음]     [Undo] [Redo] [패치 이름]     [Settings 버튼]
+    // 상단 바: [Patch 콤보박스] [이전] [다음]     [Undo] [Redo] [패치 이름]     [Tuner] [Settings 버튼]
     //  - Undo / Redo: 되돌릴 것이 없으면 비활성 (상태는 setUndoRedoEnabled 로 받는다)
     //  - 패치 이름 오른쪽 클릭: Rename / Reset 메뉴 (씬 버튼과 같은 방식, 머리글 없음). 왼쪽 클릭과 더블클릭은 동작 없음
     //      Rename : 그 자리에서 편집 (글자 위치는 평소 표시와 같다). 입력칸 오른쪽 끝에 정사각형 체크 버튼.
@@ -27,6 +28,8 @@ namespace rig
         std::function<void()> onPatchReset;
         std::function<void()> onSettingsClicked;
         std::function<void()> onUndo, onRedo;
+        std::function<void()> onTunerClicked;
+        void setTunerActive (bool active) { tunerButton.setActive (active); }   // 튜너 대화상자가 열려 있는 동안 true
 
         void setUndoRedoEnabled (bool canUndo, bool canRedo);
 
@@ -50,6 +53,7 @@ namespace rig
         LeftClickOnly<juce::TextButton> settingsButton { "Settings..." };
         LeftClickOnly<juce::DrawableButton> undoButton { "Undo", juce::DrawableButton::ImageOnButtonBackground };
         LeftClickOnly<juce::DrawableButton> redoButton { "Redo", juce::DrawableButton::ImageOnButtonBackground };
+        TunerButton tunerButton;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TopBar)
     };

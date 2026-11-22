@@ -6,6 +6,7 @@
 #include "ui/live/LiveView.h"
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
+#include "tuner/TunerDialog.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -50,6 +51,8 @@ namespace rig
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
         void updateUndoButtons();  // 되돌릴 것 / 다시 할 것이 있을 때만 TopBar 의 Undo / Redo 활성
         void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태
+        void openTuner();          // 튜너 모달. 열려 있는 동안 출력 뮤트 (TunerDialog::mutesOutput)
+        void setOutputMuted (bool muted);   // 뮤트 + 출력 노브 / MUTE 버튼 표시 (MUTE 버튼 클릭과 같은 처리)
 
         juce::AudioDeviceManager& deviceManager;
         AudioEngine& engine;

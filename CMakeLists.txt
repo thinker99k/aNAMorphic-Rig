@@ -149,7 +149,11 @@ target_sources(aNAMorphic-Rig PRIVATE
 
 target_sources(aNAMorphic-Rig PRIVATE
         source/tuner/PitchDetector.cpp
-        source/tuner/TunerSettings.cpp)
+        source/tuner/TunerSettings.cpp
+        source/tuner/TunerInput.cpp
+        source/tuner/TunerGauge.cpp
+        source/tuner/TunerDialog.cpp
+        source/tuner/TunerButton.cpp)
 
 target_include_directories(aNAMorphic-Rig PRIVATE source)
 
