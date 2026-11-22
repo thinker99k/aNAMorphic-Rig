@@ -13,7 +13,11 @@ namespace rig
     {
         const char* key;   // 패치 파일의 이름
         float minValue, maxValue, defaultValue;
+        int decimals = 0;  // 값 단위 (steps::dbDecimals / hzDecimals). 노브 조작과 저장 모두
         bool isSwitch = false;
+
+        // 범위 안으로 자르고 단위로 반올림 (스위치는 0 / 1)
+        double constrain (double value) const;
     };
 
     // 블록 하나의 지금 씬 파라미터 값 (DSP 의 처리 단계가 읽는다).

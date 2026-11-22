@@ -1,10 +1,20 @@
 #include "BlockParams.h"
 
+#include "ValueSteps.h"
+
 #include "engine/param/ir/IrParams.h"
 #include "engine/param/nam/NamParams.h"
 
 namespace rig
 {
+    double ParamSpec::constrain (double value) const
+    {
+        if (isSwitch)
+            return value >= 0.5 ? 1.0 : 0.0;
+
+        return steps::roundTo (juce::jlimit ((double) minValue, (double) maxValue, value), decimals);
+    }
+
     BlockParams::BlockParams (BlockType type) : values (specs (type).size())
     {
         const auto& s = specs (type);

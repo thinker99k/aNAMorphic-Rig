@@ -1,5 +1,7 @@
 #include "ParamKnob.h"
 
+#include "ValueSteps.h"
+
 #include <cmath>
 
 namespace rig
@@ -22,11 +24,11 @@ namespace rig
                 minValue, maxValue,
                 [ratio] (double start, double, double t) { return start * std::pow (ratio, t); },
                 [ratio] (double start, double, double v) { return juce::jlimit (0.0, 1.0, std::log (v / start) / std::log (ratio)); },
-                [] (double start, double end, double v) { return juce::jlimit (start, end, v); }));
+                [] (double start, double end, double v) { return juce::jlimit (start, end, steps::roundTo (v, steps::hzDecimals)); }));   // 1 Hz 단위
         }
         else
         {
-            slider.setRange (minValue, maxValue, 0.1);   // 선형
+            slider.setRange (minValue, maxValue, std::pow (10.0, -steps::dbDecimals));   // 선형, 0.1 dB 단위
         }
 
         // 12시 기준 좌우 135도씩 (볼륨 노브와 같다)

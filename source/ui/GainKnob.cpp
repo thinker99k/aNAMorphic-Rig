@@ -1,5 +1,7 @@
 #include "GainKnob.h"
 
+#include "ValueSteps.h"
+
 #include <cmath>
 
 namespace rig
@@ -36,7 +38,7 @@ namespace rig
                 },
                 [] (double start, double end, double db)            // 0.1 dB 단위
                 {
-                    return juce::jlimit (start, end, std::round (db * 10.0) / 10.0);
+                    return juce::jlimit (start, end, steps::roundTo (db, steps::dbDecimals));
                 });
             slider.setNormalisableRange (range);
         }
@@ -44,7 +46,7 @@ namespace rig
         {
             // 입력: 범위를 정한 뒤에 skew 를 불러야 한다.
             // 대칭 범위라 skew 1 = 선형, 12시 = 0 dB
-            slider.setRange (min, max, 0.1);
+            slider.setRange (min, max, std::pow (10.0, -steps::dbDecimals));   // 0.1 dB 단위
             slider.setSkewFactorFromMidPoint (0.0);
         }
 

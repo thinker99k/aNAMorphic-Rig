@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/param/common/BlockParams.h"
+#include "ValueSteps.h"
 
 #include <vector>
 
@@ -27,13 +28,13 @@ namespace rig
         static const std::vector<ParamSpec>& specs()
         {
             static const std::vector<ParamSpec> s {
-                { "eqOn",     0.0f, 1.0f, 0.0f, true },
-                { "bassDb",   (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb },
-                { "bassHz",   (float) bassMinHz,   (float) bassMaxHz,   (float) bassDefaultHz },
-                { "middleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb },
-                { "middleHz", (float) middleMinHz, (float) middleMaxHz, (float) middleDefaultHz },
-                { "trebleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb },
-                { "trebleHz", (float) trebleMinHz, (float) trebleMaxHz, (float) trebleDefaultHz } };
+                { "eqOn",     0.0f, 1.0f, 0.0f, 0, true },
+                { "bassDb",   (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },
+                { "bassHz",   (float) bassMinHz,   (float) bassMaxHz,   (float) bassDefaultHz,   steps::hzDecimals },
+                { "middleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },
+                { "middleHz", (float) middleMinHz, (float) middleMaxHz, (float) middleDefaultHz, steps::hzDecimals },
+                { "trebleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },
+                { "trebleHz", (float) trebleMinHz, (float) trebleMaxHz, (float) trebleDefaultHz, steps::hzDecimals } };
             return s;
         }
     };

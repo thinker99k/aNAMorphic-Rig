@@ -1,6 +1,7 @@
 #include "RigModel.h"
 
 #include "AppPaths.h"
+#include "ValueSteps.h"
 #include "engine/BlockFactory.h"
 
 namespace rig
@@ -46,10 +47,11 @@ namespace rig
     {
         auto root = std::make_unique<juce::DynamicObject>();
         root->setProperty ("version", 1);
-        root->setProperty ("inputGainDb", inputGainDb);
-        root->setProperty ("outputGainDb", outputGainDb);
+        root->setProperty ("inputGainDb", steps::roundTo (inputGainDb, steps::dbDecimals));    // float 꼬리 없이
+        root->setProperty ("outputGainDb", steps::roundTo (outputGainDb, steps::dbDecimals));
 
-        paths::settingsFile().replaceWithText (juce::JSON::toString (juce::var (root.release())));
+        // 소수 자릿수 0 = 필요한 만큼 (패치 파일과 같다)
+        paths::settingsFile().replaceWithText (juce::JSON::toString (juce::var (root.release()), false, 0));
     }
 
     //==============================================================================
@@ -329,8 +331,7 @@ namespace rig
                 const auto v = values != nullptr ? (*values)[(int) i] : juce::var();
 
                 if (spec.isSwitch ? v.isBool() : (v.isDouble() || v.isInt()))
-                    slot.paramValues[i][k] = spec.isSwitch ? ((bool) v ? 1.0f : 0.0f)
-                                                           : juce::jlimit (spec.minValue, spec.maxValue, (float) v);
+                    slot.paramValues[i][k] = (float) spec.constrain (spec.isSwitch ? ((bool) v ? 1.0 : 0.0) : (double) v);
             }
         }
 
@@ -358,7 +359,8 @@ namespace rig
                 juce::Array<juce::var> values;
 
                 for (const auto& scene : slot.paramValues)
-                    values.add (specs[k].isSwitch ? juce::var (scene[k] >= 0.5f) : juce::var ((double) scene[k]));
+                    values.add (specs[k].isSwitch ? juce::var (scene[k] >= 0.5f)
+                                                  : juce::var (specs[k].constrain (scene[k])));   // float 꼬리 없이
 
                 params->setProperty (specs[k].key, values);
             }
@@ -380,7 +382,7 @@ namespace rig
             for (int i = 0; i < numScenes; ++i)
             {
                 on.add (parallel.branchOn[k][(size_t) i]);
-                level.add (std::round ((double) parallel.levelDb[k][(size_t) i] * 10.0) / 10.0);   // 0.1 dB 단위 (float 꼬리 없이)
+                level.add (steps::roundTo (parallel.levelDb[k][(size_t) i], steps::dbDecimals));   // 0.1 dB 단위 (float 꼬리 없이)
             }
 
             for (const auto& slot : parallel.branches[k])
@@ -448,9 +450,7 @@ namespace rig
         if (slot == nullptr || ! juce::isPositiveAndBelow (index, (int) specs.size()))
             return;
 
-        const auto& spec = specs[(size_t) index];
-        slot->paramValues[(size_t) currentScene][(size_t) index] = spec.isSwitch ? (value >= 0.5f ? 1.0f : 0.0f)
-                                                                                 : juce::jlimit (spec.minValue, spec.maxValue, value);
+        slot->paramValues[(size_t) currentScene][(size_t) index] = (float) specs[(size_t) index].constrain (value);
         applyParams (*slot);   // 소리는 바로 따라간다 (DSP 가 20 ms 스무딩)
 
         if (save)

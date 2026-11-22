@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/param/common/BlockParams.h"
+#include "ValueSteps.h"
 
 #include <vector>
 
@@ -21,10 +22,10 @@ namespace rig
         static const std::vector<ParamSpec>& specs()
         {
             static const std::vector<ParamSpec> s {
-                { "lowCutOn",  0.0f, 1.0f, 0.0f, true },
-                { "lowCutHz",  (float) lowCutMinHz,  (float) lowCutMaxHz,  (float) lowCutDefaultHz },
-                { "highCutOn", 0.0f, 1.0f, 0.0f, true },
-                { "highCutHz", (float) highCutMinHz, (float) highCutMaxHz, (float) highCutDefaultHz } };
+                { "lowCutOn",  0.0f, 1.0f, 0.0f, 0, true },
+                { "lowCutHz",  (float) lowCutMinHz,  (float) lowCutMaxHz,  (float) lowCutDefaultHz,  steps::hzDecimals },
+                { "highCutOn", 0.0f, 1.0f, 0.0f, 0, true },
+                { "highCutHz", (float) highCutMinHz, (float) highCutMaxHz, (float) highCutDefaultHz, steps::hzDecimals } };
             return s;
         }
     };

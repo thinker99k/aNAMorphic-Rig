@@ -1,5 +1,7 @@
 #include "ParamBar.h"
 
+#include "ValueSteps.h"
+
 namespace rig
 {
     namespace
@@ -25,7 +27,7 @@ namespace rig
                      },
                      [] (double start, double end, double db)       // 0.1 dB 단위
                      {
-                         return juce::jlimit (start, end, std::round (db * 10.0) / 10.0);
+                         return juce::jlimit (start, end, steps::roundTo (db, steps::dbDecimals));
                      } };
         }
 
