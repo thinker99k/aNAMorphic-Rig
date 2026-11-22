@@ -9,6 +9,17 @@ namespace rig
     {
         juce::String patternFor (BlockType t) { return t == BlockType::Nam ? "*.nam" : "*.wav"; }
         juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::namDir() : paths::irDir(); }
+
+        // 검색어의 단어마다 어느 한 열에라도 들어 있으면 true (대소문자 무시). 단어가 없으면 true
+        template <typename TextOf>
+        bool matchesSearch (const juce::StringArray& words, const juce::Array<int>& columnIds, TextOf textOf)
+        {
+            return std::all_of (words.begin(), words.end(), [&] (const juce::String& word)
+            {
+                return std::any_of (columnIds.begin(), columnIds.end(),
+                                    [&] (int id) { return textOf (id).containsIgnoreCase (word); });
+            });
+        }
     }
 
     BlockEditor::BlockEditor (RigModel& m) : model (m)
@@ -34,7 +45,7 @@ namespace rig
             list->setHeader (std::make_unique<LeftClickOnly<juce::TableHeaderComponent>>());
             list->getHeader().setStretchToFitActive (true);
             list->getHeader().setLookAndFeel (&headerLookAndFeel);
-            list->setRowHeight (24);
+            list->setRowHeight (rowHeight);
             list->setOutlineThickness (1);
         }
 
@@ -59,6 +70,19 @@ namespace rig
         builtInList.setModel (&builtInListModel);
         addChildComponent (builtInList);
 
+        searchBox.setMultiLine (false);
+        searchBox.setFont (juce::FontOptions (rowFontSize));
+        searchBox.setTextToShowWhenEmpty ("Search", findColour (juce::TextEditor::textColourId).withAlpha (0.5f));
+        searchBox.setPopupMenuEnabled (false);
+        searchBox.onTextChange = [this]
+        {
+            searchWords = juce::StringArray::fromTokens (searchBox.getText(), false);
+            searchWords.removeEmptyStrings();
+            applyFilter (currentHighlight());
+        };
+        searchBox.onEscapeKey = [this] { searchBox.setText ({}, true); };
+        addAndMakeVisible (searchBox);
+
         // 더블클릭(왼쪽)해야 블록에 지정된다
         fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
 
@@ -76,18 +100,15 @@ namespace rig
         };
         builtInRowMouse.dragDescription = [this] (int row)
         {
-            const auto& builtIns = shownCategory().builtIns;
-            return juce::isPositiveAndBelow (row, (int) builtIns.size()) ? block::libraryDrag (builtIns[(size_t) row].type, {})
-                                                                        : juce::var();
+            return juce::isPositiveAndBelow (row, (int) builtInRows.size()) ? block::libraryDrag (builtInRows[(size_t) row].type, {})
+                                                                           : juce::var();
         };
-        builtInRowMouse.dragImage = [this] (int row) { return block::createImage (shownCategory().builtIns[(size_t) row].type, {}); };
+        builtInRowMouse.dragImage = [this] (int row) { return block::createImage (builtInRows[(size_t) row].type, {}); };
 
         builtInRowMouse.onDoubleClick = [this] (int row)
         {
-            const auto& builtIns = shownCategory().builtIns;
-
-            if (model.getSelectedSlot() != nullptr && juce::isPositiveAndBelow (row, (int) builtIns.size()))
-                model.assignBlock (model.getSelectedSlotId(), builtIns[(size_t) row].type, {});
+            if (model.getSelectedSlot() != nullptr && juce::isPositiveAndBelow (row, (int) builtInRows.size()))
+                model.assignBlock (model.getSelectedSlotId(), builtInRows[(size_t) row].type, {});
         };
 
         model.addChangeListener (this);
@@ -192,14 +213,11 @@ namespace rig
         // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 을 고른 동안만 비활성
         const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none;
 
-        for (auto* c : std::initializer_list<juce::Component*> { &namList, &irList, &builtInList })
+        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox })
         {
             c->setEnabled (enabled);
             c->setAlpha (enabled ? 1.0f : 0.4f);
         }
-
-        categoryList.setEnabled (enabled);
-        categoryList.setAlpha (enabled ? 1.0f : 0.4f);
 
         // 고른 블록이 없으면 둘러보던 탭과 강조를 그대로 둔다
         if (slot == nullptr)
@@ -229,9 +247,20 @@ namespace rig
         const auto* slot = model.getSelectedSlot();
         const auto& category = shownCategory();
         const bool slotInCategory = slot != nullptr && categoryFor (slot->type) == shownCategoryIndex;
+        auto highlight = resetHighlight ? Highlight {} : currentHighlight();
+
+        if (resetHighlight && slotInCategory)
+        {
+            if (category.usesFiles)
+                highlight.file = slot->file;
+            else
+                highlight.builtIn = slot->type;
+        }
 
         if (categoryList.getSelectedRow() != shownCategoryIndex)
             categoryList.selectRow (shownCategoryIndex);
+
+        categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);
 
         namList.setVisible (category.usesFiles && category.fileType == BlockType::Nam);
         irList.setVisible (category.usesFiles && category.fileType == BlockType::Ir);
@@ -239,58 +268,120 @@ namespace rig
 
         if (! category.usesFiles)
         {
-            builtInList.updateContent();
-
-            if (resetHighlight)
-            {
-                builtInList.deselectAllRows();
-
-                for (size_t i = 0; i < category.builtIns.size(); ++i)
-                    if (slotInCategory && category.builtIns[i].type == slot->type)
-                        builtInList.selectRow ((int) i);
-            }
-
-            builtInList.repaint();
+            allRows.clear();
+            applyFilter (highlight);
             return;
         }
 
         const bool isNam = category.fileType == BlockType::Nam;
 
         // 파일 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일
-        rows = isNam ? namEntries : irEntries;
+        allRows = isNam ? namEntries : irEntries;
 
-        const auto findRow = [this] (const juce::File& f)
-        {
-            for (size_t i = 0; i < rows.size(); ++i)
-                if (rows[i].file == f)
-                    return (int) i;
-
-            return -1;
-        };
-
-        if (slotInCategory && findRow (slot->file) < 0)
+        if (slotInCategory && std::none_of (allRows.begin(), allRows.end(), [slot] (const Entry& entry) { return entry.file == slot->file; }))
         {
             if (outsideEntry.file != slot->file)
                 outsideEntry = makeEntry (slot->file, isNam);
 
-            rows.push_back (outsideEntry);
+            allRows.push_back (outsideEntry);
         }
 
         sortRows();
-        auto& list = activeList();
+        applyFilter (highlight);
+    }
+
+    BlockEditor::Highlight BlockEditor::currentHighlight()
+    {
+        Highlight highlight;
+
+        if (shownCategory().usesFiles)
+        {
+            const int selected = activeList().getSelectedRow();
+            if (juce::isPositiveAndBelow (selected, (int) rows.size()))
+                highlight.file = rows[(size_t) selected].file;
+        }
+        else
+        {
+            const int selected = builtInList.getSelectedRow();
+            if (juce::isPositiveAndBelow (selected, (int) builtInRows.size()))
+                highlight.builtIn = builtInRows[(size_t) selected].type;
+        }
+
+        return highlight;
+    }
+
+    void BlockEditor::restoreHighlight (const Highlight& highlight)
+    {
+        const bool usesFiles = shownCategory().usesFiles;
+        auto& list = usesFiles ? activeList() : builtInList;
+        int selected = -1;
+
+        if (usesFiles && highlight.file != juce::File())
+        {
+            for (size_t i = 0; i < rows.size(); ++i)
+                if (rows[i].file == highlight.file)
+                {
+                    selected = (int) i;
+                    break;
+                }
+        }
+        else if (! usesFiles && highlight.builtIn.has_value())
+        {
+            for (size_t i = 0; i < builtInRows.size(); ++i)
+                if (builtInRows[i].type == *highlight.builtIn)
+                {
+                    selected = (int) i;
+                    break;
+                }
+        }
+
+        if (selected >= 0)
+            list.selectRow (selected);
+        else
+            list.deselectAllRows();
+    }
+
+    // 타이핑할 때는 정렬된 메모리 목록만 거른다. 폴더/메타데이터 읽기와 모델 변경은 이 경로에 넣지 않는다
+    void BlockEditor::applyFilter (const Highlight& highlight)
+    {
+        if (updatesPaused)
+            return;
+
+        const auto& category = shownCategory();
+        auto& list = category.usesFiles ? activeList() : builtInList;
+
+        // 검색 대상 = 이 표의 열 전부 (숨긴 열 포함, 열을 추가하면 자동으로 포함)
+        const auto& header = list.getHeader();
+        juce::Array<int> columnIds;
+
+        for (int i = 0; i < header.getNumColumns (false); ++i)
+            columnIds.add (header.getColumnIdOfIndex (i, false));
+
+        rows.clear();
+        builtInRows.clear();
+
+        if (category.usesFiles)
+        {
+            rows.reserve (allRows.size());
+
+            for (const auto& entry : allRows)
+                if (matchesSearch (searchWords, columnIds, [&entry] (int id) -> const juce::String& { return entry.get (id); }))
+                    rows.push_back (entry);
+        }
+        else
+        {
+            builtInRows.reserve (category.builtIns.size());
+
+            for (const auto& builtIn : category.builtIns)
+                if (matchesSearch (searchWords, columnIds, [&builtIn] (int) -> const juce::String& { return builtIn.name; }))
+                    builtInRows.push_back (builtIn);
+        }
+
         list.updateContent();
 
-        // 행 수가 바뀌면 세로 스크롤바가 생기거나 사라지는데, JUCE 는 열 폭을 resized() 에서만 맞춘다.
-        // 그대로 두면 머리글 오른쪽에 스크롤바 폭만큼 빈 열이 남으므로 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
+        // 행 수에 따라 스크롤바가 바뀌므로 열 폭을 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
         list.resized();
-
-        if (resetHighlight)
-        {
-            list.deselectAllRows();
-            const int current = slotInCategory ? findRow (slot->file) : -1;
-            if (current >= 0)
-                list.selectRow (current);
-        }
+        restoreHighlight (highlight);
 
         list.repaint();
     }
@@ -325,7 +416,7 @@ namespace rig
 
     int BlockEditor::BuiltInListModel::getNumRows()
     {
-        return (int) owner.shownCategory().builtIns.size();
+        return (int) owner.builtInRows.size();
     }
 
     int BlockEditor::CategoryListModel::getNumRows()
@@ -367,10 +458,8 @@ namespace rig
 
     void BlockEditor::BuiltInListModel::paintCell (juce::Graphics& g, int row, int, int width, int height, bool selected)
     {
-        const auto& builtIns = owner.shownCategory().builtIns;
-
-        if (juce::isPositiveAndBelow (row, (int) builtIns.size()))
-            owner.paintRowText (g, builtIns[(size_t) row].name, width, height, selected);
+        if (juce::isPositiveAndBelow (row, (int) owner.builtInRows.size()))
+            owner.paintRowText (g, owner.builtInRows[(size_t) row].name, width, height, selected);
     }
 
     void BlockEditor::paintCell (juce::Graphics& g, int row, int columnId, int width, int height, bool selected)
@@ -418,19 +507,13 @@ namespace rig
 
     void BlockEditor::sortOrderChanged (int, bool)
     {
+        if (updatesPaused || ! shownCategory().usesFiles)
+            return;
+
         // 정렬 상태는 보이는 표의 머리글에 있다. 정렬 후에도 같은 파일을 강조
-        auto& list = activeList();
-        const int selected = list.getSelectedRow();
-        const auto selectedFile = juce::isPositiveAndBelow (selected, (int) rows.size()) ? rows[(size_t) selected].file
-                                                                                          : juce::File();
+        const auto highlight = currentHighlight();
         sortRows();
-        list.updateContent();
-
-        for (size_t i = 0; i < rows.size(); ++i)
-            if (selectedFile != juce::File() && rows[i].file == selectedFile)
-                list.selectRow ((int) i);
-
-        list.repaint();
+        applyFilter (highlight);
     }
 
     // 캐시된 목록만 정렬한다 (디스크 읽기 없음).
@@ -441,7 +524,7 @@ namespace rig
         const int column = header.getSortColumnId();
         const bool forwards = header.isSortedForwards();
 
-        std::stable_sort (rows.begin(), rows.end(), [column, forwards] (const Entry& a, const Entry& b)
+        std::stable_sort (allRows.begin(), allRows.end(), [column, forwards] (const Entry& a, const Entry& b)
         {
             const auto& keyA = a.get (column);
             const auto& keyB = b.get (column);
@@ -502,8 +585,13 @@ namespace rig
         constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 카테고리 목록 열은 고정 폭, 높이는 남은 영역 전체 (넘치면 스크롤)
-        categoryList.setBounds (area.removeFromLeft (categoryListWidth));
+        // 오른쪽 표 높이는 유지하고, 왼쪽 열 위 2/3 는 카테고리, 맨 아래 한 줄은 검색에 쓴다
+        auto leftColumn = area.removeFromLeft (categoryListWidth);
+        const int categoryHeight = juce::jmax (0, juce::jmin (leftColumn.getHeight() * 2 / 3,
+                                                            leftColumn.getHeight() - rowHeight - middleGap));
+        categoryList.setBounds (leftColumn.withHeight (categoryHeight));
+        searchBox.setBounds (leftColumn.removeFromBottom (rowHeight));
+        categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);
         area.removeFromLeft (middleGap);
 
         namList.setBounds (area);
