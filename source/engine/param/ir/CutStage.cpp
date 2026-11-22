@@ -50,17 +50,8 @@ namespace rig
     {
         const double target = on ? 1.0 : 0.0;
 
-        if (s.mix <= 0.0 && target <= 0.0)
-            return;   // 꺼져 있음: 신호를 건드리지 않는다
-
-        if (s.mix <= 0.0)
-        {
-            // 0 에서 켜지기 시작: 옛 필터 상태와 옛 값을 버리고 지금 값에서 시작
-            for (auto& b : s.stages)
-                b.reset();
-            s.hz.setCurrentAndTargetValue (targetHz);
-        }
-
+        // 꺼져 있어도 필터는 계속 계산한다 (출력에는 섞지 않음): 낮은 L. Cut 은 상태가 채워지는 데 전환 시간보다 오래 걸려
+        // (25 Hz 약 115 ms), 멈췄다 켜면 저음 쪽이 틀어질 수 있다. 비용은 2차 필터 몇 개라 작다
         // 값은 구간 단위로 따라가고 계수는 구간마다 한 번 계산한다 (모든 단이 같은 주파수, Q 만 다름)
         s.hz.setTargetValue (targetHz);
         const double hz = s.hz.skip (n);

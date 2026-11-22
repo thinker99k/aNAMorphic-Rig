@@ -29,7 +29,7 @@ namespace rig
             bool highPass = false;   // LC = high-pass, RC = low-pass
             std::array<Biquad, numStages> stages;
             juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> hz;   // 주파수는 로그로 따라간다
-            double mix = 0.0;        // 0 = 건너뜀, 1 = 필터 소리
+            double mix = 0.0;        // 0 = 필터 전 소리, 1 = 필터 소리 (필터는 꺼져 있어도 계속 계산)
         };
 
         void processSection (Section&, bool on, double targetHz, float* io, int n) noexcept;
