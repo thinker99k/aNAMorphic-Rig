@@ -34,8 +34,8 @@ namespace rig
         // 영역 묶음: [세기][주파수]
         auto group = [this] (ParamGroup& g, ParamKnob& gain, ParamKnob& freq)
         {
-            g.addItem (gain, ParamKnob::width, 0);
-            g.addItem (freq, ParamKnob::width, ParamGroup::knobGap);
+            g.addItem (gain, gain.getIdealWidth(), 0);
+            g.addItem (freq, freq.getIdealWidth(), ParamGroup::knobGap);
             addAndMakeVisible (g);
         };
 

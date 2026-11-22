@@ -50,9 +50,29 @@ namespace rig
         };
         slider.onDragEnd = [this] { if (onDragEnded) onDragEnded(); };
 
+        const juce::Font nameFont { juce::FontOptions (textSize, juce::Font::bold) }, valueFont { juce::FontOptions (textSize) };
         nameLabel.setText (name, juce::dontSendNotification);
-        nameLabel.setFont (juce::FontOptions (textSize, juce::Font::bold));
-        valueLabel.setFont (juce::FontOptions (textSize));
+        nameLabel.setFont (nameFont);
+        valueLabel.setFont (valueFont);
+
+        // 글자 칸 폭: 이름, 양 끝 값, 범위 안에서 가장 긴 모양의 값 (숫자 폭은 글꼴마다 같으므로 8 로 잰다)
+        juce::StringArray values { toText (minValue), toText (maxValue) };
+
+        if (type == ValueType::HzLog)
+        {
+            if (minValue < 1000.0 && maxValue >= 100.0)    values.add ("888 Hz");
+            if (maxValue >= 1000.0 && minValue < 10000.0)  values.add ("8.888 kHz");
+        }
+
+        auto widthOf = [] (const juce::Font& font, const juce::String& text)
+        {
+            return (int) std::ceil (juce::GlyphArrangement::getStringWidth (font, text)) + 1;
+        };
+
+        textWidth = widthOf (nameFont, name);
+
+        for (const auto& v : values)
+            textWidth = juce::jmax (textWidth, widthOf (valueFont, v));
         valueLabel.setColour (juce::Label::textColourId, juce::Colours::white);
 
         for (auto* label : { &nameLabel, &valueLabel })

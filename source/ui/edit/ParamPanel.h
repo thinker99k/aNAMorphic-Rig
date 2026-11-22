@@ -16,7 +16,7 @@ namespace rig
     class ParamGroup final : public juce::Component
     {
     public:
-        static constexpr int knobGap = 4;      // 노브 사이
+        static constexpr int knobGap = 8;      // 노브 사이 (노브 폭은 글자에 딱 맞으므로 이만큼이 실제로 보이는 간격)
         static constexpr int powerGap = 8;     // 전원 버튼과 노브 사이 (합류 화면과 같다)
 
         // gapBefore = 앞 항목과의 간격 (첫 항목은 무시). height 0 = 묶음 높이 전체 (노브는 스스로 세로 가운데)
@@ -60,7 +60,7 @@ namespace rig
 
     protected:
         static constexpr int groupMargin = 6;   // 묶음 위아래 여백 (파라미터 바 높이 83 이면 묶음 71)
-        static constexpr int groupGap = 32;     // 묶음 사이
+        static constexpr int groupGap = 64;     // 묶음 사이 (합류 화면의 갈래 사이와 같다)
 
         // 묶음들을 왼쪽부터 놓는다
         void layoutGroups (std::initializer_list<ParamGroup*> groups)

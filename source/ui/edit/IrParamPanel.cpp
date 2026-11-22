@@ -37,7 +37,7 @@ namespace rig
         auto group = [this] (ParamGroup& g, SubPowerButton& power, ParamKnob& knob)
         {
             g.addItem (power, SubPowerButton::size, 0, SubPowerButton::size);
-            g.addItem (knob, ParamKnob::width, ParamGroup::powerGap);
+            g.addItem (knob, knob.getIdealWidth(), ParamGroup::powerGap);
             addAndMakeVisible (g);
         };
 
