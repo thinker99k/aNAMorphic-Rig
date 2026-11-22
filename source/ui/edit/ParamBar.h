@@ -14,8 +14,8 @@
 namespace rig
 {
     // 패치 맵 아래: 선택된 블록 / 합류 / IN·OUT 의 파라미터.
-    //   블록  : [ 블록 종류별 파라미터 패널 (ParamPanel) ...                       [Param Reset] (전원) ]   현재 씬의 값
-    //   합류  : [ (빨간 전원) Upper  -3.0 dB   (빨간 전원) Lower  -3.0 dB      [Level Reset] ]   현재 씬의 값
+    //   블록  : [ [Param Reset] 블록 종류별 파라미터 패널 (ParamPanel) ...                    (전원) ]   현재 씬의 값
+    //   합류  : [ [Level Reset] (빨간 전원) Upper  -3.0 dB   (빨간 전원) Lower  -3.0 dB        ]   현재 씬의 값
     //                   ━━━━━━●━━               ━━━━━━●━━
     //   IN    : [ Input channel  [1: ...    v] ]   장치 입력 채널 하나
     //   OUT   : [ Output channel [1+2: ...  v] ]   스테레오 쌍 먼저, 그다음 단일 채널
@@ -67,7 +67,7 @@ namespace rig
         std::array<juce::Label, 2> branchLabel, levelValue;
         std::array<LeftClickOnly<juce::Slider>, 2> levelSlider;
         LeftClickOnly<juce::TextButton> levelResetButton { "Level\nReset" };
-        LeftClickOnly<juce::TextButton> paramResetButton { "Param\nReset" };   // 블록 파라미터가 있는 종류만, 전원 버튼 왼쪽
+        LeftClickOnly<juce::TextButton> paramResetButton { "Param\nReset" };   // 블록 파라미터가 있는 종류만, 왼쪽 끝 (Level Reset 과 같은 자리)
         std::unique_ptr<ParamPanel> panel;
         BlockType panelType = BlockType::None;   // 지금 패널의 블록 종류
 

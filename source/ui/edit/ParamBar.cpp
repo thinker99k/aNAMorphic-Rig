@@ -277,20 +277,22 @@ namespace rig
 
     void ParamBar::resized()
     {
-        // 오른쪽 끝 = 전원 버튼. 나머지(왼쪽)는 블록 종류별 파라미터 패널
-        auto area = getLocalBounds().reduced (12, 0);
+        // 리셋(Param Reset / Level Reset)은 왼쪽 끝 (전체 리셋은 왼쪽). 씬 바와 같은 바깥 여백 6 px 의 정사각형이라
+        // 바로 아래 씬 바의 Scene Reset 과 줄이 맞는다. 리셋 오른쪽부터 내용, 오른쪽 끝 = 블록 전원 버튼
+        constexpr int resetMargin = 6, contentGap = 12;
+        const int resetSize = getHeight() - 2 * resetMargin;
+        const juce::Rectangle<int> resetArea (resetMargin, resetMargin, resetSize, resetSize);
+        paramResetButton.setBounds (resetArea);
+        levelResetButton.setBounds (resetArea);
+
+        auto area = getLocalBounds().reduced (12, 0).withLeft (resetArea.getRight() + contentGap);
         const int size = juce::jmin (PowerButton::size, getHeight() - 8);   // 블록 전원 버튼
         const int subSize = juce::jmin (SubPowerButton::size, getHeight() - 8);   // 합류 갈래 전원 버튼
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
 
-        // 전원 왼쪽 = Param Reset (Level Reset 과 같은 64 x 50, 글자 "Param\nReset" 두 줄), 그 왼쪽이 패널
-        constexpr int resetWidth = 64;
-        area.removeFromRight (12);
-        paramResetButton.setBounds (area.removeFromRight (resetWidth).withSizeKeepingCentre (resetWidth, size));
-
         if (panel != nullptr)
         {
-            area.removeFromRight (12);
+            area.removeFromRight (contentGap);
             panel->setBounds (area);
         }
 
@@ -300,11 +302,9 @@ namespace rig
         row.removeFromLeft (8);
         channelBox.setBounds (row.removeFromLeft (320));
 
-        // 합류 선택 시: [빨간 전원 40] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
+        // 합류 선택 시: [Level Reset] 12 [빨간 전원 40] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래]
         constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;
-        auto merge = getLocalBounds().reduced (12, 0);
-        // Level Reset: 블록 전원 버튼과 같은 높이(50), Param Reset 과 같은 폭 (글자 "Level\nReset" 두 줄)
-        levelResetButton.setBounds (merge.removeFromRight (resetWidth).withSizeKeepingCentre (resetWidth, size));
+        auto merge = getLocalBounds().reduced (12, 0).withLeft (resetArea.getRight() + contentGap);
 
         for (size_t b = 0; b < 2; ++b)
         {
