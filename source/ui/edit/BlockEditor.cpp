@@ -76,18 +76,15 @@ namespace rig
         };
         builtInRowMouse.dragDescription = [this] (int row)
         {
-            const auto& builtIns = shownCategory().builtIns;
-            return juce::isPositiveAndBelow (row, (int) builtIns.size()) ? block::libraryDrag (builtIns[(size_t) row].type, {})
-                                                                        : juce::var();
+            return juce::isPositiveAndBelow (row, (int) builtInRows.size()) ? block::libraryDrag (builtInRows[(size_t) row].type, {})
+                                                                           : juce::var();
         };
-        builtInRowMouse.dragImage = [this] (int row) { return block::createImage (shownCategory().builtIns[(size_t) row].type, {}); };
+        builtInRowMouse.dragImage = [this] (int row) { return block::createImage (builtInRows[(size_t) row].type, {}); };
 
         builtInRowMouse.onDoubleClick = [this] (int row)
         {
-            const auto& builtIns = shownCategory().builtIns;
-
-            if (model.getSelectedSlot() != nullptr && juce::isPositiveAndBelow (row, (int) builtIns.size()))
-                model.assignBlock (model.getSelectedSlotId(), builtIns[(size_t) row].type, {});
+            if (model.getSelectedSlot() != nullptr && juce::isPositiveAndBelow (row, (int) builtInRows.size()))
+                model.assignBlock (model.getSelectedSlotId(), builtInRows[(size_t) row].type, {});
         };
 
         model.addChangeListener (this);
@@ -229,6 +226,15 @@ namespace rig
         const auto* slot = model.getSelectedSlot();
         const auto& category = shownCategory();
         const bool slotInCategory = slot != nullptr && categoryFor (slot->type) == shownCategoryIndex;
+        auto highlight = resetHighlight ? Highlight {} : currentHighlight();
+
+        if (resetHighlight && slotInCategory)
+        {
+            if (category.usesFiles)
+                highlight.file = slot->file;
+            else
+                highlight.builtIn = slot->type;
+        }
 
         if (categoryList.getSelectedRow() != shownCategoryIndex)
             categoryList.selectRow (shownCategoryIndex);
@@ -239,58 +245,100 @@ namespace rig
 
         if (! category.usesFiles)
         {
-            builtInList.updateContent();
-
-            if (resetHighlight)
-            {
-                builtInList.deselectAllRows();
-
-                for (size_t i = 0; i < category.builtIns.size(); ++i)
-                    if (slotInCategory && category.builtIns[i].type == slot->type)
-                        builtInList.selectRow ((int) i);
-            }
-
-            builtInList.repaint();
+            allRows.clear();
+            applyFilter (highlight);
             return;
         }
 
         const bool isNam = category.fileType == BlockType::Nam;
 
         // 파일 목록: 폴더 스캔 결과 + (목록에 없으면) 현재 파일
-        rows = isNam ? namEntries : irEntries;
+        allRows = isNam ? namEntries : irEntries;
 
-        const auto findRow = [this] (const juce::File& f)
-        {
-            for (size_t i = 0; i < rows.size(); ++i)
-                if (rows[i].file == f)
-                    return (int) i;
-
-            return -1;
-        };
-
-        if (slotInCategory && findRow (slot->file) < 0)
+        if (slotInCategory && std::none_of (allRows.begin(), allRows.end(), [slot] (const Entry& entry) { return entry.file == slot->file; }))
         {
             if (outsideEntry.file != slot->file)
                 outsideEntry = makeEntry (slot->file, isNam);
 
-            rows.push_back (outsideEntry);
+            allRows.push_back (outsideEntry);
         }
 
         sortRows();
-        auto& list = activeList();
+        applyFilter (highlight);
+    }
+
+    BlockEditor::Highlight BlockEditor::currentHighlight()
+    {
+        Highlight highlight;
+
+        if (shownCategory().usesFiles)
+        {
+            const int selected = activeList().getSelectedRow();
+            if (juce::isPositiveAndBelow (selected, (int) rows.size()))
+                highlight.file = rows[(size_t) selected].file;
+        }
+        else
+        {
+            const int selected = builtInList.getSelectedRow();
+            if (juce::isPositiveAndBelow (selected, (int) builtInRows.size()))
+                highlight.builtIn = builtInRows[(size_t) selected].type;
+        }
+
+        return highlight;
+    }
+
+    void BlockEditor::restoreHighlight (const Highlight& highlight)
+    {
+        const bool usesFiles = shownCategory().usesFiles;
+        auto& list = usesFiles ? activeList() : builtInList;
+        int selected = -1;
+
+        if (usesFiles && highlight.file != juce::File())
+        {
+            for (size_t i = 0; i < rows.size(); ++i)
+                if (rows[i].file == highlight.file)
+                {
+                    selected = (int) i;
+                    break;
+                }
+        }
+        else if (! usesFiles && highlight.builtIn.has_value())
+        {
+            for (size_t i = 0; i < builtInRows.size(); ++i)
+                if (builtInRows[i].type == *highlight.builtIn)
+                {
+                    selected = (int) i;
+                    break;
+                }
+        }
+
+        if (selected >= 0)
+            list.selectRow (selected);
+        else
+            list.deselectAllRows();
+    }
+
+    // 행 번호는 목록 갱신 때 달라질 수 있으므로 표시 목록을 만든 뒤 같은 항목을 다시 강조한다
+    void BlockEditor::applyFilter (const Highlight& highlight)
+    {
+        if (updatesPaused)
+            return;
+
+        const auto& category = shownCategory();
+        rows.clear();
+        builtInRows.clear();
+
+        if (category.usesFiles)
+            rows = allRows;
+        else
+            builtInRows = category.builtIns;
+
+        auto& list = category.usesFiles ? activeList() : builtInList;
         list.updateContent();
 
-        // 행 수가 바뀌면 세로 스크롤바가 생기거나 사라지는데, JUCE 는 열 폭을 resized() 에서만 맞춘다.
-        // 그대로 두면 머리글 오른쪽에 스크롤바 폭만큼 빈 열이 남으므로 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
+        // 행 수에 따라 스크롤바가 바뀌므로 열 폭을 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
         list.resized();
-
-        if (resetHighlight)
-        {
-            list.deselectAllRows();
-            const int current = slotInCategory ? findRow (slot->file) : -1;
-            if (current >= 0)
-                list.selectRow (current);
-        }
+        restoreHighlight (highlight);
 
         list.repaint();
     }
@@ -325,7 +373,7 @@ namespace rig
 
     int BlockEditor::BuiltInListModel::getNumRows()
     {
-        return (int) owner.shownCategory().builtIns.size();
+        return (int) owner.builtInRows.size();
     }
 
     int BlockEditor::CategoryListModel::getNumRows()
@@ -367,10 +415,8 @@ namespace rig
 
     void BlockEditor::BuiltInListModel::paintCell (juce::Graphics& g, int row, int, int width, int height, bool selected)
     {
-        const auto& builtIns = owner.shownCategory().builtIns;
-
-        if (juce::isPositiveAndBelow (row, (int) builtIns.size()))
-            owner.paintRowText (g, builtIns[(size_t) row].name, width, height, selected);
+        if (juce::isPositiveAndBelow (row, (int) owner.builtInRows.size()))
+            owner.paintRowText (g, owner.builtInRows[(size_t) row].name, width, height, selected);
     }
 
     void BlockEditor::paintCell (juce::Graphics& g, int row, int columnId, int width, int height, bool selected)
@@ -418,19 +464,13 @@ namespace rig
 
     void BlockEditor::sortOrderChanged (int, bool)
     {
+        if (updatesPaused || ! shownCategory().usesFiles)
+            return;
+
         // 정렬 상태는 보이는 표의 머리글에 있다. 정렬 후에도 같은 파일을 강조
-        auto& list = activeList();
-        const int selected = list.getSelectedRow();
-        const auto selectedFile = juce::isPositiveAndBelow (selected, (int) rows.size()) ? rows[(size_t) selected].file
-                                                                                          : juce::File();
+        const auto highlight = currentHighlight();
         sortRows();
-        list.updateContent();
-
-        for (size_t i = 0; i < rows.size(); ++i)
-            if (selectedFile != juce::File() && rows[i].file == selectedFile)
-                list.selectRow ((int) i);
-
-        list.repaint();
+        applyFilter (highlight);
     }
 
     // 캐시된 목록만 정렬한다 (디스크 읽기 없음).
@@ -441,7 +481,7 @@ namespace rig
         const int column = header.getSortColumnId();
         const bool forwards = header.isSortedForwards();
 
-        std::stable_sort (rows.begin(), rows.end(), [column, forwards] (const Entry& a, const Entry& b)
+        std::stable_sort (allRows.begin(), allRows.end(), [column, forwards] (const Entry& a, const Entry& b)
         {
             const auto& keyA = a.get (column);
             const auto& keyB = b.get (column);

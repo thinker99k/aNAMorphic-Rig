@@ -7,6 +7,8 @@
 
 #include "ui/Widgets.h"
 
+#include <optional>
+
 namespace rig
 {
     // 블록 선택기 (화면 중간). 모든 블록이 함께 쓰며, 선택된 블록에 내장 블록이나 파일을 지정한다.
@@ -60,12 +62,21 @@ namespace rig
             std::vector<BuiltIn> builtIns;
         };
 
+        struct Highlight
+        {
+            juce::File file;
+            std::optional<BlockType> builtIn;   // None(Empty)도 선택할 수 있으므로 선택 없음과 구별한다
+        };
+
         static Entry makeEntry (const juce::File& file, bool readMetadata);
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
         void refresh();
         void updateFromModel();
         void showCategory (bool resetHighlight);
+        Highlight currentHighlight();
+        void restoreHighlight (const Highlight&);
+        void applyFilter (const Highlight&);
         int categoryFor (BlockType type) const;
         const Category& shownCategory() const { return categories[(size_t) shownCategoryIndex]; }
 
@@ -139,7 +150,9 @@ namespace rig
         std::vector<Entry> namEntries, irEntries;   // refresh() 의 스캔 결과
         Entry outsideEntry;                         // 폴더 밖의 현재 파일 (메타데이터를 매번 읽지 않도록 보관)
 
+        std::vector<Entry> allRows;                 // 현재 카테고리의 전체 파일 목록 (정렬된 상태)
         std::vector<Entry> rows;                    // 지금 보이는 파일 표 목록 (정렬된 상태)
+        std::vector<BuiltIn> builtInRows;
 
         // 둘러보는 탭과 강조를 선택 블록으로 되돌리는 건 선택 블록이나 그 종류/파일이 바뀌었을 때만
         int shownCategoryIndex = 0;
