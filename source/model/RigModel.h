@@ -240,7 +240,13 @@ namespace rig
         };
 
         Snapshot snapshot (int scene) const;
-        void remember();   // 편집 함수가 바꾸기 직전에 부른다
+        // 되돌리기 원칙: 실제로 바뀐 편집만 이력에 남긴다 (아무것도 안 바뀐 조작은 Undo / Redo 를 건드리지 않는다)
+        //  - remember()   : 편집 함수가 바꾸기 직전에 부른다. 직전 상태를 잡아 두기만 한다 (이미 잡혀 있으면 = 드래그 중이면 그대로)
+        //  - saveEdit()   : 편집이 끝나 저장할 때. 잡아 둔 상태와 지금이 다르면 그때 Undo 에 넣고 Redo 를 비운 뒤 저장
+        //  - 슬라이더·노브 드래그는 첫 값에서 잡고 끝(save)에서 닫으므로 한 번 끌기 = 한 단계, 제자리로 돌아오면 남지 않는다
+        void remember();
+        void saveEdit();
+        bool sameContent (const Snapshot&) const;   // 편집 내용(체인 값, 채널, 씬 이름, 패치 이름)이 같은지. 선택·DSP 는 보지 않는다
         void step (std::vector<Snapshot>& from, std::vector<Snapshot>& to);
 
         void startLoading (Slot& slot);
@@ -273,7 +279,7 @@ namespace rig
         bool waitingForLoads = false;           // 로딩을 시작한 블록(패치 전환, 추가, 이동 등)이 다 준비될 때까지 옛 소리 유지
         juce::uint64 nextId = 1;                // 슬롯과 병렬의 id (0 = 없음)
         std::vector<Snapshot> undoStack, redoStack;
-        bool levelEditOpen = false;             // 합류 레벨 슬라이더를 끄는 중 (한 번 끌기 = 되돌리기 한 단계)
+        std::optional<Snapshot> pendingUndo;    // remember() 로 잡아 둔 편집 직전 상태 (saveEdit 에서 닫는다)
 
         JUCE_DECLARE_WEAK_REFERENCEABLE (RigModel)
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RigModel)

@@ -145,7 +145,7 @@ namespace rig
 
         remember();
         patchName = trimmedName;
-        savePatch();
+        saveEdit();
     }
 
     void RigModel::loadPatch (int number)
@@ -154,7 +154,7 @@ namespace rig
         chain.clear();
         undoStack.clear();   // 되돌리기 이력은 패치마다 (패치를 바꾸면 비운다)
         redoStack.clear();
-        levelEditOpen = false;
+        pendingUndo.reset();
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
         currentScene = 0;
@@ -455,7 +455,7 @@ namespace rig
 
         if (save)
         {
-            savePatch();
+            saveEdit();
             sendChangeMessage();
         }
     }
@@ -684,12 +684,58 @@ namespace rig
 
     void RigModel::remember()
     {
-        undoStack.push_back (snapshot (currentScene));
+        if (! pendingUndo.has_value())
+            pendingUndo = snapshot (currentScene);
+    }
 
-        if ((int) undoStack.size() > maxUndoSteps)
-            undoStack.erase (undoStack.begin());
+    void RigModel::saveEdit()
+    {
+        if (pendingUndo.has_value())
+        {
+            if (! sameContent (*pendingUndo))
+            {
+                undoStack.push_back (std::move (*pendingUndo));
 
-        redoStack.clear();
+                if ((int) undoStack.size() > maxUndoSteps)
+                    undoStack.erase (undoStack.begin());
+
+                redoStack.clear();
+            }
+
+            pendingUndo.reset();
+        }
+
+        savePatch();
+    }
+
+    bool RigModel::sameContent (const Snapshot& s) const
+    {
+        const auto sameSlot = [] (const Slot& a, const Slot& b)
+        {
+            return a.type == b.type && a.file == b.file && a.on == b.on && a.paramValues == b.paramValues;
+        };
+
+        const auto sameSlots = [&] (const std::vector<Slot>& a, const std::vector<Slot>& b)
+        {
+            return std::equal (a.begin(), a.end(), b.begin(), b.end(), sameSlot);
+        };
+
+        const auto sameItem = [&] (const Item& a, const Item& b)
+        {
+            if (a.index() != b.index())
+                return false;
+
+            if (const auto* slot = std::get_if<Slot> (&a))
+                return sameSlot (*slot, std::get<Slot> (b));
+
+            const auto& p = std::get<Parallel> (a);
+            const auto& q = std::get<Parallel> (b);
+            return p.branchOn == q.branchOn && p.levelDb == q.levelDb
+                && sameSlots (p.branches[0], q.branches[0]) && sameSlots (p.branches[1], q.branches[1]);
+        };
+
+        return routing == s.routing && sceneNames == s.sceneNames && patchName == s.patchName
+            && std::equal (chain.begin(), chain.end(), s.chain.begin(), s.chain.end(), sameItem);
     }
 
     void RigModel::undo() { step (undoStack, redoStack); }
@@ -704,7 +750,7 @@ namespace rig
         auto target = std::move (from.back());
         from.pop_back();
         to.push_back (snapshot (target.scene));
-        levelEditOpen = false;
+        pendingUndo.reset();
 
         chain = std::move (target.chain);
         routing = target.routing;
@@ -807,7 +853,10 @@ namespace rig
         const auto id = slot.id;
 
         if (! wrapInParallel (belowSlotId, std::move (slot)))
+        {
+            pendingUndo.reset();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
             return;
+        }
 
         setSelectedSlot (id);
         changed();
@@ -827,7 +876,10 @@ namespace rig
         const auto movedId = moved.id;
 
         if (! wrapInParallel (belowSlotId, std::move (moved)))
+        {
+            pendingUndo.reset();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
             return;
+        }
 
         eraseSlot (slotId);
         setSelectedSlot (movedId);
@@ -877,7 +929,7 @@ namespace rig
         if (item < 0 || delta == 0)
             return;
 
-        remember();   // 옮길 블록이 하나도 없으면 아래에서 되돌린다
+        remember();   // 옮길 블록이 하나도 없으면 아래에서 버린다
         std::vector<juce::uint64> moved;
 
         // 넣기: 병렬 바로 뒤 본 줄 블록부터 (병렬을 만나면 멈춘다)
@@ -902,7 +954,7 @@ namespace rig
 
         if (moved.empty())
         {
-            undoStack.pop_back();
+            pendingUndo.reset();   // 아무것도 안 바뀌었다: 이력을 건드리지 않는다
             return;
         }
 
@@ -959,7 +1011,7 @@ namespace rig
         if (slot->dsp != nullptr)
             slot->dsp->setOn (shouldBeOn);
 
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -981,11 +1033,8 @@ namespace rig
         if (p == nullptr || ! juce::isPositiveAndBelow (branch, 2))
             return;
 
-        // 드래그 한 번 = 되돌리기 한 단계: 드래그 중 첫 값에서 기억하고 끝(save)에서 닫는다
-        if (! levelEditOpen)
-            remember();
-
-        levelEditOpen = ! save;
+        // 드래그 한 번 = 되돌리기 한 단계: 첫 값에서 잡고(이미 잡혀 있으면 그대로) 끝(save)의 saveEdit 에서 닫는다
+        remember();
         p->levelDb[(size_t) branch][(size_t) currentScene] = juce::jlimit (mergeMinDb, mergeMaxDb, db);
 
         if (save)
@@ -1017,7 +1066,7 @@ namespace rig
         remember();
         resetParamValues (*slot, (size_t) currentScene);
         applyParams (*slot);   // DSP 가 20 ms 동안 기본값으로 따라간다
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -1036,7 +1085,7 @@ namespace rig
     {
         // 프로그램은 그대로 두고 Merge 의 게인 목표만 바꾼다 (오디오 스레드가 따라간다)
         applyMerge (p);
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -1120,7 +1169,7 @@ namespace rig
 
         remember();
         sceneNames[(size_t) scene] = sanitizeSceneName (name, scene);
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -1201,7 +1250,7 @@ namespace rig
         if (scene == currentScene)
             applyCurrentScene();
 
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -1381,7 +1430,7 @@ namespace rig
 
     void RigModel::changed()
     {
-        savePatch();
+        saveEdit();
         rebuildChain();
         sendChangeMessage();
     }
