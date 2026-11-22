@@ -54,6 +54,8 @@ namespace rig
             updateMuteButton();
         };
 
+        model.onPatchSaved = [this] (bool ok, const juce::File& file) { reportWriteResult (*this, ok, file); };
+
         // 볼륨 저장은 드래그가 끝났을 때 한 번만
         statusBar.inputKnob.onDragEnded  = [this] { model.saveGains(); };
         statusBar.outputKnob.onDragEnded = [this] { model.saveGains(); };
@@ -91,6 +93,7 @@ namespace rig
     MainComponent::~MainComponent()
     {
         model.removeChangeListener (this);
+        model.onPatchSaved = nullptr;
     }
 
     void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*)

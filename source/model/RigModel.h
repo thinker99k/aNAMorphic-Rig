@@ -7,6 +7,7 @@
 #include <juce_events/juce_events.h>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -101,6 +102,9 @@ namespace rig
         void setPatchName (const juce::String& name);
         void loadPatch (int number);
         void resetPatch();   // 지금 패치를 기본 패치로 (블록 없음, 기본 씬, 이름 = 파일명). 번호 유지, 저장, 크로스페이드
+
+        // 패치 파일을 저장할 때마다 결과 (ok = 써짐). UI 가 쓰기 실패 경고를 띄운다
+        std::function<void (bool ok, const juce::File& file)> onPatchSaved;
 
         // 입력/출력 볼륨 (dB, 앱 전역, settings.json 에 저장). UI 재구성을 막기 위해 변경 알림은 보내지 않는다
         float getInputGainDb() const noexcept  { return inputGainDb; }

@@ -27,6 +27,10 @@ namespace rig::paths
     juce::File deviceSettingsFile();      // .../audio-device.xml
     juce::File settingsFile();            // .../settings.json (앱 전역 설정)
 
+    // 텍스트 파일을 통째로 다시 쓴다 (성공 = true). 숨은 임시 파일에 다 쓴 뒤에만 교체하므로 실패해도 원본은 그대로.
+    // File::replaceWithText 는 임시 파일 쓰기 실패를 보지 않고 교체해 디스크가 가득 차면 원본이 잘린다 (XmlElement::writeTo 와 같은 방식)
+    bool writeText (const juce::File& file, const juce::String& text);
+
     // juce::File -> std::filesystem::path. Windows에서 한글 경로가 깨지지 않도록 wide 문자열 사용.
     std::filesystem::path toStdPath (const juce::File& file);
 }
