@@ -134,7 +134,7 @@
           "blocks": [ { "type": "nam", "file": ".../nam/lead.nam", "on": [true, ...8개] } ] }
       ] },
     { "type": "ir",  "file": "/home/<user>/Documents/aNAMorphic-Rig/ir/cab.wav",  "on": [true, ...8개],
-      "params": { "lowCutOn": [false, ...8개], "lowCutHz": [20, ...8개], "highCutOn": [false, ...8개], "highCutHz": [20000, ...8개] } }
+      "params": { "lowCutOn": [false, ...8개], "lowCutHz": [100, ...8개], "highCutOn": [false, ...8개], "highCutHz": [5000, ...8개] } }
   ]
 }
 ```
@@ -154,13 +154,13 @@
     | `middleHz` | 400 ~ 2500 Hz | 1000 |
     | `trebleHz` | 2500 ~ 10000 Hz | 5000 |
 
-  - IR (블록 뒤 LC / RC, 48 dB/oct)
+  - IR (블록 뒤 L. Cut / H. Cut, 24 dB/oct)
 
     | 이름 | 범위 | 기본 |
     |---|---|---|
     | `lowCutOn` / `highCutOn` | true / false | false |
-    | `lowCutHz` | 20 ~ 250 Hz | 20 |
-    | `highCutHz` | 2500 ~ 20000 Hz | 20000 |
+    | `lowCutHz` | 25 ~ 400 Hz | 100 |
+    | `highCutHz` | 1250 ~ 20000 Hz | 5000 |
 
 - `branches` : 병렬의 위 / 아래 두 갈래. 갈래 안에는 블록만 (병렬은 한 단계). 두 갈래는 합류에서 다시 합쳐짐
   - `on` : 씬 1~8 에서 이 갈래의 On/Off (Off = 그 갈래 무음)

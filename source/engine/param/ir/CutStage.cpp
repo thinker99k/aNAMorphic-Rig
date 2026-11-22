@@ -14,7 +14,7 @@ namespace rig
         lowCut.highPass = true;
 
         // Butterworth n 차의 단별 Q: Q_k = 1 / (2 sin((2k-1) pi / 2n)), k = 1..n/2
-        // n = 8 이면 k = 1..4 순서로 2.5629, 0.9000, 0.6013, 0.5098 (직렬 필터는 순서와 무관하게 같은 응답)
+        // n = 4 이면 k = 1..2 순서로 1.3066, 0.5412 (직렬 필터는 순서와 무관하게 같은 응답)
         for (int k = 1; k <= numStages; ++k)
             q[(size_t) k - 1] = 1.0 / (2.0 * std::sin ((2.0 * k - 1.0) * juce::MathConstants<double>::pi / (2.0 * IrParams::cutOrder)));
     }
