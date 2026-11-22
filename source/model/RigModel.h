@@ -173,6 +173,7 @@ namespace rig
         void setBranchOn (juce::uint64 parallelId, int branch, bool shouldBeOn);
         void setBranchLevel (juce::uint64 parallelId, int branch, float db, bool save = true);   // 슬라이더 드래그 중에는 save = false, 끝에 true
         void resetLevels (juce::uint64 parallelId);   // Level Reset: 현재 씬의 두 갈래를 mergeDefaultDb 로
+        void resetBlockParams (juce::uint64 slotId);  // Param Reset: 블록의 현재 씬 파라미터를 기본값으로 (경고 없음, Undo 1단계)
         bool isBranchOn (const Parallel& p, int branch) const noexcept { return p.branchOn[(size_t) branch][(size_t) currentScene]; }
         float getBranchLevel (const Parallel& p, int branch) const noexcept { return p.levelDb[(size_t) branch][(size_t) currentScene]; }
 
@@ -216,6 +217,7 @@ namespace rig
         void applyParams (Slot&);          // 현재 씬의 파라미터 값을 DSP 가 읽는 값으로
         static void resetSceneValues (Parallel&, size_t scene);
         static void resetLevelValues (Parallel&, size_t scene);   // 합류 레벨만 (Level Reset)
+        static void resetParamValues (Slot&, size_t scene);       // 블록 파라미터만 (Param Reset)
         static void copySceneValues (Slot&, size_t source, size_t destination);
         static void copySceneValues (Parallel&, size_t source, size_t destination);
         static void swapSceneValues (Slot&, size_t a, size_t b);

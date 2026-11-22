@@ -92,6 +92,9 @@ namespace rig
         levelResetButton.onClick = [this] { model.resetLevels (model.getSelectedParallelId()); };
         addChildComponent (levelResetButton);
 
+        paramResetButton.onClick = [this] { model.resetBlockParams (model.getSelectedSlotId()); };
+        addChildComponent (paramResetButton);
+
         model.addChangeListener (this);
         deviceManager.addChangeListener (this);
         updateFromModel();
@@ -128,6 +131,7 @@ namespace rig
                 c->setVisible (isMerge);
 
         levelResetButton.setVisible (isMerge);
+        paramResetButton.setVisible (false);   // 블록이면 아래에서 패널이 있을 때만
 
         if (isMerge)
         {
@@ -165,6 +169,8 @@ namespace rig
         {
             panel->refresh();
         }
+
+        paramResetButton.setVisible (panel != nullptr);
     }
 
     void ParamBar::updateMerge (const RigModel::Parallel& parallel)
@@ -277,6 +283,11 @@ namespace rig
         const int subSize = juce::jmin (SubPowerButton::size, getHeight() - 8);   // 합류 갈래 전원 버튼
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
 
+        // 전원 왼쪽 = Param Reset (Level Reset 과 같은 64 x 50, 글자 "Param\nReset" 두 줄), 그 왼쪽이 패널
+        constexpr int resetWidth = 64;
+        area.removeFromRight (12);
+        paramResetButton.setBounds (area.removeFromRight (resetWidth).withSizeKeepingCentre (resetWidth, size));
+
         if (panel != nullptr)
         {
             area.removeFromRight (12);
@@ -292,8 +303,7 @@ namespace rig
         // 합류 선택 시: [빨간 전원 40] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
         constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;
         auto merge = getLocalBounds().reduced (12, 0);
-        // Level Reset: 블록 전원 버튼과 같은 높이(50), 좁게 (글자 "Level\nReset" 두 줄)
-        constexpr int resetWidth = 64;
+        // Level Reset: 블록 전원 버튼과 같은 높이(50), Param Reset 과 같은 폭 (글자 "Level\nReset" 두 줄)
         levelResetButton.setBounds (merge.removeFromRight (resetWidth).withSizeKeepingCentre (resetWidth, size));
 
         for (size_t b = 0; b < 2; ++b)

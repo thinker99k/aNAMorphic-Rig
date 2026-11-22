@@ -1008,6 +1008,19 @@ namespace rig
         mergeEdited (*p);
     }
 
+    void RigModel::resetBlockParams (juce::uint64 slotId)
+    {
+        auto* slot = editSlot (slotId);
+        if (slot == nullptr || slot->params == nullptr)
+            return;
+
+        remember();
+        resetParamValues (*slot, (size_t) currentScene);
+        applyParams (*slot);   // DSP 가 20 ms 동안 기본값으로 따라간다
+        savePatch();
+        sendChangeMessage();
+    }
+
     void RigModel::applyMerge (Parallel& p, bool immediately)
     {
         // 갈래 Off = 게인 0, 레벨은 mergeMinDb 이하가 -inf
@@ -1114,6 +1127,11 @@ namespace rig
     void RigModel::resetSceneValues (Slot& slot, size_t scene)
     {
         slot.on[scene] = true;
+        resetParamValues (slot, scene);
+    }
+
+    void RigModel::resetParamValues (Slot& slot, size_t scene)
+    {
         slot.paramValues[scene] = BlockParams::defaults (slot.type);
     }
 
