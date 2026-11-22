@@ -358,9 +358,14 @@ namespace rig
             {
                 juce::Array<juce::var> values;
 
+                // 스위치 = true / false, 정수 단위(Hz) = 정수 (100.0 이 아니라 100), 그 밖 = 단위로 반올림한 실수 (float 꼬리 없이)
                 for (const auto& scene : slot.paramValues)
-                    values.add (specs[k].isSwitch ? juce::var (scene[k] >= 0.5f)
-                                                  : juce::var (specs[k].constrain (scene[k])));   // float 꼬리 없이
+                {
+                    const auto value = specs[k].constrain (scene[k]);
+                    values.add (specs[k].isSwitch      ? juce::var (value >= 0.5)
+                                : specs[k].decimals == 0 ? juce::var (juce::roundToInt (value))
+                                                         : juce::var (value));
+                }
 
                 params->setProperty (specs[k].key, values);
             }
