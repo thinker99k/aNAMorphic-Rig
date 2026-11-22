@@ -241,12 +241,10 @@ namespace rig
             box.setEnabled (! values.isEmpty());
         };
 
-        fill (rateBox, sampleRates, current ? setup.sampleRate : 0.0, [] (double hz)
-        {
-            return juce::String (hz / 1000.0, 3).trimCharactersAtEnd ("0").trimCharactersAtEnd (".") + "kHz";
-        });
+        fill (rateBox, sampleRates, current ? setup.sampleRate : 0.0,
+              [] (double hz) { return juce::String (juce::roundToInt (hz)); });
         fill (bufferBox, bufferSizes, current ? setup.bufferSize : 0,
-              [] (int samples) { return juce::String (samples) + " samples"; });
+              [] (int samples) { return juce::String (samples); });
     }
 
     void SettingsDialog::save()
