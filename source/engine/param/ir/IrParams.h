@@ -6,7 +6,7 @@
 
 namespace rig
 {
-    // IR 블록용 LC(Low Cut) / RC(High Cut) 값 (패치당 1벌, 체인의 모든 IR 블록 뒤에 각각 적용)
+    // IR 블록용 LC(Low Cut) / RC(High Cut) 값 (IR 블록마다 한 벌)
     class IrParams final : public BlockParams
     {
     public:
@@ -23,7 +23,6 @@ namespace rig
 
         juce::var toVar() const override;
         void fromVar (const juce::var&) override;
-        void setDefaults() override;
     };
 
     static_assert (IrParams::lowCutMaxHz < IrParams::highCutMinHz);   // 250 < 2500: LC 와 RC 가 겹치지 않는다

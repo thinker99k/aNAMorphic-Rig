@@ -43,7 +43,7 @@ namespace rig
 
     void IrParamPanel::refresh()
     {
-        params = dynamic_cast<IrParams*> (model.getParams (BlockType::Ir));
+        params = std::dynamic_pointer_cast<IrParams> (model.getSelectedParams());
         if (params == nullptr)
             return;
 

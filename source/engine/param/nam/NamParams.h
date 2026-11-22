@@ -6,7 +6,7 @@
 
 namespace rig
 {
-    // NAM 블록용 3밴드 EQ 값 (패치당 1벌, 체인의 모든 NAM 블록 뒤에 각각 적용)
+    // NAM 블록용 3밴드 EQ 값 (NAM 블록마다 한 벌)
     class NamParams final : public BlockParams
     {
     public:
@@ -30,7 +30,6 @@ namespace rig
 
         juce::var toVar() const override;
         void fromVar (const juce::var&) override;
-        void setDefaults() override;
     };
 
     // 침범 금지: 어떤 조합에서도 Bass Freq < Middle Freq < Treble Freq

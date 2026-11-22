@@ -10,7 +10,7 @@
 
 namespace rig
 {
-    // NAM 블록 뒤의 3밴드 EQ (Bass / Middle / Treble 모두 peak, 각 Freq 가 중심 주파수). 값은 패치의 NamParams 를 공유, 필터 상태는 블록마다 따로
+    // NAM 블록 뒤의 3밴드 EQ (Bass / Middle / Treble 모두 peak, 각 Freq 가 중심 주파수). 값은 그 블록의 NamParams, 필터 상태는 DSP 인스턴스마다 따로
     class EqStage final : public ParamStage
     {
     public:

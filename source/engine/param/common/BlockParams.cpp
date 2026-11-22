@@ -17,12 +17,6 @@ namespace rig
         return nullptr;
     }
 
-    const std::vector<BlockType>& BlockParams::paramTypes()
-    {
-        static const std::vector<BlockType> types { BlockType::Nam, BlockType::Ir };
-        return types;
-    }
-
     double BlockParams::readNumber (const juce::var& obj, const juce::Identifier& key, double def, double lo, double hi)
     {
         const auto v = obj.getProperty (key, {});

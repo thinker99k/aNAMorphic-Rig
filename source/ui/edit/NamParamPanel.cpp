@@ -20,7 +20,7 @@ namespace rig
         // 노브 -> 원자 변수 (돌리는 동안은 알림·저장 없음), 드래그가 끝나면 저장
         auto connect = [this] (ParamKnob& knob, std::atomic<float> P::* field)
         {
-            knob.onValueChanged = [this, field] (double v) { if (params != nullptr) (params->*field).store ((float) v); };
+            knob.onValueChanged = [this, field] (double v) { if (params != nullptr) ((*params).*field).store ((float) v); };
             knob.onDragEnded = [this] { model.saveParams(); };
             addAndMakeVisible (knob);
         };
@@ -48,7 +48,7 @@ namespace rig
 
     void NamParamPanel::refresh()
     {
-        params = dynamic_cast<NamParams*> (model.getParams (BlockType::Nam));
+        params = std::dynamic_pointer_cast<NamParams> (model.getSelectedParams());
         if (params == nullptr)
             return;
 

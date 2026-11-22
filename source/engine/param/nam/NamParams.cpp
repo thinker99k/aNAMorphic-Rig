@@ -26,9 +26,4 @@ namespace rig
         trebleDb.store ((float) readNumber (v, "trebleDb", gainDefaultDb,   gainMinDb,   gainMaxDb));
         trebleHz.store ((float) readNumber (v, "trebleHz", trebleDefaultHz, trebleMinHz, trebleMaxHz));
     }
-
-    void NamParams::setDefaults()
-    {
-        fromVar ({});
-    }
 }

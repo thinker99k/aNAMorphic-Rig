@@ -20,9 +20,4 @@ namespace rig
         highCutOn.store (readBool (v, "highCutOn", false));
         highCutHz.store ((float) readNumber (v, "highCutHz", highCutDefaultHz, highCutMinHz, highCutMaxHz));
     }
-
-    void IrParams::setDefaults()
-    {
-        fromVar ({});
-    }
 }
