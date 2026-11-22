@@ -15,7 +15,7 @@ namespace rig
         constexpr int valueGap = 8;            // 노브와 오른쪽 값 사이
     }
 
-    ParamKnob::ParamKnob (const juce::String& name, double minValue, double maxValue, ValueType t) : type (t)
+    ParamKnob::ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType t) : type (t)
     {
         slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -40,6 +40,7 @@ namespace rig
                                     juce::MathConstants<float>::pi * 2.75f,
                                     true);
         slider.setLookAndFeel (&knobLnf);
+        slider.setDoubleClickReturnValue (true, defaultValue);   // JUCE 가 드래그 시작/끝도 보내 저장된다 (합류 레벨과 같다)
         slider.setScrollWheelEnabled (false);   // 볼륨 노브와 같이: 휠로는 드래그 끝(저장)이 오지 않으므로 막는다
 
         slider.onValueChange = [this]

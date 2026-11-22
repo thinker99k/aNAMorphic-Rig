@@ -10,7 +10,7 @@
 namespace rig
 {
     // 파라미터 노브: 위에 이름, 그 아래 [노브] 오른쪽에 값. 이름과 값은 항상 보인다. 비활성(setEnabled false)이면 흐리고 조작 안 됨.
-    // 왼쪽 클릭 드래그만, 더블클릭 초기화·휠·글자 입력 없음 (볼륨 노브와 같은 규칙)
+    // 왼쪽 클릭 드래그만, 더블클릭 = 기본값, 휠·글자 입력 없음 (볼륨 노브와 같은 규칙)
     class ParamKnob final : public juce::Component
     {
     public:
@@ -20,7 +20,7 @@ namespace rig
             HzLog    // 주파수: 로그 매핑(노브 가운데 = 기하 평균), "250 Hz" / "1.25 kHz"
         };
 
-        ParamKnob (const juce::String& name, double minValue, double maxValue, ValueType type);
+        ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType type);
         ~ParamKnob() override;
 
         std::function<void (double)> onValueChanged;   // 사용자가 돌릴 때만
