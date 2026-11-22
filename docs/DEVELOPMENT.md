@@ -143,7 +143,7 @@
 - `type` : `nam` / `ir` / `none`(미지정 블록, 소리 그대로 통과) / `parallel`(병렬)
 - `file` : 절대 경로. 파일이 필요한 종류인데 경로가 비어 있으면 미지정 블록으로 읽음
 - `on` : 씬 1~8 에서 이 블록의 On/Off (Off = 바이패스)
-- `params` : NAM / IR 블록의 파라미터. 이름마다 씬 1~8 의 값. 스위치는 true / false, dB 는 소수 1자리, Hz 는 정수.
+- `params` : NAM / IR 블록의 파라미터. 이름마다 씬 1~8 의 값. 스위치는 true / false, dB 는 소수 1자리, Hz 는 정수, Q 는 소수 2자리.
   없거나 이상한 값은 기본값, 범위 밖은 범위 안으로
   - NAM (블록 뒤 3밴드 EQ, 세 밴드 모두 peak, 항상 켜짐)
 
@@ -152,6 +152,7 @@
     | `bassDb` / `middleDb` / `trebleDb` | -18 ~ 18 dB | 0 |
     | `bassHz` | 25 ~ 400 Hz | 100 |
     | `middleHz` | 400 ~ 2500 Hz | 1000 |
+    | `middleQ` | 0.2 ~ 3.2 (Middle 폭, Bass / Treble 은 0.8 고정) | 0.8 |
     | `trebleHz` | 2500 ~ 10000 Hz | 5000 |
 
   - IR (블록 뒤 L. Cut / H. Cut, 24 dB/oct)

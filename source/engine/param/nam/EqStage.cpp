@@ -15,7 +15,7 @@ namespace rig
 
         for (auto* s : { &bassDb, &middleDb, &trebleDb })
             s->reset (sr, rampSeconds);
-        for (auto* s : { &bassHz, &middleHz, &trebleHz })
+        for (auto* s : { &bassHz, &middleHz, &trebleHz, &middleQ })
             s->reset (sr, rampSeconds);
 
         jumpToTargets();
@@ -30,6 +30,7 @@ namespace rig
         bassHz.setCurrentAndTargetValue   (params->get (NamParams::bassHz));
         middleHz.setCurrentAndTargetValue (params->get (NamParams::middleHz));
         trebleHz.setCurrentAndTargetValue (params->get (NamParams::trebleHz));
+        middleQ.setCurrentAndTargetValue  (params->get (NamParams::middleQ));
     }
 
     void EqStage::setTargets() noexcept
@@ -40,6 +41,7 @@ namespace rig
         bassHz.setTargetValue   (params->get (NamParams::bassHz));
         middleHz.setTargetValue (params->get (NamParams::middleHz));
         trebleHz.setTargetValue (params->get (NamParams::trebleHz));
+        middleQ.setTargetValue  (params->get (NamParams::middleQ));
     }
 
     void EqStage::process (float* io, int n) noexcept
@@ -47,7 +49,7 @@ namespace rig
         // 값은 구간 단위로 따라가고 계수는 구간마다 한 번 계산한다
         setTargets();
         low.setPeak    (sampleRate, bassHz.skip (n),   NamParams::eqQ, bassDb.skip (n));
-        middle.setPeak (sampleRate, middleHz.skip (n), NamParams::eqQ, middleDb.skip (n));
+        middle.setPeak (sampleRate, middleHz.skip (n), middleQ.skip (n), middleDb.skip (n));
         high.setPeak   (sampleRate, trebleHz.skip (n), NamParams::eqQ, trebleDb.skip (n));
 
         for (int i = 0; i < n; ++i)

@@ -29,7 +29,7 @@ namespace rig
         std::shared_ptr<BlockParams> params;
         Biquad low, middle, high;
         Linear bassDb, middleDb, trebleDb;
-        Multiplicative bassHz, middleHz, trebleHz;
+        Multiplicative bassHz, middleHz, trebleHz, middleQ;   // Q 도 비율로 따라간다
 
         double sampleRate = 48000.0;
     };

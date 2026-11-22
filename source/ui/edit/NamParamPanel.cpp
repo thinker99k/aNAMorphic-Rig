@@ -14,6 +14,7 @@ namespace rig
           bassFreq   ("B. Freq",     P::bassMinHz,   P::bassMaxHz,   P::bassDefaultHz,   VT::HzLog),
           middle     ("M",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
           middleFreq ("M. Freq",     P::middleMinHz, P::middleMaxHz, P::middleDefaultHz, VT::HzLog),
+          middleQ    ("M. Q",        P::middleQMin,  P::middleQMax,  P::middleQDefault,  VT::QLog),
           treble     ("T",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
           trebleFreq ("T. Freq",     P::trebleMinHz, P::trebleMaxHz, P::trebleDefaultHz, VT::HzLog)
     {
@@ -28,6 +29,7 @@ namespace rig
         connect (bassFreq,   P::bassHz);
         connect (middle,     P::middleDb);
         connect (middleFreq, P::middleHz);
+        connect (middleQ,    P::middleQ);
         connect (treble,     P::trebleDb);
         connect (trebleFreq, P::trebleHz);
 
@@ -41,6 +43,7 @@ namespace rig
 
         group (bassGroup,   bass,   bassFreq);
         group (middleGroup, middle, middleFreq);
+        middleGroup.addItem (middleQ, middleQ.getIdealWidth(), ParamGroup::knobGap);   // Middle 만 폭(Q) 노브가 있다
         group (trebleGroup, treble, trebleFreq);
 
         refresh();
@@ -56,6 +59,7 @@ namespace rig
         bassFreq.setValue   (model.getParam (*slot, P::bassHz));
         middle.setValue     (model.getParam (*slot, P::middleDb));
         middleFreq.setValue (model.getParam (*slot, P::middleHz));
+        middleQ.setValue    (model.getParam (*slot, P::middleQ));
         treble.setValue     (model.getParam (*slot, P::trebleDb));
         trebleFreq.setValue (model.getParam (*slot, P::trebleHz));
     }

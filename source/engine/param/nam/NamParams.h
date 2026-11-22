@@ -23,9 +23,13 @@ namespace rig
         static constexpr double middleMinHz = h1Hz, middleMaxHz = h2Hz,    middleDefaultHz = 1000.0;
         static constexpr double trebleMinHz = h2Hz, trebleMaxHz = 10000.0, trebleDefaultHz = 5000.0;
 
-        static constexpr double eqQ = 0.8;       // Bass / Middle / Treble 공통 폭 (약 1.5~2 옥타브)
+        static constexpr double eqQ = 0.8;       // Bass / Treble 폭 (고정, 약 1.7 옥타브)
 
-        enum Index : int { bassDb, bassHz, middleDb, middleHz, trebleDb, trebleHz };
+        // Middle 폭 Q (로그). 12시 = √(0.2 × 3.2) = 0.8 = 기본값 = Bass / Treble 과 같은 폭. 0.2 = 약 4.7 옥타브, 3.2 = 약 0.45 옥타브
+        // 낮추면 Middle 이 H1 아래 / H2 위로 넘친다 (허용: 경계는 중심 주파수 순서만 지킨다)
+        static constexpr double middleQMin = 0.2, middleQMax = 3.2, middleQDefault = 0.8;
+
+        enum Index : int { bassDb, bassHz, middleDb, middleHz, middleQ, trebleDb, trebleHz };
 
         static const std::vector<ParamSpec>& specs()
         {
@@ -34,6 +38,7 @@ namespace rig
                 { "bassHz",   (float) bassMinHz,   (float) bassMaxHz,   (float) bassDefaultHz,   steps::hzDecimals },
                 { "middleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },
                 { "middleHz", (float) middleMinHz, (float) middleMaxHz, (float) middleDefaultHz, steps::hzDecimals },
+                { "middleQ",  (float) middleQMin,  (float) middleQMax,  (float) middleQDefault,  steps::qDecimals },
                 { "trebleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },
                 { "trebleHz", (float) trebleMinHz, (float) trebleMaxHz, (float) trebleDefaultHz, steps::hzDecimals } };
             return s;
@@ -46,4 +51,5 @@ namespace rig
     static_assert (NamParams::bassMinHz < NamParams::bassDefaultHz && NamParams::bassDefaultHz < NamParams::bassMaxHz);
     static_assert (NamParams::middleMinHz < NamParams::middleDefaultHz && NamParams::middleDefaultHz < NamParams::middleMaxHz);
     static_assert (NamParams::trebleMinHz < NamParams::trebleDefaultHz && NamParams::trebleDefaultHz < NamParams::trebleMaxHz);
+    static_assert (NamParams::middleQMin < NamParams::middleQDefault && NamParams::middleQDefault < NamParams::middleQMax);
 }

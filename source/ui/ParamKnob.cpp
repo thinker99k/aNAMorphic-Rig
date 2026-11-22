@@ -18,15 +18,16 @@ namespace rig
         slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
 
-        if (type == ValueType::HzLog)
+        if (type != ValueType::Db)
         {
-            // 로그 매핑: value = min * (max / min)^t  (노브 가운데 = 기하 평균)
+            // 로그 매핑: value = min * (max / min)^t  (노브 가운데 = 기하 평균). Hz 는 1 Hz, Q 는 0.01 단위
             const double ratio = maxValue / minValue;
+            const int decimals = type == ValueType::HzLog ? steps::hzDecimals : steps::qDecimals;
             slider.setNormalisableRange (juce::NormalisableRange<double> (
                 minValue, maxValue,
                 [ratio] (double start, double, double t) { return start * std::pow (ratio, t); },
                 [ratio] (double start, double, double v) { return juce::jlimit (0.0, 1.0, std::log (v / start) / std::log (ratio)); },
-                [] (double start, double end, double v) { return juce::jlimit (start, end, steps::roundTo (v, steps::hzDecimals)); }));   // 1 Hz 단위
+                [decimals] (double start, double end, double v) { return juce::jlimit (start, end, steps::roundTo (v, decimals)); }));
         }
         else
         {
@@ -113,6 +114,9 @@ namespace rig
             const auto text = juce::String (tenths / 10.0, 1) + " dB";
             return tenths > 0 ? "+" + text : tenths == 0 ? juce::String ("0.0 dB") : text;
         }
+
+        if (type == ValueType::QLog)
+            return juce::String (steps::roundTo (value, steps::qDecimals), steps::qDecimals);   // "0.80"
 
         const int hz = juce::roundToInt (value);
 
