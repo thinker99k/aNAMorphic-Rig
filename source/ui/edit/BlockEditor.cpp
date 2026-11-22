@@ -10,16 +10,14 @@ namespace rig
         juce::String patternFor (BlockType t) { return t == BlockType::Nam ? "*.nam" : "*.wav"; }
         juce::File folderFor (BlockType t)    { return t == BlockType::Nam ? paths::namDir() : paths::irDir(); }
 
-        template <typename TextAt>
-        bool matchesSearch (const juce::StringArray& words, int numFields, TextAt textAt)
+        // 검색어의 단어마다 어느 한 열에라도 들어 있으면 true (대소문자 무시). 단어가 없으면 true
+        template <typename TextOf>
+        bool matchesSearch (const juce::StringArray& words, const juce::Array<int>& columnIds, TextOf textOf)
         {
             return std::all_of (words.begin(), words.end(), [&] (const juce::String& word)
             {
-                for (int field = 0; field < numFields; ++field)
-                    if (textAt (field).containsIgnoreCase (word))
-                        return true;
-
-                return false;
+                return std::any_of (columnIds.begin(), columnIds.end(),
+                                    [&] (int id) { return textOf (id).containsIgnoreCase (word); });
             });
         }
     }
@@ -350,16 +348,24 @@ namespace rig
             return;
 
         const auto& category = shownCategory();
+        auto& list = category.usesFiles ? activeList() : builtInList;
+
+        // 검색 대상 = 이 표의 열 전부 (숨긴 열 포함, 열을 추가하면 자동으로 포함)
+        const auto& header = list.getHeader();
+        juce::Array<int> columnIds;
+
+        for (int i = 0; i < header.getNumColumns (false); ++i)
+            columnIds.add (header.getColumnIdOfIndex (i, false));
+
         rows.clear();
         builtInRows.clear();
 
         if (category.usesFiles)
         {
-            const int numFields = category.fileType == BlockType::Nam ? modeledByColumn : nameColumn;
             rows.reserve (allRows.size());
 
             for (const auto& entry : allRows)
-                if (matchesSearch (searchWords, numFields, [&entry] (int field) -> const juce::String& { return entry.get (nameColumn + field); }))
+                if (matchesSearch (searchWords, columnIds, [&entry] (int id) -> const juce::String& { return entry.get (id); }))
                     rows.push_back (entry);
         }
         else
@@ -367,11 +373,10 @@ namespace rig
             builtInRows.reserve (category.builtIns.size());
 
             for (const auto& builtIn : category.builtIns)
-                if (matchesSearch (searchWords, 1, [&builtIn] (int) -> const juce::String& { return builtIn.name; }))
+                if (matchesSearch (searchWords, columnIds, [&builtIn] (int) -> const juce::String& { return builtIn.name; }))
                     builtInRows.push_back (builtIn);
         }
 
-        auto& list = category.usesFiles ? activeList() : builtInList;
         list.updateContent();
 
         // 행 수에 따라 스크롤바가 바뀌므로 열 폭을 다시 맞춘다 (사용자가 바꾼 폭 비율은 유지됨)
