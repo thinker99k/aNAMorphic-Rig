@@ -59,8 +59,8 @@ namespace rig
         model.onPatchSaved = [this] (bool ok, const juce::File& file) { reportWriteResult (*this, ok, file); };
 
         // 볼륨 저장은 드래그가 끝났을 때 한 번만
-        statusBar.inputKnob.onDragEnded  = [this] { model.saveGains(); };
-        statusBar.outputKnob.onDragEnded = [this] { model.saveGains(); };
+        statusBar.inputKnob.onDragEnded  = [this] { model.saveAppSettings(); };
+        statusBar.outputKnob.onDragEnded = [this] { model.saveAppSettings(); };
 
         statusBar.muteButton.onClick = [this]
         {
@@ -199,36 +199,15 @@ namespace rig
 
     void MainComponent::openTuner()
     {
-        // 튜너가 열려 있는 동안 출력을 끈다 (3-3절). 닫으면 열기 전 뮤트 상태로 되돌린다
-        const bool wasMuted = model.isOutputMuted();
-
-        if (TunerDialog::mutesOutput)
-            setOutputMuted (true);
-
+        // 튜너가 열려 있는 동안 출력은 엔진이 무음으로 한다 (MUTE 버튼·출력 노브는 그대로)
         topBar.setTunerActive (true);
 
         juce::Component::SafePointer<MainComponent> safeThis (this);
 
-        // 앰프 체인 대신 입력 소리만 내보낸다. 이미 뮤트 중이었으면 내보내지 않는다
-        const bool passInput = TunerDialog::mutesOutput && TunerDialog::passesInput && ! wasMuted;
-
-        TunerDialog::show (deviceManager, model.getRouting(), passInput, this, [safeThis, wasMuted]
+        TunerDialog::show (engine, model, this, [safeThis]
         {
-            if (safeThis == nullptr)
-                return;
-
-            safeThis->topBar.setTunerActive (false);
-
-            if (TunerDialog::mutesOutput)
-                safeThis->setOutputMuted (wasMuted);
+            if (safeThis != nullptr)
+                safeThis->topBar.setTunerActive (false);
         });
-    }
-
-    void MainComponent::setOutputMuted (bool muted)
-    {
-        model.setOutputMuted (muted);
-        statusBar.outputKnob.setValueDb (model.isOutputMuted() ? AudioEngine::outputMinDb
-                                                               : model.getOutputGainDb());
-        updateMuteButton();
     }
 }

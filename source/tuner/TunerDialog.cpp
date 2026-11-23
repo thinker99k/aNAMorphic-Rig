@@ -1,7 +1,5 @@
 #include "TunerDialog.h"
 
-#include "tuner/TunerSettings.h"
-
 #include <algorithm>
 #include <cmath>
 
@@ -13,19 +11,12 @@ namespace rig
         constexpr int    refreshHz       = 20;
         constexpr int    silentAfter     = 8;       // 연속 실패 프레임 (약 0.4 초)
         constexpr double jumpCents       = 100.0;   // 이만큼 뛰면 새 음으로 보고 다시 모은다
-        constexpr int    repeatFirstMs   = 400;     // ± 길게 누르기
-        constexpr int    repeatEveryMs   = 60;
 
-        // 배치 (내용물 420 x 318 안의 좌표, Figma)
-        constexpr int contentWidth = 420, contentHeight = 318, tunerTitleBarHeight = 22;   // DocumentWindow::titleBarHeight 와 이름이 겹치지 않게
-        const juce::Rectangle<int> gaugeBounds  { 8, 8, 404, 254 };
-        const juce::Rectangle<int> barBounds    { 0, 270, 420, 48 };
-        // 하단 바 안 (barBounds 기준)
-        const juce::Rectangle<int> downBounds   { 12, 12, 24, 24 };    // 왼쪽 여백 12 에 붙인다
-        const juce::Rectangle<int> pitchBounds  { 40, 12, 84, 24 };
-        const juce::Rectangle<int> upBounds     { 128, 12, 24, 24 };
+        // 배치 (내용물 420 x 270 안의 좌표). 게이지는 도면 크기 그대로 (값 상자 자리 pitchArea 가 맞도록)
+        constexpr int contentWidth = 420, contentHeight = 270, tunerTitleBarHeight = 22;   // DocumentWindow::titleBarHeight 와 이름이 겹치지 않게
+        const juce::Rectangle<int> gaugeBounds  { 8, 8, TunerGauge::panelWidth, TunerGauge::panelHeight };
 
-        constexpr int pixelsPerStep = 2;   // 값 상자를 위아래로 끌 때 0.1 Hz 당 픽셀 (위 = 올림)
+        constexpr int pixelsPerHz = 2;   // 값 상자를 위아래로 끌 때 1 Hz 당 픽셀 (위 = 올림)
 
         // DialogWindow::LaunchOptions::create 가 만드는 창과 같지만, 제목 표시줄 끌기도 왼쪽 클릭만 (SettingsDialog 와 같은 방식)
         struct TunerWindow final : public LeftClickOnly<juce::DialogWindow>
@@ -53,10 +44,9 @@ namespace rig
         };
     }
 
-    void TunerDialog::show (juce::AudioDeviceManager& dm, const AudioEngine::Routing& routing, bool passInput,
-                            juce::Component* parent, std::function<void()> onClosed)
+    void TunerDialog::show (AudioEngine& engine, RigModel& model, juce::Component* parent, std::function<void()> onClosed)
     {
-        auto content = std::make_unique<TunerDialog> (dm, routing, passInput);
+        auto content = std::make_unique<TunerDialog> (engine, model);
         content->onClosed = std::move (onClosed);
 
         auto* window = new TunerWindow (std::move (content), parent);
@@ -68,26 +58,27 @@ namespace rig
         window->enterModalState (true, nullptr, true);
     }
 
-    TunerDialog::TunerDialog (juce::AudioDeviceManager& dm, const AudioEngine::Routing& routing, bool passInput)
-        : deviceManager (dm),
-          pitchTenths (TunerSettings::load()),
-          loadedTenths (pitchTenths)
+    TunerDialog::TunerDialog (AudioEngine& e, RigModel& m)
+        : engine (e),
+          model (m)
     {
         addAndMakeVisible (gauge);
 
         // 기준음 값: 클릭하면 Hz 숫자를 직접 입력 (Enter 또는 바깥 클릭 = 적용, Esc = 취소). 범위 밖은 끝 값으로
         //          위아래로 끌면 값이 바뀐다 (끌었으면 Label 이 입력 칸을 열지 않는다). 끌기는 mouseDown / mouseDrag 에서
+        //          게이지의 음 이름 왼쪽에 글자만 (Logic 튜너처럼 상자 테두리 없음)
         pitchLabel.setJustificationType (juce::Justification::centred);
-        pitchLabel.setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.25f));
-        pitchLabel.setColour (juce::Label::outlineColourId, juce::Colours::grey);
+        pitchLabel.setFont (juce::FontOptions (TunerGauge::valueFontSize));
+        pitchLabel.setColour (juce::Label::textColourId, juce::Colours::white);
         pitchLabel.setEditable (true, false, false);
         pitchLabel.onEditorShow = [this]
         {
             if (auto* ed = pitchLabel.getCurrentTextEditor())
             {
-                ed->setInputRestrictions (5, "0123456789.");   // 예: 442.5
+                ed->setPopupMenuEnabled (false);   // 입력칸의 오른쪽 클릭 메뉴는 쓰지 않는다 (마우스 규칙)
+                ed->setInputRestrictions (3, "0123456789");   // 예: 442
                 ed->setJustification (juce::Justification::centred);
-                ed->setText (juce::String (TunerSettings::toHz (pitchTenths), 1), false);
+                ed->setText (juce::String (model.getTunerPitchHz()), false);
                 ed->selectAll();
             }
         };
@@ -96,31 +87,17 @@ namespace rig
         pitchLabel.addMouseListener (this, false);
         addAndMakeVisible (pitchLabel);
 
-        for (auto* button : { &downButton, &upButton })
-        {
-            button->setTriggeredOnMouseDown (true);
-            button->setRepeatSpeed (repeatFirstMs, repeatEveryMs);
-            button->setWantsKeyboardFocus (false);
-            addAndMakeVisible (button);
-        }
-
-        downButton.onClick = [this] { stepPitch (-1); };
-        upButton.onClick   = [this] { stepPitch (1); };
-
-        updatePitchControls();
+        updatePitchLabel();
         setSize (contentWidth, contentHeight);
 
-        input.setInputChannel (routing.input);
-        input.setOutput (routing.output, routing.stereoOutput);
-        input.setPassThrough (passInput);
-        deviceManager.addAudioCallback (&input);
+        engine.setTunerActive (true);
         startTimerHz (refreshHz);
     }
 
     TunerDialog::~TunerDialog()
     {
         stopTimer();
-        deviceManager.removeAudioCallback (&input);   // close() 에서 이미 했어도 안전하다
+        engine.setTunerActive (false);   // close() 에서 이미 했어도 안전하다
     }
 
     void TunerDialog::close()
@@ -132,19 +109,7 @@ namespace rig
         auto callback = onClosed;
 
         stopTimer();
-
-        // 입력 통과 소리를 페이드로 줄인 뒤에 콜백을 뗀다 (바로 떼면 딸깍 소리)
-        // shortcut: 메시지 스레드를 페이드 시간만큼(약 30 ms) 멈춘다. 닫기가 느껴질 만큼 길어지면 타이머로 나눌 것
-        if (input.isPassingThrough())
-        {
-            input.setPassThrough (false);
-            juce::Thread::sleep (juce::roundToInt (TunerInput::fadeSeconds * 1000.0) + 10);
-        }
-
-        deviceManager.removeAudioCallback (&input);
-
-        if (pitchTenths != loadedTenths)
-            TunerSettings::save (pitchTenths);
+        engine.setTunerActive (false);   // 소리를 되살리는 페이드는 엔진이 한다
 
         if (auto* window = findParentComponentOfClass<juce::DialogWindow>())
             window->exitModalState (0);   // 창은 이후 스스로 삭제됨
@@ -153,34 +118,34 @@ namespace rig
             callback();
     }
 
-    void TunerDialog::stepPitch (int direction)
-    {
-        pitchTenths = TunerSettings::clampTenths (pitchTenths + direction * TunerSettings::stepTenths);
-        updatePitchControls();
-    }
-
     void TunerDialog::pitchTyped()
     {
-        const auto typed = pitchLabel.getText().retainCharacters ("0123456789.");
-        const double hz = typed.getDoubleValue();
+        const auto typed = pitchLabel.getText().retainCharacters ("0123456789");
 
-        if (typed.isNotEmpty() && hz > 0.0)
-            pitchTenths = TunerSettings::clampTenths ((int) std::lround (hz * 10.0));
-
-        updatePitchControls();   // 잘못된 값이면 원래 값으로 되돌려 보인다
+        if (typed.isNotEmpty())
+        {
+            setPitchHz (typed.getIntValue());
+            model.saveAppSettings();   // 입력을 마치면 바로 저장 (끌기 끝과 같이)
+        }
+        else
+            updatePitchLabel();   // 빈 값이면 원래 값으로 되돌려 보인다
     }
 
-    void TunerDialog::updatePitchControls()
+    void TunerDialog::setPitchHz (int hz)
     {
-        pitchLabel.setText (juce::String (TunerSettings::toHz (pitchTenths), 1) + " Hz", juce::dontSendNotification);
-        downButton.setEnabled (pitchTenths > TunerSettings::minTenths);
-        upButton.setEnabled (pitchTenths < TunerSettings::maxTenths);
+        model.setTunerPitchHz (hz);   // 범위 밖은 RigModel 이 끝 값으로
+        updatePitchLabel();
+    }
+
+    void TunerDialog::updatePitchLabel()
+    {
+        pitchLabel.setText (juce::String (model.getTunerPitchHz()) + " Hz", juce::dontSendNotification);
     }
 
     void TunerDialog::timerCallback()
     {
         // 1. 샘플레이트가 바뀔 때만 다시 준비 (이때만 할당)
-        const double sr = input.getSampleRate();
+        const double sr = engine.getSampleRate();
 
         if (! juce::approximatelyEqual (sr, preparedRate))
         {
@@ -193,7 +158,7 @@ namespace rig
         // 2-3. 최근 입력을 가져와 분석
         PitchResult result;
 
-        if (input.copyLatest (samples.data(), (int) samples.size()))
+        if (engine.copyLatestInput (samples.data(), (int) samples.size()))
             result = detector.detect (samples.data(), (int) samples.size());
 
         if (result.valid)
@@ -217,7 +182,7 @@ namespace rig
             auto sorted = recent;
             std::sort (sorted.begin(), sorted.begin() + recentCount);
             const double hz = sorted[(size_t) recentCount / 2];
-            const auto note = PitchDetector::toNote (hz, TunerSettings::toHz (pitchTenths));
+            const auto note = PitchDetector::toNote (hz, model.getTunerPitchHz());
 
             state = { true, hz, note.name, note.cents };
         }
@@ -236,7 +201,7 @@ namespace rig
     void TunerDialog::mouseDown (const juce::MouseEvent& e)
     {
         if (e.eventComponent == &pitchLabel && isLeftClick (e))
-            dragStartTenths = pitchTenths;
+            dragStartHz = model.getTunerPitchHz();
     }
 
     void TunerDialog::mouseDrag (const juce::MouseEvent& e)
@@ -244,27 +209,24 @@ namespace rig
         if (e.eventComponent != &pitchLabel || ! isLeftClick (e) || pitchLabel.isBeingEdited())
             return;
 
-        const int steps = -e.getDistanceFromDragStartY() / pixelsPerStep;
-        pitchTenths = TunerSettings::clampTenths (dragStartTenths + steps * TunerSettings::stepTenths);
-        updatePitchControls();
+        setPitchHz (dragStartHz - e.getDistanceFromDragStartY() / pixelsPerHz);
+    }
+
+    void TunerDialog::mouseUp (const juce::MouseEvent& e)
+    {
+        if (e.eventComponent == &pitchLabel && isLeftClick (e) && e.mouseWasDraggedSinceMouseDown() && ! pitchLabel.isBeingEdited())
+            model.saveAppSettings();
     }
 
     void TunerDialog::paint (juce::Graphics& g)
     {
-        const auto background = getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId);
-        g.fillAll (background);
-
-        g.setColour (background.darker (0.3f));   // 하단 바 (상단 바와 같은 색)
-        g.fillRect (barBounds);
+        g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
     }
 
     void TunerDialog::resized()
     {
         gauge.setBounds (gaugeBounds);
 
-        const auto origin = barBounds.getPosition();
-        downButton.setBounds (downBounds + origin);
-        pitchLabel.setBounds (pitchBounds + origin);
-        upButton.setBounds (upBounds + origin);
+        pitchLabel.setBounds (TunerGauge::pitchArea() + gaugeBounds.getPosition());   // 게이지 위에 겹친다
     }
 }

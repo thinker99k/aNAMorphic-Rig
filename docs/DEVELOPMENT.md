@@ -72,7 +72,7 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 │   │   ├── NamBlock.*                  .nam 캡처 (NAM Core) + 뒤에 EQ
 │   │   ├── IrBlock.*                   .wav IR (juce::dsp::Convolution) + 뒤에 L. Cut / H. Cut
 │   │   ├── Merge.h                     병렬 두 갈래 합류 (갈래별 게인)
-│   │   ├── AudioEngine.*               오디오 콜백 + 직렬/병렬 체인 처리, 크로스페이드, 입출력 볼륨
+│   │   ├── AudioEngine.*               오디오 콜백 + 직렬/병렬 체인 처리, 크로스페이드, 입출력 볼륨, 튜너 모드(출력 무음 + 입력 기록)
 │   │   └── param/                      블록 파라미터
 │   │       ├── common/                 BlockParams (파라미터 정의 + 지금 씬 값), ParamStage (블록 뒤 처리 틀), Biquad
 │   │       ├── nam/                    NamParams (B / M / T, Freq, Middle Q), EqStage (3밴드 peak EQ)
@@ -81,9 +81,14 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 │   │   └── NamMetadata.*               .nam 파일의 메타데이터(이름, 장비 종류 등)만 읽기
 │   ├── model/
 │   │   └── RigModel.*                  체인(직렬/병렬 트리) 편집 상태, 패치·씬, 자동 저장, 백그라운드 로딩
+│   ├── tuner/                          튜너 (모달 창)
+│   │   ├── PitchDetector.*             YIN 피치 검출, 주파수 → 음 이름·cents
+│   │   ├── TunerDialog.*               튜너 창 (게이지 + 기준음 값 상자), 20 Hz 로 엔진 입력 분석
+│   │   ├── TunerGauge.*                반원 게이지
+│   │   └── TunerButton.*               상단 바 Tuner 버튼
 │   └── ui/                             화면
 │       ├── MainComponent.*             전체 배치, Edit / Live 모드 전환
-│       ├── TopBar.*                    패치 콤보박스, 이전/다음, Undo / Redo, 패치 이름(Rename / Patch Reset), 설정 버튼
+│       ├── TopBar.*                    패치 콤보박스, 이전/다음, Undo / Redo, 패치 이름(Rename / Patch Reset), Tuner / 설정 버튼
 │       ├── StatusBar.*                 입출력 볼륨 노브, IN / OUT 미터, CPU, 출력 뮤트
 │       ├── GainKnob.*                  볼륨 노브
 │       ├── ParamKnob.*                 블록 파라미터 노브 ([노브][이름 / 값])
@@ -117,7 +122,7 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 
 ```
 ~/Documents/aNAMorphic-Rig/             (Windows: C:\Users\<user>\Documents\aNAMorphic-Rig)
-├── settings.json                       앱 전역 설정: 입력/출력 볼륨 dB, 소수 1자리 (없거나 깨지면 0 dB 로 생성, 노브 드래그 끝/종료 시 저장)
+├── settings.json                       앱 전역 설정: 입력/출력 볼륨 dB(소수 1자리), 튜너 기준음 Hz(정수, 410~470, 기본 440) (없거나 깨지면 기본값으로 생성, 볼륨 노브·튜너 기준음 드래그 끝, 기준음 입력 적용, 종료 시 저장)
 ├── settings.json.bak                   깨진 settings.json 을 다시 만들 때 남기는 백업
 ├── audio-device.xml                    오디오 장치 설정 (처음 실행 시 기본 장치로 생성, Settings 에서 Save 하거나 종료할 때 저장). 채널은 항상 전부 열고, 쓸 채널은 패치가 정함
 ├── nam/                                *.nam 캡처를 여기에 넣으면 블록 선택기 NAM 목록에 표시

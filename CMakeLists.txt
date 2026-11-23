@@ -137,6 +137,10 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/engine/param/ir/CutStage.cpp
         source/model/RigModel.cpp
         source/library/NamMetadata.cpp
+        source/tuner/PitchDetector.cpp
+        source/tuner/TunerGauge.cpp
+        source/tuner/TunerDialog.cpp
+        source/tuner/TunerButton.cpp
         source/ui/MainComponent.cpp
         source/ui/TopBar.cpp
         source/ui/SettingsDialog.cpp
@@ -156,14 +160,6 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/ParamKnob.cpp
         source/ui/SpectrumWindow.cpp   # [SPECTRUM] 테스트용
 )
-
-target_sources(aNAMorphic-Rig PRIVATE
-        source/tuner/PitchDetector.cpp
-        source/tuner/TunerSettings.cpp
-        source/tuner/TunerInput.cpp
-        source/tuner/TunerGauge.cpp
-        source/tuner/TunerDialog.cpp
-        source/tuner/TunerButton.cpp)
 
 target_include_directories(aNAMorphic-Rig PRIVATE source)
 

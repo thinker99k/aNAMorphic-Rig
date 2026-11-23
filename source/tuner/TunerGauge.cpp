@@ -6,10 +6,8 @@ namespace rig
 {
     namespace
     {
-        // 도면 좌표 (게이지 패널 404 x 254 안, Figma 29:215 / 29:331 / 29:391)
-        constexpr float panelWidth  = 404.0f;
-        constexpr float panelHeight = 254.0f;
-        constexpr float cx = 202.0f, cy = 246.0f;   // 게이지 중심
+        // 도면 좌표 (게이지 패널 TunerGauge::panelWidth x panelHeight = 404 x 254 안)
+        constexpr float cx = 202.0f, cy = 246.0f;   // 게이지 중심 (바늘 뿌리, 보이지 않음)
 
         constexpr float arcRadius        = 200.0f;   // 기본 호, 정확 구간, 부채꼴, 굵은 호
         constexpr float tickOuterRadius  = 195.0f;
@@ -17,7 +15,8 @@ namespace rig
         constexpr float tickMinorInner   = 189.0f;   // 그 사이 5 cents (길이 6)
         constexpr float numberRadius     = 218.0f;
         constexpr float needleRadius     = 206.0f;
-        constexpr float plateRadius      = 58.0f;    // 음 이름 반원 판
+        constexpr float innerRadius      = 70.0f;    // 음 이름 위 가는 호. 바늘·부채꼴은 여기서 시작
+        constexpr float innerArcDegrees  = 60.0f;    // 가는 호는 ±60°
 
         constexpr float degreesPerCent = 1.2f;       // ±50 cents = ±60°
         constexpr float maxCents       = 50.0f;
@@ -30,13 +29,13 @@ namespace rig
         constexpr float fillAlpha        = 0.22f;    // 부채꼴 투명도
 
         const juce::Rectangle<float> numberBox   { 32.0f, 16.0f };   // 숫자 하나 (가운데가 반지름 218 위)
-        // 반원 판 안: 음 이름 위, 그 바로 밑에 cents (판 아래쪽 y 246 까지)
-        const juce::Rectangle<float> noteArea    { 146.0f, 190.0f, 112.0f, 36.0f };
-        const juce::Rectangle<float> centsArea   { 146.0f, 226.0f, 112.0f, 18.0f };
+        // 아래 줄: 가는 호 안에 음 이름, 양옆에 기준음 Hz(값 상자) / 오차 cents (가운데에서 같은 거리)
+        const juce::Rectangle<float> noteArea    { 152.0f, 198.0f, 100.0f, 44.0f };
+        const juce::Rectangle<int>   pitchBox    { 36, 208, 96, 24 };
+        const juce::Rectangle<float> centsArea   { 272.0f, 208.0f, 96.0f, 24.0f };
         const juce::Rectangle<float> noSignalArea { 0.0f, 150.0f, 404.0f, 22.0f };
 
-        constexpr float noteFontSize  = 32.0f;
-        constexpr float centsFontSize = 13.0f;
+        constexpr float noteFontSize  = 40.0f;
         constexpr float smallFontSize = 14.0f;
         constexpr float numberFontSize = 11.0f;
         const juce::Colour inTuneColour = juce::Colour (0xff32cd32);   // 전원 버튼과 같은 초록
@@ -62,6 +61,11 @@ namespace rig
         }
     }
 
+    juce::Rectangle<int> TunerGauge::pitchArea()
+    {
+        return pitchBox;
+    }
+
     TunerGauge::TunerGauge()
     {
         setInterceptsMouseClicks (false, false);
@@ -69,9 +73,6 @@ namespace rig
 
     void TunerGauge::setState (const TunerState& newState)
     {
-        if (newState == state)
-            return;
-
         state = newState;
         repaint();
     }
@@ -117,32 +118,27 @@ namespace rig
             const float angle = toRadians (state.cents);
             const float from = juce::jmin (0.0f, angle), to = juce::jmax (0.0f, angle);
 
-            // 부채꼴, 굵은 호, 바늘
+            // 부채꼴(가는 호 바깥만), 굵은 호, 바늘
             juce::Path fan;
-            fan.addPieSegment (cx - arcRadius, cy - arcRadius, arcRadius * 2.0f, arcRadius * 2.0f, from, to, 0.0f);
+            fan.addPieSegment (cx - arcRadius, cy - arcRadius, arcRadius * 2.0f, arcRadius * 2.0f, from, to, innerRadius / arcRadius);
             g.setColour (colour.withAlpha (fillAlpha));
             g.fillPath (fan);
 
             g.setColour (colour);
             strokeArc (g, arcRadius, from, to, boldArcThickness);
-            g.drawLine (juce::Line<float> ({ cx, cy }, pointAt (needleRadius, angle)), needleThickness);
+            g.drawLine (juce::Line<float> (pointAt (innerRadius, angle), pointAt (needleRadius, angle)), needleThickness);
         }
 
-        // 반원 판과 음 이름 (바늘 뿌리를 덮는다)
-        juce::Path plate;
-        plate.addPieSegment (cx - plateRadius, cy - plateRadius, plateRadius * 2.0f, plateRadius * 2.0f,
-                             -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi, 0.0f);
-        g.setColour (background);
-        g.fillPath (plate);
+        // 음 이름 위 가는 호와 음 이름
         g.setColour (idleColour);
-        g.strokePath (plate, juce::PathStrokeType (1.0f));
+        strokeArc (g, innerRadius, -juce::degreesToRadians (innerArcDegrees), juce::degreesToRadians (innerArcDegrees), 1.0f);
 
         g.setColour (colour);
         g.setFont (juce::FontOptions (noteFontSize, juce::Font::bold));
         g.drawText (state.hasSignal ? juce::String (state.note) : juce::String ("-"), noteArea, juce::Justification::centred, false);
 
-        // 오차: 음 이름 밑 (주파수는 표시하지 않는다)
-        g.setFont (juce::FontOptions (centsFontSize));
+        // 오차: 음 이름 오른쪽 (주파수는 표시하지 않는다)
+        g.setFont (juce::FontOptions (valueFontSize));
         g.setColour (state.hasSignal ? juce::Colours::white : idleColour);
 
         const int cents = juce::roundToInt (state.cents);

@@ -50,7 +50,7 @@ namespace rig
         for (int t = 1; t <= tauMax + 1; ++t)
         {
             running += d[(size_t) t];
-            cmnd[(size_t) t] = running > 0.0 ? (float) (d[(size_t) t] * t / running) : 1.0f;
+            cmnd[(size_t) t] = running > 0.0 ? (float) ((double) d[(size_t) t] * t / running) : 1.0f;
         }
 
         // 4. 임계값보다 처음 낮아지는 곳에서 지역 최솟값까지
