@@ -78,16 +78,17 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 │   │       ├── nam/                    NamParams (B / M / T, Freq, Middle Q), EqStage (3밴드 peak EQ)
 │   │       └── ir/                     IrParams (L. Cut / H. Cut), CutStage (Butterworth 24 dB/oct)
 │   ├── library/
-│   │   └── NamMetadata.*               .nam 파일의 메타데이터(이름, 장비 종류 등)만 읽기
+│   │   ├── NamMetadata.*               .nam 파일의 메타데이터(이름, 장비 종류 등)만 읽기
+│   │   └── LibraryImport.*             외부 NAM / WAV 파일 복사, 중복 이름 처리, 결과 집계
 │   ├── model/
 │   │   └── RigModel.*                  체인(직렬/병렬 트리) 편집 상태, 패치·씬, 자동 저장, 백그라운드 로딩
 │   └── ui/                             화면
-│       ├── MainComponent.*             전체 배치, Edit / Live 모드 전환
+│       ├── MainComponent.*             전체 배치, Edit / Live 모드 전환, 외부 파일 드롭과 가져오기 큐
 │       ├── TopBar.*                    패치 콤보박스, 이전/다음, Undo / Redo, 패치 이름(Rename / Patch Reset), 설정 버튼
 │       ├── StatusBar.*                 입출력 볼륨 노브, IN / OUT 미터, CPU, 출력 뮤트
 │       ├── GainKnob.*                  볼륨 노브
 │       ├── ParamKnob.*                 블록 파라미터 노브 ([노브][이름 / 값])
-│       ├── SettingsDialog.*            설정 모달 (드라이버, 입출력 장치, 저장/취소)
+│       ├── SettingsDialog.*            설정 모달 (오디오 장치·형식, 저장/취소, Refresh Library)
 │       ├── SpectrumWindow.*            출력 주파수 분석 창 (실행 인자 --spectrum 일 때만, 테스트용)
 │       ├── Widgets.h                   공용 위젯, 마우스 규칙, 기본 LookAndFeel, 노브 외형, 전원 버튼
 │       ├── edit/                       Edit 모드 화면
@@ -128,6 +129,15 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 ```
 
 출력 뮤트는 저장하지 않습니다 (패치를 바꿔도 유지, 앱을 다시 켜면 해제).
+
+라이브러리 가져오기와 갱신
+
+- `MainComponent`가 OS 파일 드롭을 받습니다. 제목표시줄은 부모 `DocumentWindow`이므로 제외되며, Edit/Live의 모든 자식 영역은 메인 컴포넌트로 전달됩니다. 앱 내부의 블록 드래그와는 별도 경로입니다.
+- `.nam` / `.wav`는 대소문자 구분 없이 받아 `nam/` / `ir/`에 복사하고, 저장 확장자는 소문자로 통일합니다. 폴더와 다른 확장자는 건너뜁니다. 이미 올바른 라이브러리 하위에 있는 파일은 복사하지 않습니다.
+- `LibraryImport`는 UI·모델·오디오를 참조하지 않습니다. 단일 `ThreadPool`에서 드롭 순서대로 복사하고, 이름 충돌 시 `name (2).nam`부터 번호를 붙입니다. 배타적 파일 생성으로 기존 파일을 덮어쓰지 않으며, 실패·취소 시 이번 복사에서 만든 불완전한 파일을 정리합니다.
+- 종료 시 대기 작업을 취소하고 진행 중 작업은 버퍼 단위로 중단합니다. 완료 콜백은 메시지 스레드에서 `SafePointer`를 확인한 뒤 드롭당 한 번 `EditView::refreshLibrary()`를 호출하고 제외·실패 내역을 알립니다.
+- `SettingsDialog::show()`의 `onRefreshLibrary` 콜백도 같은 `EditView → BlockEditor::refresh()` 경로를 사용합니다. NAM / IR 하위 폴더를 재귀 스캔하는 기존 구현을 사용하며 검색어와 표별 정렬은 유지합니다. Refresh는 오디오 설정 Save/Cancel과 독립적입니다.
+- 블록 선택기의 `Browse`는 `paths::root().startAsProcess()`로 루트를 엽니다. IN/OUT 선택 중에도 활성입니다. 파일 이동 추적이나 패치 경로 마이그레이션은 하지 않으므로, 사용 중인 파일을 옮겼다면 블록에 새 경로를 다시 지정해야 합니다.
 
 패치 파일 형식
 
