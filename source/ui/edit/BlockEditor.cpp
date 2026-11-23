@@ -83,6 +83,16 @@ namespace rig
         searchBox.onEscapeKey = [this] { searchBox.setText ({}, true); };
         addAndMakeVisible (searchBox);
 
+        browseButton.onClick = [this]
+        {
+            const auto folder = paths::root();
+            if (! folder.isDirectory() || ! folder.startAsProcess())
+                showAlert (*this, "Could not open library folder",
+                           folder.getFullPathName() + "\n\nCheck folder permissions and your file manager.",
+                           { { "OK", 0 } });
+        };
+        addAndMakeVisible (browseButton);
+
         // 더블클릭(왼쪽)해야 블록에 지정된다
         fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
 
@@ -585,12 +595,14 @@ namespace rig
         constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 오른쪽 표 높이는 유지하고, 왼쪽 열 위 2/3 는 카테고리, 맨 아래 한 줄은 검색에 쓴다
+        // 오른쪽 표는 유지. 왼쪽 아래는 Browse + 검색, 나머지 위 2/3 까지를 카테고리에 쓴다
         auto leftColumn = area.removeFromLeft (categoryListWidth);
         const int categoryHeight = juce::jmax (0, juce::jmin (leftColumn.getHeight() * 2 / 3,
-                                                            leftColumn.getHeight() - rowHeight - middleGap));
+                                                            leftColumn.getHeight() - 2 * (rowHeight + middleGap)));
         categoryList.setBounds (leftColumn.withHeight (categoryHeight));
         searchBox.setBounds (leftColumn.removeFromBottom (rowHeight));
+        leftColumn.removeFromBottom (juce::jmin (middleGap, leftColumn.getHeight()));
+        browseButton.setBounds (leftColumn.removeFromBottom (rowHeight));
         categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);
         area.removeFromLeft (middleGap);
 

@@ -150,6 +150,7 @@ namespace rig
         BuiltInListModel builtInListModel { *this };
         juce::TableListBox builtInList;
         LeftClickOnly<juce::TextEditor> searchBox;
+        LeftClickOnly<juce::TextButton> browseButton { "Browse" };
 
         std::vector<Entry> namEntries, irEntries;   // refresh() 의 스캔 결과
         Entry outsideEntry;                         // 폴더 밖의 현재 파일 (메타데이터를 매번 읽지 않도록 보관)
