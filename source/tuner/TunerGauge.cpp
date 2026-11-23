@@ -30,12 +30,13 @@ namespace rig
         constexpr float fillAlpha        = 0.22f;    // 부채꼴 투명도
 
         const juce::Rectangle<float> numberBox   { 32.0f, 16.0f };   // 숫자 하나 (가운데가 반지름 218 위)
-        const juce::Rectangle<float> noteArea    { 146.0f, 186.0f, 112.0f, 60.0f };
-        const juce::Rectangle<float> hzArea      { 16.0f, 206.0f, 120.0f, 22.0f };
-        const juce::Rectangle<float> centsArea   { 268.0f, 206.0f, 120.0f, 22.0f };
+        // 반원 판 안: 음 이름 위, 그 바로 밑에 cents (판 아래쪽 y 246 까지)
+        const juce::Rectangle<float> noteArea    { 146.0f, 190.0f, 112.0f, 36.0f };
+        const juce::Rectangle<float> centsArea   { 146.0f, 226.0f, 112.0f, 18.0f };
         const juce::Rectangle<float> noSignalArea { 0.0f, 150.0f, 404.0f, 22.0f };
 
-        constexpr float noteFontSize  = 40.0f;
+        constexpr float noteFontSize  = 32.0f;
+        constexpr float centsFontSize = 13.0f;
         constexpr float smallFontSize = 14.0f;
         constexpr float numberFontSize = 11.0f;
         const juce::Colour inTuneColour = juce::Colour (0xff32cd32);   // 전원 버튼과 같은 초록
@@ -140,21 +141,13 @@ namespace rig
         g.setFont (juce::FontOptions (noteFontSize, juce::Font::bold));
         g.drawText (state.hasSignal ? juce::String (state.note) : juce::String ("-"), noteArea, juce::Justification::centred, false);
 
-        // 주파수 / 오차
-        g.setFont (juce::FontOptions (smallFontSize));
+        // 오차: 음 이름 밑 (주파수는 표시하지 않는다)
+        g.setFont (juce::FontOptions (centsFontSize));
         g.setColour (state.hasSignal ? juce::Colours::white : idleColour);
 
-        if (state.hasSignal)
-        {
-            const int cents = juce::roundToInt (state.cents);
-            g.drawText (juce::String (state.hz, 1) + " Hz", hzArea, juce::Justification::centred, false);
-            g.drawText ((cents >= 0 ? "+" : "") + juce::String (cents) + " cents", centsArea, juce::Justification::centred, false);
-        }
-        else
-        {
-            g.drawText ("- Hz", hzArea, juce::Justification::centred, false);
-            g.drawText ("- cents", centsArea, juce::Justification::centred, false);
-        }
+        const int cents = juce::roundToInt (state.cents);
+        g.drawText (state.hasSignal ? (cents >= 0 ? "+" : "") + juce::String (cents) + " cents" : juce::String ("- cents"),
+                    centsArea, juce::Justification::centred, false);
 
         if (! state.hasSignal)
         {

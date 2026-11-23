@@ -24,11 +24,8 @@ namespace rig
         const juce::Rectangle<int> downBounds   { 12, 12, 24, 24 };    // 왼쪽 여백 12 에 붙인다
         const juce::Rectangle<int> pitchBounds  { 40, 12, 84, 24 };
         const juce::Rectangle<int> upBounds     { 128, 12, 24, 24 };
-        const juce::Rectangle<int> ledBounds    { 288, 18, 8, 8 };
-        const juce::Rectangle<int> sourceBounds { 300, 0, 108, 48 };
 
-        const juce::Colour ledOnColour = juce::Colour (0xff32cd32);
-        const juce::Colour ledOffColour = juce::Colours::grey;
+        constexpr int pixelsPerStep = 2;   // 값 상자를 위아래로 끌 때 0.1 Hz 당 픽셀 (위 = 올림)
 
         // DialogWindow::LaunchOptions::create 가 만드는 창과 같지만, 제목 표시줄 끌기도 왼쪽 클릭만 (SettingsDialog 와 같은 방식)
         struct TunerWindow final : public LeftClickOnly<juce::DialogWindow>
@@ -79,6 +76,7 @@ namespace rig
         addAndMakeVisible (gauge);
 
         // 기준음 값: 클릭하면 Hz 숫자를 직접 입력 (Enter 또는 바깥 클릭 = 적용, Esc = 취소). 범위 밖은 끝 값으로
+        //          위아래로 끌면 값이 바뀐다 (끌었으면 Label 이 입력 칸을 열지 않는다). 끌기는 mouseDown / mouseDrag 에서
         pitchLabel.setJustificationType (juce::Justification::centred);
         pitchLabel.setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.25f));
         pitchLabel.setColour (juce::Label::outlineColourId, juce::Colours::grey);
@@ -94,6 +92,8 @@ namespace rig
             }
         };
         pitchLabel.onTextChange = [this] { pitchTyped(); };
+        pitchLabel.setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+        pitchLabel.addMouseListener (this, false);
         addAndMakeVisible (pitchLabel);
 
         for (auto* button : { &downButton, &upButton })
@@ -106,9 +106,6 @@ namespace rig
 
         downButton.onClick = [this] { stepPitch (-1); };
         upButton.onClick   = [this] { stepPitch (1); };
-
-        sourceLabel.setJustificationType (juce::Justification::centredLeft);
-        addAndMakeVisible (sourceLabel);
 
         updatePitchControls();
         setSize (contentWidth, contentHeight);
@@ -233,11 +230,23 @@ namespace rig
 
         // 6. 화면 갱신
         gauge.setState (state);
+    }
 
-        const int channel = input.getInputChannel();
-        sourceLabel.setText (channel > 0 ? "Source: IN " + juce::String (channel) : juce::String ("Source: -"),
-                             juce::dontSendNotification);
-        repaint (barBounds.getX() + ledBounds.getX(), barBounds.getY() + ledBounds.getY(), ledBounds.getWidth(), ledBounds.getHeight());
+    // 값 상자 끌기 (pitchLabel 의 마우스 이벤트를 받는다). 왼쪽 버튼만, 입력 중에는 무시
+    void TunerDialog::mouseDown (const juce::MouseEvent& e)
+    {
+        if (e.eventComponent == &pitchLabel && isLeftClick (e))
+            dragStartTenths = pitchTenths;
+    }
+
+    void TunerDialog::mouseDrag (const juce::MouseEvent& e)
+    {
+        if (e.eventComponent != &pitchLabel || ! isLeftClick (e) || pitchLabel.isBeingEdited())
+            return;
+
+        const int steps = -e.getDistanceFromDragStartY() / pixelsPerStep;
+        pitchTenths = TunerSettings::clampTenths (dragStartTenths + steps * TunerSettings::stepTenths);
+        updatePitchControls();
     }
 
     void TunerDialog::paint (juce::Graphics& g)
@@ -247,9 +256,6 @@ namespace rig
 
         g.setColour (background.darker (0.3f));   // 하단 바 (상단 바와 같은 색)
         g.fillRect (barBounds);
-
-        g.setColour (state.hasSignal ? ledOnColour : ledOffColour);
-        g.fillEllipse (ledBounds.translated (barBounds.getX(), barBounds.getY()).toFloat());
     }
 
     void TunerDialog::resized()
@@ -260,6 +266,5 @@ namespace rig
         downButton.setBounds (downBounds + origin);
         pitchLabel.setBounds (pitchBounds + origin);
         upButton.setBounds (upBounds + origin);
-        sourceLabel.setBounds (sourceBounds + origin);
     }
 }
