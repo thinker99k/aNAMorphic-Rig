@@ -139,6 +139,10 @@ namespace rig
         {
             if (safeThis != nullptr && saved)
                 safeThis->model.deviceChanged();
+        }, [safeThis]
+        {
+            if (safeThis != nullptr)
+                safeThis->editView.refreshLibrary();
         });
     }
 

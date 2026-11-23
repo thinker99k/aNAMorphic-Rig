@@ -33,6 +33,8 @@ namespace rig
         // 편집 화면이 숨겨진 동안(Live 모드) 변경 알림으로 목록을 다시 고르지 않는다. 다시 켜면 한 번 맞춘다
         void setUpdatesPaused (bool paused);
 
+        void refresh();   // Settings 및 파일 가져오기가 NAM / IR 전체를 다시 스캔
+
         void paint (juce::Graphics&) override;
         void resized() override;
 
@@ -72,7 +74,6 @@ namespace rig
         static Entry makeEntry (const juce::File& file, bool readMetadata);
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
-        void refresh();
         void updateFromModel();
         void showCategory (bool resetHighlight);
         Highlight currentHighlight();

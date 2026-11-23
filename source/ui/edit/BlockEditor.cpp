@@ -169,7 +169,7 @@ namespace rig
                  metadata.gearType, metadata.toneType, metadata.modeledBy };
     }
 
-    // 추후 설정창 refresh library 버튼에서 호출 예정
+    // 설정창 Refresh Library 및 파일 가져오기 완료 때 호출
     // nam/, ir/ 폴더를 스캔하고 NAM 메타데이터를 읽어 캐시에 둔다 (디스크를 읽는 곳은 여기뿐)
     void BlockEditor::refresh()
     {
