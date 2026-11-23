@@ -1,5 +1,7 @@
 #include "MainComponent.h"
 
+#include "AppPaths.h"
+#include "library/LibraryImport.h"
 #include "ui/SettingsDialog.h"
 
 namespace rig
@@ -92,6 +94,7 @@ namespace rig
 
     MainComponent::~MainComponent()
     {
+        libraryImports.removeAllJobs (true, -1);   // 대기 작업 취소, 진행 중 복사는 버퍼 경계에서 정리
         model.removeChangeListener (this);
         model.onPatchSaved = nullptr;
     }
@@ -143,6 +146,63 @@ namespace rig
         {
             if (safeThis != nullptr)
                 safeThis->editView.refreshLibrary();
+        });
+    }
+
+    bool MainComponent::isInterestedInFileDrag (const juce::StringArray& files)
+    {
+        return std::any_of (files.begin(), files.end(), [] (const juce::String& path)
+        {
+            const juce::File file (path);
+            return isLibraryFile (file) && file.existsAsFile();
+        });
+    }
+
+    void MainComponent::filesDropped (const juce::StringArray& files, int x, int y)
+    {
+        // MainComponent 만 파일 드롭 대상이다. 제목 표시줄은 부모 DocumentWindow 영역.
+        if (! getLocalBounds().contains (x, y) || isCurrentlyBlockedByAnotherModalComponent())
+            return;
+
+        const auto namDirectory = paths::namDir();
+        const auto irDirectory = paths::irDir();
+        juce::Component::SafePointer<MainComponent> safeThis (this);
+
+        libraryImports.addJob ([files, namDirectory, irDirectory, safeThis]
+        {
+            auto* job = juce::ThreadPoolJob::getCurrentThreadPoolJob();
+            auto imported = importLibraryFiles (files, namDirectory, irDirectory, [job] { return job->shouldExit(); });
+            if (imported.cancelled || job->shouldExit())
+                return;
+
+            // SafePointer 는 이 UI 콜백에서만 검사한다 (작업 스레드는 UI 에 접근하지 않는다).
+            juce::MessageManager::callAsync ([safeThis, result = std::move (imported)]
+            {
+                if (safeThis == nullptr)
+                    return;
+
+                safeThis->editView.refreshLibrary();
+                if (result.skipped.isEmpty() && result.failed.isEmpty())
+                    return;
+
+                juce::String message = "Imported: " + juce::String (result.imported)
+                                     + "\nAlready in library: " + juce::String (result.alreadyPresent);
+                const auto append = [&message] (const juce::String& label, const juce::StringArray& details)
+                {
+                    if (details.isEmpty())
+                        return;
+
+                    message += "\n\n" + label + " (" + juce::String (details.size()) + "):\n";
+                    constexpr int maxDetails = 6;
+                    for (int i = 0; i < juce::jmin (maxDetails, details.size()); ++i)
+                        message += details[i] + "\n";
+                    if (details.size() > maxDetails)
+                        message += "... and " + juce::String (details.size() - maxDetails) + " more.\n";
+                };
+                append ("Skipped (only .nam and .wav files are supported)", result.skipped);
+                append ("Could not import", result.failed);
+                showAlert (*safeThis, "Library import", message, { { "OK", 0 } });
+            });
         });
     }
 
