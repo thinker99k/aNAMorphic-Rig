@@ -131,6 +131,10 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/engine/AudioEngine.cpp
         source/engine/NamBlock.cpp
         source/engine/IrBlock.cpp
+        source/engine/BlockFactory.cpp
+        source/engine/param/common/BlockParams.cpp
+        source/engine/param/nam/EqStage.cpp
+        source/engine/param/ir/CutStage.cpp
         source/model/RigModel.cpp
         source/library/NamMetadata.cpp
         source/ui/MainComponent.cpp
@@ -138,6 +142,9 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/SettingsDialog.cpp
         source/ui/edit/ChainView.cpp
         source/ui/edit/ParamBar.cpp
+        source/ui/edit/ParamPanel.cpp
+        source/ui/edit/NamParamPanel.cpp
+        source/ui/edit/IrParamPanel.cpp
         source/ui/edit/SceneBar.cpp
         source/ui/edit/BlockEditor.cpp
         source/ui/edit/EditView.cpp
@@ -145,7 +152,10 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/live/ScenePads.cpp
         source/ui/live/PatchBar.cpp
         source/ui/StatusBar.cpp
-        source/ui/GainKnob.cpp)
+        source/ui/GainKnob.cpp
+        source/ui/ParamKnob.cpp
+        source/ui/SpectrumWindow.cpp   # [SPECTRUM] 테스트용
+)
 
 target_sources(aNAMorphic-Rig PRIVATE
         source/tuner/PitchDetector.cpp

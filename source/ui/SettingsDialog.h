@@ -10,7 +10,7 @@
 namespace rig
 {
     // 설정 모달 다이얼로그 내용물.
-    //  - 입력 소스(드라이버 종류 + 입력 장치), 출력 장치 선택
+    //  - 입력 소스(드라이버 종류 + 입력 장치), 출력 장치, 샘플레이트와 버퍼 크기 선택
     //  - 채널은 장치의 모든 채널을 열고, 어느 채널을 쓸지는 패치(IN / OUT 노드)에서 고른다
     //  - [Save] 를 누르면 장치에 적용하고 ~/Documents/aNAMorphic-Rig/audio-device.xml 에 저장
     //  - [Cancel] 을 누르면 아무것도 바꾸지 않고 닫힘
@@ -32,6 +32,8 @@ namespace rig
         void refreshDeviceTypes();
         void refreshInputDevices();
         void refreshOutputDevices();
+        void refreshFormatOptions();
+        juce::String selectedInputName() const;
         juce::AudioIODeviceType* selectedType() const;
         void save();
         void close (bool saved);
@@ -44,6 +46,12 @@ namespace rig
         LeftClickOnly<juce::ComboBox> typeBox, deviceBox;
         juce::Label outputDeviceLabel  { {}, "Output device" };
         LeftClickOnly<juce::ComboBox> outputDeviceBox;
+
+        juce::Label rateLabel { {}, "Sample rate" };
+        juce::Label bufferLabel { {}, "Buffer size" };
+        LeftClickOnly<juce::ComboBox> rateBox, bufferBox;
+        juce::Array<double> sampleRates;
+        juce::Array<int> bufferSizes;
 
         LeftClickOnly<juce::TextButton> saveButton   { "Save" };
         LeftClickOnly<juce::TextButton> cancelButton { "Cancel" };

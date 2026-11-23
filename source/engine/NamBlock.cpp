@@ -1,12 +1,13 @@
 #include "NamBlock.h"
 #include "AppPaths.h"
+#include "engine/param/nam/EqStage.h"
 
 #include <NAM/dsp.h>
 #include <NAM/get_dsp.h>
 
 namespace rig
 {
-    std::unique_ptr<NamBlock> NamBlock::load (const juce::File& file, juce::String& error)
+    std::unique_ptr<NamBlock> NamBlock::load (const juce::File& file, juce::String& error, std::shared_ptr<BlockParams> params)
     {
         if (! file.existsAsFile())
         {
@@ -37,7 +38,12 @@ namespace rig
                 return nullptr;
             }
 
-            return std::unique_ptr<NamBlock> (new NamBlock (std::move (model)));
+            auto block = std::unique_ptr<NamBlock> (new NamBlock (std::move (model)));
+
+            if (params != nullptr)
+                block->setStage (std::make_unique<EqStage> (std::move (params)));
+
+            return block;
         }
         catch (const std::exception& e)
         {

@@ -840,6 +840,18 @@ namespace rig
     {
         viewport.setScrollBarsShown (false, true);
         addAndMakeVisible (viewport);
+
+        errorLabel.setColour (juce::Label::textColourId, juce::Colours::red.brighter (0.2f));
+        warningLabel.setColour (juce::Label::textColourId, juce::Colours::yellow);
+
+        for (auto* label : { &errorLabel, &warningLabel })
+        {
+            label->setJustificationType (juce::Justification::topLeft);
+            label->setBorderSize ({});
+            label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
+            label->setInterceptsMouseClicks (false, false);   // 아래 패치 맵 조작을 막지 않는다
+            addChildComponent (label);   // viewport 다음에 넣어 위에 그린다
+        }
         model.addChangeListener (this);
         deviceManager.addChangeListener (this);
         rebuild();
@@ -856,6 +868,15 @@ namespace rig
         if (! updatesPaused)
             rebuild();
     }
+
+    // [SPECTRUM] begin (테스트용)
+    void ChainView::showSpectrumButton (std::function<void()> onClick)
+    {
+        spectrumButton.onClick = std::move (onClick);
+        addAndMakeVisible (spectrumButton);   // viewport 다음에 넣어 위에 그린다
+        resized();
+    }
+    // [SPECTRUM] end
 
     void ChainView::setUpdatesPaused (bool paused)
     {
@@ -907,6 +928,31 @@ namespace rig
             stopTimer();
         }
 
+        // 오류: 선택된 블록의 로딩 실패, 선택된 IN / OUT 의 채널이 지금 장치에 없음
+        juce::String error;
+        const auto endpoint = model.getSelectedEndpoint();
+
+        if (current != nullptr)
+            error = current->error;
+        else if (endpoint == RigModel::Endpoint::input ? inputFailed : endpoint == RigModel::Endpoint::output && outputFailed)
+            error = "Channel not available on the current device";
+
+        errorLabel.setText (error, juce::dontSendNotification);
+        errorLabel.setVisible (error.isNotEmpty());
+
+        // 모델 레이트와 장치 레이트가 다르면 소리가 틀어진다 (리샘플 미구현)
+        juce::String warning;
+        const auto deviceRate = model.getDeviceSampleRate();
+
+        if (current != nullptr && current->dsp != nullptr)
+            if (const auto modelRate = current->dsp->expectedSampleRate(); modelRate > 0.0 && std::abs (modelRate - deviceRate) > 0.5)
+                warning = "Sample rate mismatch:\nmodel " + juce::String (juce::roundToInt (modelRate)) + " Hz\ndevice "
+                        + juce::String (juce::roundToInt (deviceRate)) + " Hz";
+
+        warningLabel.setText (warning, juce::dontSendNotification);
+        warningLabel.setVisible (warning.isNotEmpty());
+        resized();
+
         // 새로 선택된 블록(방금 넣은 블록 등)이 화면 밖이면 보이도록 스크롤
         const auto* selected = model.getSelectedSlot();
         const auto selectedId = selected != nullptr ? selected->id : 0;
@@ -936,6 +982,21 @@ namespace rig
     void ChainView::resized()
     {
         viewport.setBounds (getLocalBounds());
+
+        // [SPECTRUM] 오른쪽 위 고정 (스크롤 안 됨). 오류 / 경고 문구(왼쪽 위)와 같은 여백
+        constexpr int spectrumWidth = 90, spectrumHeight = 26;                                                   // [SPECTRUM]
+        spectrumButton.setBounds (getWidth() - margin - spectrumWidth, margin, spectrumWidth, spectrumHeight);   // [SPECTRUM]
+
+        // 오류 / 경고: 왼쪽 위 (IN 노드와 같은 여백), 위에서부터 오류 → 경고. 글자의 줄바꿈(\n)만큼 줄 수
+        constexpr int messageWidth = 420, messageLineHeight = 18;
+        auto messages = juce::Rectangle<int> (margin, margin, messageWidth, getHeight());
+
+        for (auto* label : { &errorLabel, &warningLabel })
+        {
+            const auto& text = label->getText();
+            const int lines = label->isVisible() ? text.length() - text.removeCharacters ("\n").length() + 1 : 0;
+            label->setBounds (messages.removeFromTop (messageLineHeight * lines));
+        }
 
         if (strip != nullptr)
             strip->setSize (juce::jmax (strip->idealWidth(), viewport.getWidth()),

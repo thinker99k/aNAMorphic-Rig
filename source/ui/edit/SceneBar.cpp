@@ -14,7 +14,6 @@ namespace rig
         constexpr float sceneCorner = 5.0f;     // 씬 버튼 둥근 모서리 반지름
         constexpr float nameFontSize = 13.0f;   // 씬 이름 (버튼 표시와 입력칸이 같은 크기와 위치)
         constexpr int nameInset = 6;
-        constexpr float toolsWidthRatio = 1.75f;   // [Copy/Swap | All Reset] 묶음 폭 = 씬 버튼 폭의 1.75 배 (자리가 모자라면 그만큼만)
     }
 
     SceneBar::SceneBar (RigModel& m) : model (m)
@@ -25,7 +24,7 @@ namespace rig
         liveButton.onClick = [this] { if (onLiveClicked) onLiveClicked(); };
         addAndMakeVisible (liveButton);
 
-        for (auto* b : { &copyButton, &swapButton, &resetAllButton })
+        for (auto* b : { &copyButton, &swapButton, &sceneResetButton })
         {
             // 눌러도 키보드 포커스를 가져가지 않는다 (ESC 는 씬 바가 받는다)
             b->setWantsKeyboardFocus (false);
@@ -40,16 +39,16 @@ namespace rig
         swapButton.onClick = [this] { toggleMode (Mode::swap); };
 
         // Copy / Swap 모드 중이면 바깥 클릭처럼 모드를 끝낸다. 경고창에서 Reset 을 눌러야 초기화
-        resetAllButton.setTooltip ("Reset all scenes: every block On, default names");
-        resetAllButton.onClick = [this]
+        sceneResetButton.setTooltip ("Reset all scenes: every block On with default parameters, branches -3 dB, default names");
+        sceneResetButton.onClick = [this]
         {
             cancelMode();
             cancelRename();
 
             juce::Component::SafePointer<SceneBar> safeThis (this);
-            showResetWarning (*this, "All Reset",
-                              "Reset all 8 scenes?\n\nEvery block will be On in every scene and all scene names "
-                              "go back to \"Scene 1\" ... \"Scene 8\".",
+            showResetWarning (*this, "Scene Reset",
+                              "Reset all 8 scenes?\n\nIn every scene, every block will be On with default parameters, "
+                              "parallel branches will be On at -3 dB, and the scene names go back to \"Scene 1\" ... \"Scene 8\".",
                               [safeThis] { if (safeThis != nullptr) safeThis->model.resetAllScenes(); });
         };
 
@@ -183,7 +182,7 @@ namespace rig
 
         juce::PopupMenu menu;
         menu.addItem ("Rename", [this, scene] { startRename (scene); });
-        menu.addItem ("Reset", [this, scene] { model.resetScene (scene); });   // 씬 하나라 경고 없이 바로
+        menu.addItem ("Reset", [this, scene] { model.resetScene (scene); });   // 씬 하나 = 중간 리셋이라 경고 없이 바로
         showContextMenu (menu, click);
     }
 
@@ -367,26 +366,22 @@ namespace rig
     {
         auto area = getLocalBounds().reduced (gap);
 
-        // [Live] 는 왼쪽 끝, 씬 버튼 8개 묶음은 가운데, [Copy/Swap | All Reset] 는 오른쪽 끝.
-        // 모두 정사각형 한 칸 폭 (= 높이), 씬 버튼 사이는 gap
+        // [Scene Reset] 는 왼쪽 끝 (전체 리셋은 왼쪽), [1] ~ [8] [Copy/Swap] 묶음은 가운데, [Live] 는 오른쪽 끝.
+        // 버튼 폭은 모두 같은 정사각형 한 칸 (= 높이). Copy / Swap 은 한 칸을 위아래로 나눈다. 사이는 모두 gap
         const int size = area.getHeight();
 
-        liveButton.setBounds (area.getX(), area.getY(), size, size);
+        sceneResetButton.setBounds (area.getX(), area.getY(), size, size);
+        liveButton.setBounds (area.getRight() - size, area.getY(), size, size);
 
-        const int scenesWidth = RigModel::numScenes * size + (RigModel::numScenes - 1) * gap;
-        const int scenesLeft = getLocalBounds().getCentreX() - scenesWidth / 2;
+        constexpr int columns = RigModel::numScenes + 1;   // 씬 8개 + Copy / Swap
+        const int groupWidth = columns * size + (columns - 1) * gap;
+        const int groupLeft = getLocalBounds().getCentreX() - groupWidth / 2;
 
         for (int i = 0; i < RigModel::numScenes; ++i)
-            sceneBounds[(size_t) i] = { scenesLeft + i * (size + gap), area.getY(), size, size };
+            sceneBounds[(size_t) i] = { groupLeft + i * (size + gap), area.getY(), size, size };
 
-        // 오른쪽 묶음은 씬 버튼보다 넓게 (글자를 읽기 편하게). 씬 묶음과 겹치지 않는 폭까지만
-        const int scenesRight = scenesLeft + scenesWidth;
-        const int toolsWidth = juce::jmin (juce::roundToInt ((float) size * toolsWidthRatio), area.getRight() - scenesRight - gap);
-        auto tools = juce::Rectangle<int> (area.getRight() - toolsWidth, area.getY(), toolsWidth, size);
-        auto modeArea = tools.removeFromLeft ((tools.getWidth() - gap) / 2);
-        tools.removeFromLeft (gap);
-        resetAllButton.setBounds (tools);
-        copyButton.setBounds (modeArea.removeFromTop ((modeArea.getHeight() - gap) / 2));
+        auto modeArea = juce::Rectangle<int> (groupLeft + RigModel::numScenes * (size + gap), area.getY(), size, size);
+        copyButton.setBounds (modeArea.removeFromTop ((size - gap) / 2));
         modeArea.removeFromTop (gap);
         swapButton.setBounds (modeArea);
 

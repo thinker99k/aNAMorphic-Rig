@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model/RigModel.h"
+#include "ui/Widgets.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -25,6 +26,9 @@ namespace rig
 
         // 편집 화면이 숨겨진 동안(Live 모드) 변경 알림으로 다시 만들지 않는다. 다시 켜면 한 번 다시 만든다
         void setUpdatesPaused (bool paused);
+
+        // [SPECTRUM] 오른쪽 위 고정 [Spectrum] 버튼을 보이고 누르면 onClick (실행 인자 --spectrum 일 때만 부른다)
+        void showSpectrumButton (std::function<void()> onClick);   // [SPECTRUM]
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -54,6 +58,10 @@ namespace rig
         RigModel& model;
         juce::AudioDeviceManager& deviceManager;   // 장치가 바뀌면 IN / OUT 빗금(없는 채널)을 다시 따진다
         juce::Viewport viewport;
+        // 왼쪽 위 고정 문구 (스크롤 안 됨, 클릭 통과). 선택된 블록 / IN·OUT 기준, 위에서부터 오류 → 경고
+        //  오류(빨강) = 블록 로딩 실패, 장치에 없는 채널. 경고(노랑) = NAM 모델 샘플레이트 ≠ 장치 샘플레이트
+        juce::Label errorLabel, warningLabel;
+        LeftClickOnly<juce::TextButton> spectrumButton { "Spectrum" };   // [SPECTRUM] 오른쪽 위 고정, 평소에는 숨김
         std::unique_ptr<Strip> strip;
         juce::uint64 shownSelectedId = 0;   // 선택이 바뀌었을 때만 그 블록이 보이도록 스크롤
         MarqueeKey marqueeKey;

@@ -139,8 +139,8 @@ namespace rig
     void PatchBar::resized()
     {
         auto area = getLocalBounds().reduced (gap);
-        liveBounds = area.removeFromLeft (area.getHeight());   // 정사각형, SceneBar 의 Live 버튼과 같은 자리
-        area.removeFromLeft (gap);
+        liveBounds = area.removeFromRight (area.getHeight());   // 정사각형, SceneBar 의 Live 버튼과 같은 자리 (오른쪽 끝)
+        area.removeFromRight (gap);
         prevBounds = area.removeFromLeft ((area.getWidth() - gap) / 2);
         area.removeFromLeft (gap);
         nextBounds = area;
@@ -154,22 +154,15 @@ namespace rig
         g.setColour (border);
         g.drawRect (getLocalBounds(), 1);
 
-        // Live ON: "Live" 14 px 아래 "ON" 10 px, 줄 간격 2 px, 묶음을 가운데에
+        // Live: 편집 화면 Live 버튼과 같은 글자 크기 (JUCE 버튼 글꼴 = min (16, 높이 x 0.6)), Live 모드라 굵게만
         const auto liveArea = liveBounds.toFloat();
         g.setColour (liveFill);
         g.fillRoundedRectangle (liveArea, 5.0f);
         g.setColour (liveGreen);
         g.drawRoundedRectangle (liveArea.reduced (1.0f), 5.0f, 2.0f);
 
-        const auto liveFont = boldFont (14.0f);
-        const auto onFont = boldFont (10.0f);
-        const float liveTop = liveArea.getCentreY() - (liveFont.getHeight() + (float) textGap + onFont.getHeight()) / 2.0f;
-        g.setFont (liveFont);
-        g.drawText ("Live", juce::Rectangle<float> (liveArea.getX(), liveTop, liveArea.getWidth(), liveFont.getHeight()),
-                    juce::Justification::centred, false);
-        g.setFont (onFont);
-        g.drawText ("ON", juce::Rectangle<float> (liveArea.getX(), liveTop + liveFont.getHeight() + (float) textGap, liveArea.getWidth(), onFont.getHeight()),
-                    juce::Justification::centred, false);
+        g.setFont (boldFont (juce::jmin (16.0f, liveArea.getHeight() * 0.6f)));
+        g.drawText ("Live", liveArea, juce::Justification::centred, false);
 
         // 두 버튼이 같은 글꼴을 쓰므로 한 번만 만든다
         const auto stepNumberFont = boldFont (40.0f);   // ScenePads 의 씬 번호와 같은 글꼴

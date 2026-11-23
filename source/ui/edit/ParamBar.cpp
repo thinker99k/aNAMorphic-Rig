@@ -1,5 +1,7 @@
 #include "ParamBar.h"
 
+#include "ValueSteps.h"
+
 namespace rig
 {
     namespace
@@ -7,8 +9,6 @@ namespace rig
         // channelBox 항목 id: 단일 채널은 1 + 채널(0부터), 출력 스테레오 쌍은 pairIdBase + 첫 채널(0부터)
         constexpr int pairIdBase = 1000;
 
-        const juce::Colour errorColour (juce::Colours::red.brighter (0.2f));
-        const juce::Colour warningColour (juce::Colours::yellow);
 
         // 합류 레벨: 오디오 테이퍼. 위치 p 에서 dB = 10 * log2 (p) → 절반마다 -10 dB, -3 dB ≈ 81 %,
         // p ≤ 2^-6 (= -60 dB) 는 -inf (mergeMinDb 에 붙임). 0.1 dB 단위
@@ -25,7 +25,7 @@ namespace rig
                      },
                      [] (double start, double end, double db)       // 0.1 dB 단위
                      {
-                         return juce::jlimit (start, end, std::round (db * 10.0) / 10.0);
+                         return juce::jlimit (start, end, steps::roundTo (db, steps::dbDecimals));
                      } };
         }
 
@@ -39,7 +39,6 @@ namespace rig
 
     ParamBar::ParamBar (RigModel& m, juce::AudioDeviceManager& dm) : model (m), deviceManager (dm)
     {
-        powerButton.setClickingTogglesState (true);
         powerButton.onClick = [this] { model.setOn (model.getSelectedSlotId(), powerButton.getToggleState()); };
         addAndMakeVisible (powerButton);
 
@@ -48,20 +47,9 @@ namespace rig
         channelBox.onChange = [this] { channelChosen(); };
         addChildComponent (channelBox);
 
-        errorLabel.setColour (juce::Label::textColourId, errorColour);
-        warningLabel.setColour (juce::Label::textColourId, warningColour);
-
-        for (auto* label : { &errorLabel, &warningLabel })
-        {
-            label->setJustificationType (juce::Justification::topRight);
-            label->setBorderSize ({});
-            label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
-            addChildComponent (label);
-        }
 
         for (int b = 0; b < 2; ++b)
         {
-            branchPower[(size_t) b].setClickingTogglesState (true);
             branchPower[(size_t) b].onClick = [this, b]
             {
                 model.setBranchOn (model.getSelectedParallelId(), b, branchPower[(size_t) b].getToggleState());
@@ -104,6 +92,9 @@ namespace rig
         levelResetButton.onClick = [this] { model.resetLevels (model.getSelectedParallelId()); };
         addChildComponent (levelResetButton);
 
+        paramResetButton.onClick = [this] { model.resetBlockParams (model.getSelectedSlotId()); };
+        addChildComponent (paramResetButton);
+
         model.addChangeListener (this);
         deviceManager.addChangeListener (this);
         updateFromModel();
@@ -131,27 +122,26 @@ namespace rig
         channelLabel.setVisible (isEndpoint);
         channelBox.setVisible (isEndpoint);
 
+        if (panel != nullptr)
+            panel->setVisible (! isEndpoint && ! isMerge);   // IN / OUT, 합류를 고르면 숨긴다
+
         for (int b = 0; b < 2; ++b)
             for (auto* c : std::initializer_list<juce::Component*> { &branchPower[(size_t) b], &branchLabel[(size_t) b],
                                                                      &levelSlider[(size_t) b], &levelValue[(size_t) b] })
                 c->setVisible (isMerge);
 
         levelResetButton.setVisible (isMerge);
+        paramResetButton.setVisible (false);   // 블록이면 아래에서 패널이 있을 때만
 
         if (isMerge)
         {
             updateMerge (*parallel);
-            setMessages ({}, {});
             return;
         }
 
         if (isEndpoint)
         {
             fillChannelBox (endpoint);
-            setMessages (model.isChannelMissing (endpoint, deviceManager.getCurrentAudioDevice())
-                             ? "Channel not available on the current device" : juce::String(),
-                         {});
-            resized();
             return;
         }
 
@@ -161,17 +151,26 @@ namespace rig
         powerButton.setEnabled (slot != nullptr && slot->type != BlockType::None);
         powerButton.setToggleState (slot == nullptr || model.isOn (*slot), juce::dontSendNotification);
 
-        // 모델 레이트와 장치 레이트가 다르면 소리가 틀어진다 (리샘플 미구현)
-        juce::String warning;
-        const auto deviceRate = model.getDeviceSampleRate();
+        // 블록 종류가 바뀌면 패널을 다시 만들고, 같으면 값만 갱신 (패치가 바뀐 경우 포함)
+        const auto type = slot != nullptr ? slot->type : BlockType::None;
 
-        if (slot != nullptr && slot->dsp != nullptr)
-            if (const auto modelRate = slot->dsp->expectedSampleRate(); modelRate > 0.0 && std::abs (modelRate - deviceRate) > 0.5)
-                warning = "Sample rate mismatch:\nmodel " + juce::String (juce::roundToInt (modelRate)) + " Hz\ndevice "
-                        + juce::String (juce::roundToInt (deviceRate)) + " Hz";
+        if (type != panelType || (panel == nullptr && type != BlockType::None))
+        {
+            panelType = type;
+            panel = createParamPanel (type, model);   // 이전 패널은 여기서 지워진다
 
-        setMessages (slot != nullptr ? slot->error : juce::String(), warning);
-        resized();
+            if (panel != nullptr)
+            {
+                addAndMakeVisible (*panel);
+                resized();
+            }
+        }
+        else if (panel != nullptr)
+        {
+            panel->refresh();
+        }
+
+        paramResetButton.setVisible (panel != nullptr);
     }
 
     void ParamBar::updateMerge (const RigModel::Parallel& parallel)
@@ -183,15 +182,6 @@ namespace rig
             levelSlider[(size_t) b].setValue (level, juce::dontSendNotification);
             levelValue[(size_t) b].setText (levelText (level), juce::dontSendNotification);
         }
-    }
-
-    // 오류(빨강)와 경고(노랑)는 동시에 보일 수 있다. 하나뿐이면 그 줄만 세로 가운데에
-    void ParamBar::setMessages (const juce::String& error, const juce::String& warning)
-    {
-        errorLabel.setText (error, juce::dontSendNotification);
-        warningLabel.setText (warning, juce::dontSendNotification);
-        errorLabel.setVisible (error.isNotEmpty());
-        warningLabel.setVisible (warning.isNotEmpty());
     }
 
     void ParamBar::fillChannelBox (RigModel::Endpoint endpoint)
@@ -278,40 +268,6 @@ namespace rig
         g.drawLine (sliderPos, cap.getY() + 3.0f, sliderPos, cap.getBottom() - 3.0f, 2.0f);
     }
 
-    void ParamBar::PowerButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
-    {
-        auto bounds = getLocalBounds().toFloat().reduced (1.5f);
-        const bool on = getToggleState();
-
-        auto colour = on ? juce::Colours::limegreen : juce::Colours::grey.darker (0.3f);
-        if (! isEnabled())
-            colour = juce::Colours::grey.darker (0.8f);
-        else if (down)
-            colour = colour.darker (0.3f);
-        else if (highlighted)
-            colour = colour.brighter (0.3f);
-
-        g.setColour (juce::Colours::black.withAlpha (on && isEnabled() ? 0.35f : 0.2f));
-        g.fillRoundedRectangle (bounds, 6.0f);
-        g.setColour (colour.withAlpha (0.6f));
-        g.drawRoundedRectangle (bounds, 6.0f, 1.0f);
-
-        // 전원 기호: 위가 열린 원 + 세로선
-        const auto icon = bounds.reduced (bounds.getHeight() * 0.25f);
-        const auto centre = icon.getCentre();
-        const float radius = icon.getHeight() * 0.5f;
-        const float gapAngle = juce::MathConstants<float>::pi / 5.0f;
-
-        juce::Path path;
-        path.addCentredArc (centre.x, centre.y, radius, radius, 0.0f,
-                            gapAngle, juce::MathConstants<float>::twoPi - gapAngle, true);
-        path.startNewSubPath (centre.x, icon.getY() - radius * 0.15f);
-        path.lineTo (centre.x, centre.y);
-
-        g.setColour (colour);
-        g.strokePath (path, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-    }
-
     void ParamBar::paint (juce::Graphics& g)
     {
         g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.05f));
@@ -321,10 +277,26 @@ namespace rig
 
     void ParamBar::resized()
     {
-        // 오른쪽 끝 = 전원 버튼. 나머지(왼쪽)는 나중에 파라미터 노브 자리
-        auto area = getLocalBounds().reduced (12, 0);
-        const int size = juce::jmin (50, getHeight() - 8);   // 전원 버튼 50 px (예전 40 px 의 1.25 배)
+        // 리셋(Param Reset / Level Reset)은 왼쪽 끝 (리셋은 왼쪽). 중간 리셋이라 높이 = 큰 리셋(씬 바 Scene Reset,
+        // 바깥 여백 6 px 로 바를 꽉 채운 정사각형)의 2/3, 세로 가운데. 폭은 큰 리셋과 같아 아래 Scene Reset 과 줄이 맞는다.
+        // 리셋 오른쪽부터 내용, 오른쪽 끝 = 블록 전원 버튼
+        constexpr int resetMargin = 6, contentGap = 12;
+        const int bigResetSize = getHeight() - 2 * resetMargin;
+        const auto resetArea = juce::Rectangle<int> (resetMargin, 0, bigResetSize, getHeight())
+                                   .withSizeKeepingCentre (bigResetSize, bigResetSize * 2 / 3);
+        paramResetButton.setBounds (resetArea);
+        levelResetButton.setBounds (resetArea);
+
+        auto area = getLocalBounds().reduced (12, 0).withLeft (resetArea.getRight() + contentGap);
+        const int size = juce::jmin (PowerButton::size, getHeight() - 8);   // 블록 전원 버튼
+        const int subSize = juce::jmin (SubPowerButton::size, getHeight() - 8);   // 합류 갈래 전원 버튼
         powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
+
+        if (panel != nullptr)
+        {
+            area.removeFromRight (contentGap);
+            panel->setBounds (area);
+        }
 
         // IN / OUT 선택 시: 왼쪽부터 [이름표 110] [채널 목록 320], 높이 28 (설정창 줄과 같은 크기)
         auto row = getLocalBounds().reduced (12, 0).withSizeKeepingCentre (getWidth() - 24, 28);
@@ -332,27 +304,13 @@ namespace rig
         row.removeFromLeft (8);
         channelBox.setBounds (row.removeFromLeft (320));
 
-        // 오류 / 경고 문구: 전원 버튼 자리 왼쪽에 오른쪽 정렬, 윗변 = 전원 버튼 윗변 (IN / OUT 일 때도 같은 자리).
-        // 오류(빨강) 아래 경고(노랑), 글자의 줄바꿈(\n)만큼 줄 수
-        constexpr int messageWidth = 420, messageLineHeight = 18;
-        auto messages = area.withTrimmedRight (12).removeFromRight (messageWidth).withTop (powerButton.getY());
-
-        for (auto* label : { &errorLabel, &warningLabel })
-        {
-            const int lines = label->isVisible() ? label->getText().length() - label->getText().removeCharacters ("\n").length() + 1 : 0;
-            label->setBounds (messages.removeFromTop (messageLineHeight * lines));
-        }
-
-        // 합류 선택 시: [전원 50] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래] ... [Level Reset 64 x 50]
+        // 합류 선택 시: [Level Reset] 12 [빨간 전원 40] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래]
         constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;
-        auto merge = getLocalBounds().reduced (12, 0);
-        // Level Reset: 전원 버튼과 같은 높이, 좁게 (글자 "Level\nReset" 두 줄)
-        constexpr int resetWidth = 64;
-        levelResetButton.setBounds (merge.removeFromRight (resetWidth).withSizeKeepingCentre (resetWidth, size));
+        auto merge = getLocalBounds().reduced (12, 0).withLeft (resetArea.getRight() + contentGap);
 
         for (size_t b = 0; b < 2; ++b)
         {
-            branchPower[b].setBounds (merge.removeFromLeft (size).withSizeKeepingCentre (size, size));
+            branchPower[b].setBounds (merge.removeFromLeft (subSize).withSizeKeepingCentre (subSize, subSize));
             merge.removeFromLeft (8);
 
             auto column = merge.removeFromLeft (columnWidth).withSizeKeepingCentre (columnWidth, textHeight + sliderHeight);

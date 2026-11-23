@@ -7,6 +7,8 @@
 
 #include "ui/Widgets.h"
 
+#include <optional>
+
 namespace rig
 {
     // 블록 선택기 (화면 중간). 모든 블록이 함께 쓰며, 선택된 블록에 내장 블록이나 파일을 지정한다.
@@ -14,6 +16,7 @@ namespace rig
     //   네 목록 모두 같은 모양의 표 (머리글 + 같은 행 높이와 색). 머리글 높이가 같아 왼쪽과 오른쪽의 윗선이 맞는다
     //   - 더블클릭해야 블록에 지정된다 (이때 패치도 저장). 탭 클릭/클릭/방향키는 둘러보기(강조)만
     //   - 항목을 끌어 패치맵에 놓으면 추가 / 교체 / 병렬 (패치맵이 놓은 자리로 판단)
+    //   - 왼쪽 열 아래 검색창: 현재 카테고리만, 공백으로 나눈 단어를 모두 포함하는 행 (대소문자 무시). 탭을 바꿔도 검색어 유지
     //   - 파일 카테고리(NAM / IR) : ~/Documents/aNAMorphic-Rig/nam (*.nam) 또는 ir (*.wav) 의 파일 표
     //       - 폴더 스캔은 refresh() 에서만 한다 (생성 시 한 번). 모델 변경 알림 때는 캐시에서 목록만 다시 고른다
     //       - NAM / IR 표를 따로 두어 열 폭과 정렬 상태를 각자 유지한다 (메모리에만, 다시 켜면 기본값)
@@ -60,12 +63,21 @@ namespace rig
             std::vector<BuiltIn> builtIns;
         };
 
+        struct Highlight
+        {
+            juce::File file;
+            std::optional<BlockType> builtIn;   // None(Empty)도 선택할 수 있으므로 선택 없음과 구별한다
+        };
+
         static Entry makeEntry (const juce::File& file, bool readMetadata);
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
         void refresh();
         void updateFromModel();
         void showCategory (bool resetHighlight);
+        Highlight currentHighlight();
+        void restoreHighlight (const Highlight&);
+        void applyFilter (const Highlight&);
         int categoryFor (BlockType type) const;
         const Category& shownCategory() const { return categories[(size_t) shownCategoryIndex]; }
 
@@ -110,6 +122,7 @@ namespace rig
         };
 
         static constexpr float rowFontSize = 14.0f;
+        static constexpr int rowHeight = 24;
         static constexpr int categoryListWidth = 96;   // 카테고리 목록 폭 (고정). 머리글 "Category" 가 잘리지 않는 폭
         void drawRowBackground (juce::Graphics&, int row, int width, int height, bool selected, bool menuTarget) const;   // 네 표 공통 행 배경
         void paintRowText (juce::Graphics&, const juce::String& text, int width, int height, bool selected) const;   // 네 표 공통 칸 글자
@@ -135,11 +148,15 @@ namespace rig
         juce::TableListBox namList, irList;
         BuiltInListModel builtInListModel { *this };
         juce::TableListBox builtInList;
+        LeftClickOnly<juce::TextEditor> searchBox;
 
         std::vector<Entry> namEntries, irEntries;   // refresh() 의 스캔 결과
         Entry outsideEntry;                         // 폴더 밖의 현재 파일 (메타데이터를 매번 읽지 않도록 보관)
 
-        std::vector<Entry> rows;                    // 지금 보이는 파일 표 목록 (정렬된 상태)
+        std::vector<Entry> allRows;                 // 현재 카테고리의 전체 파일 목록 (정렬된 상태)
+        std::vector<Entry> rows;                    // allRows 에서 검색어로 거른 목록 (순서 유지)
+        std::vector<BuiltIn> builtInRows;
+        juce::StringArray searchWords;              // 검색어가 바뀔 때 한 번만 나눈다
 
         // 둘러보는 탭과 강조를 선택 블록으로 되돌리는 건 선택 블록이나 그 종류/파일이 바뀌었을 때만
         int shownCategoryIndex = 0;

@@ -52,11 +52,13 @@ namespace rig::defaults
                 if (isValidPatch (juce::JSON::parse (file.loadFileAsString())))
                     return;
 
-                // 깨진 파일은 덮어쓰기 전에 남겨 둔다
-                file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
+                // 깨진 파일은 덮어쓰기 전에 남겨 둔다. 남기지 못하면 덮어쓰지 않는다 (깨진 원본이라도 유지)
+                if (! file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak")))
+                    return;
             }
 
-            file.replaceWithText (defaultPatchText (file.getFileName()));
+            // 시작 때 쓰기 실패는 알리지 않는다
+            paths::writeText (file, defaultPatchText (file.getFileName()));
         }
 
         // settings.json: 없거나, 0 바이트거나, JSON 객체가 아니면 기본값으로 다시 쓴다.
@@ -75,9 +77,10 @@ namespace rig::defaults
             {
                 json = juce::JSON::parse (file.loadFileAsString());
 
-                // 깨진 파일은 덮어쓰기 전에 남겨 둔다
-                if (json.getDynamicObject() == nullptr)
-                    file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak"));
+                // 깨진 파일은 덮어쓰기 전에 남겨 둔다. 남기지 못하면 덮어쓰지 않는다 (깨진 원본이라도 유지)
+                if (json.getDynamicObject() == nullptr
+                    && ! file.copyFileTo (file.getSiblingFile (file.getFileName() + ".bak")))
+                    return;
             }
 
             if (json.getDynamicObject() == nullptr)
@@ -96,7 +99,7 @@ namespace rig::defaults
             }
 
             if (changed)
-                file.replaceWithText (juce::JSON::toString (json));
+                paths::writeText (file, juce::JSON::toString (json));
         }
     }
 

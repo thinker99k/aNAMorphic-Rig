@@ -41,6 +41,27 @@ namespace rig::paths
         return root().getChildFile ("settings.json");
     }
 
+    bool writeText (const juce::File& file, const juce::String& text)
+    {
+        juce::TemporaryFile temp (file, juce::TemporaryFile::useHiddenFile);
+
+        {
+            juce::FileOutputStream out (temp.getFile());
+
+            if (! out.openedOk())
+                return false;
+
+            // 줄바꿈은 replaceWithText 기본값과 같은 "\r\n"
+            const bool written = out.writeText (text, false, false, "\r\n");
+            out.flush();
+
+            if (! written || out.getStatus().failed())
+                return false;
+        }
+
+        return temp.overwriteTargetFileWithTemporary();
+    }
+
     std::filesystem::path toStdPath (const juce::File& file)
     {
        #if JUCE_WINDOWS

@@ -1,13 +1,20 @@
 #pragma once
 
+#include "engine/param/common/ParamStage.h"
+
 #include <juce_core/juce_core.h>
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <memory>
 
 namespace rig
 {
+    // 소리가 바뀌는 모든 전환 시간: 블록·패치·씬 크로스페이드, 블록 On/Off, 합류 레벨, 채널, 볼륨·블록 파라미터 값 스무딩, 컷 전원.
+    // 모양은 전환마다 고른다 (다른 소리끼리 = 등전력, 같은 소리의 두 버전 = 선형). 시간은 모두 이 값 하나
+    inline constexpr double transitionSeconds = 0.02;
+
     // 지금은 두 종류만. 공간계/다이나믹 등은 나중에 여기에 추가.
     enum class BlockType
     {
@@ -81,6 +88,7 @@ namespace rig
         void processMixed (const float* in, float* out, int numSamples, int rampSamples) noexcept
         {
             process (in, out, numSamples);
+            if (stage != nullptr) stage->process (out, numSamples);   // 파라미터 단계는 wet 쪽에만
 
             const bool on = onTarget.load (std::memory_order_relaxed);
 
@@ -106,9 +114,18 @@ namespace rig
         }
 
     protected:
-        void rememberPrepare (double sr, int bs) noexcept { lastSampleRate = sr; lastBlockSize = bs; }
+        void rememberPrepare (double sr, int bs) noexcept
+        {
+            lastSampleRate = sr; lastBlockSize = bs;
+            if (stage != nullptr) stage->prepare (sr, bs);
+        }
+
+        // 블록이 만들어질 때 한 번만 호출 (오디오 스레드가 쓰기 전)
+        void setStage (std::unique_ptr<ParamStage> s) noexcept { stage = std::move (s); }
 
     private:
+        std::unique_ptr<ParamStage> stage;   // 블록 소리 뒤에 적용하는 파라미터 처리 (없으면 nullptr)
+
         std::atomic<bool> onTarget { true };
         float mix = 1.0f;   // 오디오 스레드 전용: 0 = dry, 1 = wet
 

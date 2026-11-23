@@ -4,6 +4,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <cmath>
 #include <functional>
 #include <utility>
 #include <vector>
@@ -227,6 +228,63 @@ namespace rig
         }
     };
 
+    // 전원 아이콘 토글 버튼. 켜짐 = onColour, 꺼짐 = 흐린 회색. 누르면 상태가 바뀐다
+    //  - PowerButton    : 블록 켜고 끄기 전용 (초록, size)
+    //  - SubPowerButton : 블록 안 기능·합류 갈래 켜고 끄기 (빨강, 조금 작게)
+    struct PowerButton : public LeftClickOnly<juce::Button>
+    {
+        static constexpr int size = 50;   // 보이는 크기 (정사각형)
+
+        explicit PowerButton (juce::Colour on = juce::Colours::limegreen) : LeftClickOnly ("Power"), onColour (on)
+        {
+            setClickingTogglesState (true);
+        }
+
+        void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+        {
+            auto bounds = getLocalBounds().toFloat().reduced (1.5f);
+            const bool on = getToggleState();
+
+            auto colour = on ? onColour : juce::Colours::grey.darker (0.3f);
+            if (! isEnabled())
+                colour = juce::Colours::grey.darker (0.8f);
+            else if (down)
+                colour = colour.darker (0.3f);
+            else if (highlighted)
+                colour = colour.brighter (0.3f);
+
+            g.setColour (juce::Colours::black.withAlpha (on && isEnabled() ? 0.35f : 0.2f));
+            g.fillRoundedRectangle (bounds, 6.0f);
+            g.setColour (colour.withAlpha (0.6f));
+            g.drawRoundedRectangle (bounds, 6.0f, 1.0f);
+
+            // 전원 기호: 위가 열린 원 + 세로선
+            const auto icon = bounds.reduced (bounds.getHeight() * 0.25f);
+            const auto centre = icon.getCentre();
+            const float radius = icon.getHeight() * 0.5f;
+            const float gapAngle = juce::MathConstants<float>::pi / 5.0f;
+
+            juce::Path path;
+            path.addCentredArc (centre.x, centre.y, radius, radius, 0.0f,
+                                gapAngle, juce::MathConstants<float>::twoPi - gapAngle, true);
+            path.startNewSubPath (centre.x, icon.getY() - radius * 0.15f);
+            path.lineTo (centre.x, centre.y);
+
+            g.setColour (colour);
+            g.strokePath (path, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+
+    private:
+        const juce::Colour onColour;
+    };
+
+    struct SubPowerButton final : public PowerButton
+    {
+        static constexpr int size = 40;   // 블록 전원(50)보다 조금 작게
+
+        SubPowerButton() : PowerButton (juce::Colours::red) {}
+    };
+
     // 이름 편집용 Label. 편집 중에는 모달이 되어 바깥 클릭이 컴포넌트에 닿기 전에 편집을 끝내는데,
     // allowWhileEditing 이 허락한 컴포넌트(저장 체크 버튼)의 클릭만은 그대로 통과시킨다 (그래야 체크로 저장할 수 있다)
     struct PassThroughLabel final : public juce::Label
@@ -243,6 +301,61 @@ namespace rig
         {
             editor->setPopupMenuEnabled (false);
             juce::Label::editorShown (editor);
+        }
+    };
+
+    // 노브 공용 외형 (상태바 볼륨 노브, 파라미터 노브): 노브 몸통 + 호(맨 왼쪽 ~ 현재 값) + 지시선
+    struct KnobLookAndFeel final : juce::LookAndFeel_V4
+    {
+        void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+                               float sliderPos, float rotaryStartAngle,
+                               float rotaryEndAngle, juce::Slider&) override
+        {
+            // 굵기·여백은 지름에 비례 (지름 44 px 정도의 작은 노브에서도 잘리지 않게)
+            const auto radius = (float) juce::jmin (width, height) * 0.5f;
+            const auto arcThickness = juce::jlimit (2.5f, 4.0f, radius * 0.15f);
+            const auto arcGap = juce::jlimit (1.5f, 3.0f, radius * 0.08f);   // 호와 몸통 사이 여백
+
+            const auto cx = (float) x + (float) width * 0.5f;
+            const auto cy = (float) y + (float) height * 0.5f;
+            const auto arcRadius = radius - arcThickness;
+            const auto bodyRadius = arcRadius - arcThickness * 0.5f - arcGap;
+
+            if (bodyRadius <= 0.0f)
+                return;
+
+            // sliderPos 는 skew 가 적용된 위치 (0 dB = 0.5 = 12시)
+            const auto toAngle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+            const juce::PathStrokeType stroke (arcThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded);
+
+            // 1. 몸통
+            g.setColour (juce::Colour (0xff2a2a2a));
+            g.fillEllipse (cx - bodyRadius, cy - bodyRadius, bodyRadius * 2.0f, bodyRadius * 2.0f);
+
+            // 2. 호 트랙 (전체 범위)
+            juce::Path track;
+            track.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
+            g.setColour (juce::Colours::darkgrey.darker (0.4f));
+            g.strokePath (track, stroke);
+
+            // 3. 값 호 (맨 왼쪽 ~ 현재 값, 단색)
+            if (sliderPos > 0.0f)
+            {
+                juce::Path value;
+                value.addCentredArc (cx, cy, arcRadius, arcRadius, 0.0f, rotaryStartAngle, toAngle, true);
+                g.setColour (juce::Colour (0xffd9822b));   // ChainView 의 NAM 타일과 같은 주황
+                g.strokePath (value, stroke);
+            }
+
+            // 4. 지시선 (각도는 12시 기준 시계 방향). 길이는 몸통 반지름의 약 0.65 배
+            auto pointAt = [&] (float r) { return juce::Point<float> (cx + r * std::sin (toAngle), cy - r * std::cos (toAngle)); };
+
+            juce::Path pointer;
+            pointer.startNewSubPath (pointAt (bodyRadius * 0.3f));
+            pointer.lineTo (pointAt (bodyRadius * 0.95f));
+            g.setColour (juce::Colours::white.withAlpha (0.9f));
+            g.strokePath (pointer, juce::PathStrokeType (juce::jlimit (1.5f, 2.5f, radius * 0.1f),
+                                                         juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
     };
 
@@ -401,13 +514,13 @@ namespace rig
         juce::Component spacer;
     };
 
-    // 경고창을 프로그램 창 가운데에 모달로 띄운다. 버튼을 누르면 onResult (그 버튼의 값). escapeCloses = Esc 로 닫기(값 0)
+    // 경고창을 프로그램 창 가운데에 모달로 띄운다. 버튼으로만 닫힌다 (ESC, X 없음). 버튼을 누르면 onResult (그 버튼의 값)
     inline void showAlert (juce::Component& origin, const juce::String& title, const juce::String& message,
-                           const std::vector<std::pair<juce::String, int>>& buttons, bool escapeCloses,
+                           const std::vector<std::pair<juce::String, int>>& buttons,
                            std::function<void (int)> onResult = nullptr)
     {
         auto* alert = new LeftClickAlertWindow (title, message, origin.getTopLevelComponent(), buttons);
-        alert->setEscapeKeyCancels (escapeCloses);
+        alert->setEscapeKeyCancels (false);
         alert->enterModalState (true, juce::ModalCallbackFunction::create ([onResult] (int result)
         {
             if (onResult != nullptr)
@@ -415,14 +528,40 @@ namespace rig
         }), true);
     }
 
+    // 파일 쓰기 결과 알림 (패치 저장, 설정창 Save 의 audio-device.xml). 앱 전체에 상태 하나:
+    // 성공하다가 실패로 바뀔 때만 경고 한 번. 실패가 이어지는 동안은 다시 띄우지 않고, 쓰기가 성공하면 다음 실패에 또 띄운다.
+    // 시작·종료 때의 쓰기와 settings.json(볼륨)은 알리지 않는다
+    inline void reportWriteResult (juce::Component& origin, bool ok, const juce::File& file)
+    {
+        static bool failing = false;
+
+        if (ok)
+        {
+            failing = false;
+            return;
+        }
+
+        if (failing)
+            return;
+
+        failing = true;
+        showAlert (origin, "Could not save file",
+                   file.getFullPathName() + "\n\nCheck disk space and folder permissions. Changes may be lost.",
+                   { { "OK", 0 } });
+    }
+
     // 초기화 경고: File not found 창과 같은 모양. [Reset] / [Cancel] 버튼으로만 닫힌다 (ESC, X 없음).
     // Reset 을 누르면 onReset 을 부른다. 프로그램 창 가운데에 띄운다.
-    // 기준: 두 개 이상 항목을 동시에 초기화하면 경고 (패치 리셋, All Reset).
-    //   씬 하나 Reset (오른쪽 클릭 메뉴) 은 경고 없이 바로
+    // 리셋 단계 (CLAUDE.md 6절):
+    //   큰 리셋   = 씬 여러 개가 한꺼번에 바뀜 (패치 이름 메뉴 Reset, Scene Reset) -> 항상 이 경고. 이름 끝에 말줄임표.
+    //               메뉴면 구분선 아래, 버튼이면 바 위아래를 꽉 채움
+    //   중간 리셋 = 한 씬 안에서 값 여러 개 (씬 메뉴 Reset, Param Reset, Level Reset) -> 경고 없음 (의도한 동작일 가능성이 큼).
+    //               버튼이면 큰 리셋 높이의 2/3
+    //   작은 리셋 = 값 하나 (노브·슬라이더 더블클릭) -> 경고 없음
     inline void showResetWarning (juce::Component& origin, const juce::String& title, const juce::String& message,
                                   std::function<void()> onReset)
     {
-        showAlert (origin, title, message, { { "Reset", 1 }, { "Cancel", 0 } }, false, [onReset] (int result)
+        showAlert (origin, title, message, { { "Reset", 1 }, { "Cancel", 0 } }, [onReset] (int result)
         {
             if (result == 1 && onReset != nullptr)
                 onReset();

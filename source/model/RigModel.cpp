@@ -1,8 +1,8 @@
 #include "RigModel.h"
 
 #include "AppPaths.h"
-#include "engine/IrBlock.h"
-#include "engine/NamBlock.h"
+#include "ValueSteps.h"
+#include "engine/BlockFactory.h"
 
 namespace rig
 {
@@ -53,10 +53,12 @@ namespace rig
 
         auto* root = json.getDynamicObject();
         root->setProperty ("version", 1);
-        root->setProperty ("inputGainDb", inputGainDb);
-        root->setProperty ("outputGainDb", outputGainDb);
+        root->setProperty ("inputGainDb", steps::roundTo (inputGainDb, steps::dbDecimals));    // float 꼬리 없이
+        root->setProperty ("outputGainDb", steps::roundTo (outputGainDb, steps::dbDecimals));
 
-        paths::settingsFile().replaceWithText (juce::JSON::toString (json));
+        // 소수 자릿수 0 = 필요한 만큼 (패치 파일과 같다)
+        // 실패는 알리지 않는다 (볼륨 값 두 개뿐, Live 중에 노브를 놓을 때 경고가 뜨지 않게. 종료 때 다시 저장)
+        paths::writeText (paths::settingsFile(), juce::JSON::toString (json, false, 0));
     }
 
     //==============================================================================
@@ -82,7 +84,9 @@ namespace rig
     //                                  "blocks": [ { "type": "nam", "file": "/path/clean.nam", "on": [ ... ] } ] },
     //                                { "on": [ ... ], "level": [ ... ],
     //                                  "blocks": [ { "type": "nam", "file": "/path/lead.nam", "on": [ ... ] } ] } ] },
-    //                { "type": "ir", "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ] } ]
+    //                { "type": "ir", "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ],
+    //                  "params": { "lowCutOn": [ false, ... 8개 ], "lowCutHz": [ 20, ... 8개 ], ... } } ]
+    //  블록의 "params" = 씬별 블록 파라미터 (NAM / IR 만). 이름은 각 종류의 specs. 없거나 이상한 값은 기본값, 숫자는 범위 안으로
     //  }
 
     juce::String RigModel::sanitizePatchName (const juce::var& value, const juce::String& fallback)
@@ -148,7 +152,7 @@ namespace rig
 
         remember();
         patchName = trimmedName;
-        savePatch();
+        saveEdit();
     }
 
     void RigModel::loadPatch (int number)
@@ -157,7 +161,7 @@ namespace rig
         chain.clear();
         undoStack.clear();   // 되돌리기 이력은 패치마다 (패치를 바꾸면 비운다)
         redoStack.clear();
-        levelEditOpen = false;
+        pendingUndo.reset();
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
         currentScene = 0;
@@ -234,7 +238,11 @@ namespace rig
             }
         }
 
-        forEachSlot ([this] (Slot& slot) { startLoading (slot); });
+        forEachSlot ([this] (Slot& slot)
+        {
+            applyParams (slot);   // 로딩 전에: 새 DSP 가 준비할 때 이 값에서 시작한다
+            startLoading (slot);
+        });
 
         if (! chain.empty())
         {
@@ -316,6 +324,24 @@ namespace rig
         else
             slot.type = BlockType::None;
 
+        resetParams (slot);
+        const auto params = json.getProperty ("params", {});
+        const auto& specs = BlockParams::specs (slot.type);
+
+        for (size_t k = 0; k < specs.size(); ++k)
+        {
+            const auto& spec = specs[k];
+            const auto* values = params.getProperty (spec.key, {}).getArray();
+
+            for (size_t i = 0; i < (size_t) numScenes; ++i)
+            {
+                const auto v = values != nullptr ? (*values)[(int) i] : juce::var();
+
+                if (spec.isSwitch ? v.isBool() : (v.isDouble() || v.isInt()))
+                    slot.paramValues[i][k] = (float) spec.constrain (spec.isSwitch ? ((bool) v ? 1.0 : 0.0) : (double) v);
+            }
+        }
+
         return slot;
     }
 
@@ -330,6 +356,30 @@ namespace rig
             on.add (b);
 
         obj->setProperty ("on", on);
+
+        if (const auto& specs = BlockParams::specs (slot.type); ! specs.empty())
+        {
+            auto params = std::make_unique<juce::DynamicObject>();
+
+            for (size_t k = 0; k < specs.size(); ++k)
+            {
+                juce::Array<juce::var> values;
+
+                // 스위치 = true / false, 정수 단위(Hz) = 정수 (100.0 이 아니라 100), 그 밖 = 단위로 반올림한 실수 (float 꼬리 없이)
+                for (const auto& scene : slot.paramValues)
+                {
+                    const auto value = specs[k].constrain (scene[k]);
+                    values.add (specs[k].isSwitch      ? juce::var (value >= 0.5)
+                                : specs[k].decimals == 0 ? juce::var (juce::roundToInt (value))
+                                                         : juce::var (value));
+                }
+
+                params->setProperty (specs[k].key, values);
+            }
+
+            obj->setProperty ("params", juce::var (params.release()));
+        }
+
         return juce::var (obj.release());
     }
 
@@ -344,7 +394,7 @@ namespace rig
             for (int i = 0; i < numScenes; ++i)
             {
                 on.add (parallel.branchOn[k][(size_t) i]);
-                level.add (std::round ((double) parallel.levelDb[k][(size_t) i] * 10.0) / 10.0);   // 0.1 dB 단위 (float 꼬리 없이)
+                level.add (steps::roundTo (parallel.levelDb[k][(size_t) i], steps::dbDecimals));   // 0.1 dB 단위 (float 꼬리 없이)
             }
 
             for (const auto& slot : parallel.branches[k])
@@ -401,7 +451,32 @@ namespace rig
         root->setProperty ("blocks", blocks);
 
         // 소수 자릿수 0 = 필요한 만큼 (기본 15 자리면 -23.3 이 -23.300000000000001 로 써진다)
-        paths::patchFile (patchNumber).replaceWithText (juce::JSON::toString (juce::var (root.release()), false, 0));
+        const auto file = paths::patchFile (patchNumber);
+        const bool ok = paths::writeText (file, juce::JSON::toString (juce::var (root.release()), false, 0));
+
+        if (onPatchSaved)
+            onPatchSaved (ok, file);
+    }
+
+    void RigModel::setParam (juce::uint64 slotId, int index, float value, bool save)
+    {
+        auto* slot = editSlot (slotId);
+        const auto& specs = BlockParams::specs (slot != nullptr ? slot->type : BlockType::None);
+
+        if (slot == nullptr || ! juce::isPositiveAndBelow (index, (int) specs.size()))
+            return;
+
+        // 드래그 한 번 = 되돌리기 한 단계 (합류 레벨과 같다): 첫 값에서 잡고 끝(save)의 saveEdit 에서 닫는다.
+        // 전원(L. Cut / H. Cut)은 save = true 한 번이라 누를 때마다 한 단계
+        remember();
+        slot->paramValues[(size_t) currentScene][(size_t) index] = (float) specs[(size_t) index].constrain (value);
+        applyParams (*slot);   // 소리는 바로 따라간다 (DSP 가 20 ms 스무딩)
+
+        if (save)
+        {
+            saveEdit();
+            sendChangeMessage();
+        }
     }
 
 
@@ -543,6 +618,8 @@ namespace rig
         slot.id = nextId++;
         slot.type = usesFile (type) && file != juce::File() ? type : BlockType::None;
         slot.file = slot.type == BlockType::None ? juce::File() : file;
+        resetParams (slot);
+        applyParams (slot);
         return slot;
     }
 
@@ -551,11 +628,8 @@ namespace rig
         Parallel p;
         p.id = nextId++;
 
-        for (auto& on : p.branchOn)
-            on = allScenesOn();
-
-        for (auto& level : p.levelDb)
-            level.fill (mergeDefaultDb);
+        for (size_t i = 0; i < (size_t) numScenes; ++i)
+            resetSceneValues (p, i);
 
         p.merge = std::make_shared<Merge>();
         return p;
@@ -629,12 +703,58 @@ namespace rig
 
     void RigModel::remember()
     {
-        undoStack.push_back (snapshot (currentScene));
+        if (! pendingUndo.has_value())
+            pendingUndo = snapshot (currentScene);
+    }
 
-        if ((int) undoStack.size() > maxUndoSteps)
-            undoStack.erase (undoStack.begin());
+    void RigModel::saveEdit()
+    {
+        if (pendingUndo.has_value())
+        {
+            if (! sameContent (*pendingUndo))
+            {
+                undoStack.push_back (std::move (*pendingUndo));
 
-        redoStack.clear();
+                if ((int) undoStack.size() > maxUndoSteps)
+                    undoStack.erase (undoStack.begin());
+
+                redoStack.clear();
+            }
+
+            pendingUndo.reset();
+        }
+
+        savePatch();
+    }
+
+    bool RigModel::sameContent (const Snapshot& s) const
+    {
+        const auto sameSlot = [] (const Slot& a, const Slot& b)
+        {
+            return a.type == b.type && a.file == b.file && a.on == b.on && a.paramValues == b.paramValues;
+        };
+
+        const auto sameSlots = [&] (const std::vector<Slot>& a, const std::vector<Slot>& b)
+        {
+            return std::equal (a.begin(), a.end(), b.begin(), b.end(), sameSlot);
+        };
+
+        const auto sameItem = [&] (const Item& a, const Item& b)
+        {
+            if (a.index() != b.index())
+                return false;
+
+            if (const auto* slot = std::get_if<Slot> (&a))
+                return sameSlot (*slot, std::get<Slot> (b));
+
+            const auto& p = std::get<Parallel> (a);
+            const auto& q = std::get<Parallel> (b);
+            return p.branchOn == q.branchOn && p.levelDb == q.levelDb
+                && sameSlots (p.branches[0], q.branches[0]) && sameSlots (p.branches[1], q.branches[1]);
+        };
+
+        return routing == s.routing && sceneNames == s.sceneNames && patchName == s.patchName
+            && std::equal (chain.begin(), chain.end(), s.chain.begin(), s.chain.end(), sameItem);
     }
 
     void RigModel::undo() { step (undoStack, redoStack); }
@@ -649,7 +769,7 @@ namespace rig
         auto target = std::move (from.back());
         from.pop_back();
         to.push_back (snapshot (target.scene));
-        levelEditOpen = false;
+        pendingUndo.reset();
 
         chain = std::move (target.chain);
         routing = target.routing;
@@ -752,7 +872,10 @@ namespace rig
         const auto id = slot.id;
 
         if (! wrapInParallel (belowSlotId, std::move (slot)))
+        {
+            pendingUndo.reset();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
             return;
+        }
 
         setSelectedSlot (id);
         changed();
@@ -772,7 +895,10 @@ namespace rig
         const auto movedId = moved.id;
 
         if (! wrapInParallel (belowSlotId, std::move (moved)))
+        {
+            pendingUndo.reset();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
             return;
+        }
 
         eraseSlot (slotId);
         setSelectedSlot (movedId);
@@ -822,7 +948,7 @@ namespace rig
         if (item < 0 || delta == 0)
             return;
 
-        remember();   // 옮길 블록이 하나도 없으면 아래에서 되돌린다
+        remember();   // 옮길 블록이 하나도 없으면 아래에서 버린다
         std::vector<juce::uint64> moved;
 
         // 넣기: 병렬 바로 뒤 본 줄 블록부터 (병렬을 만나면 멈춘다)
@@ -847,7 +973,7 @@ namespace rig
 
         if (moved.empty())
         {
-            undoStack.pop_back();
+            pendingUndo.reset();   // 아무것도 안 바뀌었다: 이력을 건드리지 않는다
             return;
         }
 
@@ -904,7 +1030,7 @@ namespace rig
         if (slot->dsp != nullptr)
             slot->dsp->setOn (shouldBeOn);
 
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -926,11 +1052,8 @@ namespace rig
         if (p == nullptr || ! juce::isPositiveAndBelow (branch, 2))
             return;
 
-        // 드래그 한 번 = 되돌리기 한 단계: 드래그 중 첫 값에서 기억하고 끝(save)에서 닫는다
-        if (! levelEditOpen)
-            remember();
-
-        levelEditOpen = ! save;
+        // 드래그 한 번 = 되돌리기 한 단계: 첫 값에서 잡고(이미 잡혀 있으면 그대로) 끝(save)의 saveEdit 에서 닫는다
+        remember();
         p->levelDb[(size_t) branch][(size_t) currentScene] = juce::jlimit (mergeMinDb, mergeMaxDb, db);
 
         if (save)
@@ -949,11 +1072,21 @@ namespace rig
             return;
 
         remember();
-
-        for (auto& level : p->levelDb)
-            level[(size_t) currentScene] = mergeDefaultDb;
-
+        resetLevelValues (*p, (size_t) currentScene);
         mergeEdited (*p);
+    }
+
+    void RigModel::resetBlockParams (juce::uint64 slotId)
+    {
+        auto* slot = editSlot (slotId);
+        if (slot == nullptr || slot->params == nullptr)
+            return;
+
+        remember();
+        resetParamValues (*slot, (size_t) currentScene);
+        applyParams (*slot);   // DSP 가 20 ms 동안 기본값으로 따라간다
+        saveEdit();
+        sendChangeMessage();
     }
 
     void RigModel::applyMerge (Parallel& p, bool immediately)
@@ -971,7 +1104,7 @@ namespace rig
     {
         // 프로그램은 그대로 두고 Merge 의 게인 목표만 바꾼다 (오디오 스레드가 따라간다)
         applyMerge (p);
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -996,16 +1129,8 @@ namespace rig
         const auto s = (size_t) source, d = (size_t) destination;
         sceneNames[d] = sceneNames[s];
 
-        forEachSlot ([&] (Slot& slot) { slot.on[d] = slot.on[s]; });
-
-        forEachParallel ([&] (Parallel& p)
-        {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                p.branchOn[b][d] = p.branchOn[b][s];
-                p.levelDb[b][d] = p.levelDb[b][s];
-            }
-        });
+        forEachSlot ([&] (Slot& slot) { copySceneValues (slot, s, d); });
+        forEachParallel ([&] (Parallel& p) { copySceneValues (p, s, d); });
 
         sceneEdited (destination);
     }
@@ -1020,16 +1145,8 @@ namespace rig
         const auto s = (size_t) source, d = (size_t) destination;
         std::swap (sceneNames[s], sceneNames[d]);
 
-        forEachSlot ([&] (Slot& slot) { std::swap (slot.on[s], slot.on[d]); });
-
-        forEachParallel ([&] (Parallel& p)
-        {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                std::swap (p.branchOn[b][s], p.branchOn[b][d]);
-                std::swap (p.levelDb[b][s], p.levelDb[b][d]);
-            }
-        });
+        forEachSlot ([&] (Slot& slot) { swapSceneValues (slot, s, d); });
+        forEachParallel ([&] (Parallel& p) { swapSceneValues (p, s, d); });
 
         sceneEdited (source == currentScene ? source : destination);
     }
@@ -1044,16 +1161,8 @@ namespace rig
         const auto i = (size_t) scene;
         sceneNames[i] = defaultSceneName (scene);
 
-        forEachSlot ([&] (Slot& slot) { slot.on[i] = true; });
-
-        forEachParallel ([&] (Parallel& p)
-        {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                p.branchOn[b][i] = true;
-                p.levelDb[b][i] = mergeDefaultDb;
-            }
-        });
+        forEachSlot ([&] (Slot& slot) { resetSceneValues (slot, i); });
+        forEachParallel ([&] (Parallel& p) { resetSceneValues (p, i); });
 
         sceneEdited (scene);
     }
@@ -1062,19 +1171,12 @@ namespace rig
     {
         remember();
 
-        for (int i = 0; i < numScenes; ++i)
-            sceneNames[(size_t) i] = defaultSceneName (i);
-
-        forEachSlot ([] (Slot& slot) { slot.on = allScenesOn(); });
-
-        forEachParallel ([] (Parallel& p)
+        for (size_t i = 0; i < (size_t) numScenes; ++i)
         {
-            for (size_t b = 0; b < 2; ++b)
-            {
-                p.branchOn[b] = allScenesOn();
-                p.levelDb[b].fill (mergeDefaultDb);
-            }
-        });
+            sceneNames[i] = defaultSceneName ((int) i);
+            forEachSlot ([&] (Slot& slot) { resetSceneValues (slot, i); });
+            forEachParallel ([&] (Parallel& p) { resetSceneValues (p, i); });
+        }
 
         sceneEdited (currentScene);
     }
@@ -1086,8 +1188,80 @@ namespace rig
 
         remember();
         sceneNames[(size_t) scene] = sanitizeSceneName (name, scene);
-        savePatch();
+        saveEdit();
         sendChangeMessage();
+    }
+
+    void RigModel::resetSceneValues (Slot& slot, size_t scene)
+    {
+        slot.on[scene] = true;
+        resetParamValues (slot, scene);
+    }
+
+    void RigModel::resetParamValues (Slot& slot, size_t scene)
+    {
+        slot.paramValues[scene] = BlockParams::defaults (slot.type);
+    }
+
+    void RigModel::resetParams (Slot& slot)
+    {
+        slot.params = BlockParams::create (slot.type);
+        slot.paramValues.fill (BlockParams::defaults (slot.type));
+    }
+
+    void RigModel::applyParams (Slot& slot)
+    {
+        if (slot.params == nullptr)
+            return;
+
+        const auto& values = slot.paramValues[(size_t) currentScene];
+
+        for (size_t k = 0; k < values.size(); ++k)
+            slot.params->set ((int) k, values[k]);
+    }
+
+    void RigModel::resetSceneValues (Parallel& p, size_t scene)
+    {
+        for (auto& on : p.branchOn)
+            on[scene] = true;
+
+        resetLevelValues (p, scene);
+    }
+
+    void RigModel::resetLevelValues (Parallel& p, size_t scene)
+    {
+        for (auto& level : p.levelDb)
+            level[scene] = mergeDefaultDb;
+    }
+
+    void RigModel::copySceneValues (Slot& slot, size_t source, size_t destination)
+    {
+        slot.on[destination] = slot.on[source];
+        slot.paramValues[destination] = slot.paramValues[source];
+    }
+
+    void RigModel::copySceneValues (Parallel& p, size_t source, size_t destination)
+    {
+        for (size_t b = 0; b < 2; ++b)
+        {
+            p.branchOn[b][destination] = p.branchOn[b][source];
+            p.levelDb[b][destination] = p.levelDb[b][source];
+        }
+    }
+
+    void RigModel::swapSceneValues (Slot& slot, size_t a, size_t b)
+    {
+        std::swap (slot.on[a], slot.on[b]);
+        std::swap (slot.paramValues[a], slot.paramValues[b]);
+    }
+
+    void RigModel::swapSceneValues (Parallel& p, size_t a, size_t b)
+    {
+        for (size_t k = 0; k < 2; ++k)
+        {
+            std::swap (p.branchOn[k][a], p.branchOn[k][b]);
+            std::swap (p.levelDb[k][a], p.levelDb[k][b]);
+        }
     }
 
     void RigModel::sceneEdited (int scene)
@@ -1095,7 +1269,7 @@ namespace rig
         if (scene == currentScene)
             applyCurrentScene();
 
-        savePatch();
+        saveEdit();
         sendChangeMessage();
     }
 
@@ -1105,6 +1279,8 @@ namespace rig
         {
             if (slot.dsp != nullptr)
                 slot.dsp->setOn (isOn (slot));
+
+            applyParams (slot);   // DSP 가 20 ms 동안 새 씬의 값으로 따라간다
         });
 
         forEachParallel ([this] (Parallel& p) { applyMerge (p); });
@@ -1127,8 +1303,19 @@ namespace rig
             return;
 
         remember();
+
+        // 교체 = 같은 종류여도 8 씬 모두 기본값. 같은 파일을 다시 시도할 때만 (로딩 실패 후) 값을 둔다
+        // 옛 DSP 는 옛 객체를 들고 있어서 크로스페이드가 끝날 때까지 옛 값으로 소리를 낸다
+        const bool replaced = slot->type != type || slot->file != newFile;
         slot->type = type;
         slot->file = newFile;
+
+        if (replaced)
+        {
+            resetParams (*slot);
+            applyParams (*slot);
+        }
+
         startLoading (*slot);
         changed();
     }
@@ -1176,16 +1363,14 @@ namespace rig
         const auto bs = engine.getMaxBlockSize();
         juce::WeakReference<RigModel> weakThis (this);
 
+        // 블록의 파라미터 객체를 값으로 넘긴다 (로더 스레드에서 슬롯을 읽지 않는다). 새 DSP 도 같은 객체를 읽는다
+        const auto paramsSnapshot = slot.params;
+
         // 무거운 작업(파일 파싱, 모델 생성, Reset/prewarm)은 로더 스레드에서
-        loader.addJob ([weakThis, slotId, generation, type, file, sr, bs]
+        loader.addJob ([weakThis, slotId, generation, type, file, sr, bs, paramsSnapshot]
         {
             juce::String error;
-            std::shared_ptr<Block> block;
-
-            if (type == BlockType::Nam)
-                block = NamBlock::load (file, error);
-            else
-                block = IrBlock::load (file, error);
+            auto block = loadBlock (type, file, error, paramsSnapshot);
 
             if (block != nullptr)
                 block->prepare (sr, bs);
@@ -1264,7 +1449,7 @@ namespace rig
 
     void RigModel::changed()
     {
-        savePatch();
+        saveEdit();
         rebuildChain();
         sendChangeMessage();
     }
