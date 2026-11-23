@@ -92,6 +92,13 @@ namespace rig
         float takeInputPeak() noexcept  { return inputPeak.exchange (0.0f); }
         float takeOutputPeak() noexcept { return outputPeak.exchange (0.0f); }
 
+        // 튜너: 켜져 있는 동안 출력은 무음 (체인은 계속 처리. 켜고 끌 때 transitionSeconds 동안 등전력으로 줄이고 키운다)
+        void setTunerActive (bool shouldBeActive) noexcept { tunerActive.store (shouldBeActive, std::memory_order_relaxed); }
+
+        // 튜너 피치 분석용 (UI 스레드): 고른 입력 채널의 입력 볼륨 전 신호의 최근 numSamples 개.
+        // 데이터가 부족하거나 복사 중에 덮어쓰였으면 false
+        bool copyLatestInput (float* dest, int numSamples) const noexcept { return inputRing.copyLatest (dest, numSamples); }
+
         // [SPECTRUM] begin (테스트용)
         // 스펙트럼 창용 (UI 스레드): 출력 게인 뒤, 출력 채널 복사 직전 신호의 최근 numSamples 개.
         // 데이터가 부족하거나 복사 중에 덮어쓰였으면 false
@@ -192,11 +199,15 @@ namespace rig
         // 오디오 스레드 전용: 게인 변화를 transitionSeconds(20 ms) 동안 선형으로 이어 "틱" 잡음을 막는다
         juce::SmoothedValue<float> inputSmoothed { 1.0f }, outputSmoothed { 1.0f };
 
-        // [SPECTRUM] begin (테스트용)
+        // 튜너 무음 진행 (오디오 스레드 전용): 0 = 소리, 1 = 무음. transitionSeconds 동안 선형으로 가고, 게인은 cos (등전력)
+        std::atomic<bool> tunerActive { false };
+        juce::SmoothedValue<float> tunerFade { 0.0f };
+
         // 가장 최근 샘플을 덮어쓰는 링 버퍼. 쓰는 쪽은 오디오 스레드 하나, 읽는 쪽은 UI 스레드 하나
-        struct ScopeRing
+        struct SampleRing
         {
-            static constexpr int size = 32768;   // 2의 거듭제곱. 8192점 분석 구간의 4배
+            // 2의 거듭제곱. 한 번에 읽을 수 있는 길이는 절반까지 (스펙트럼 8192점, 튜너 약 5300점 = 192 kHz 에서 2048 + 3200)
+            static constexpr int size = 32768;
 
             // atomic 배열: 쓰는 도중에 읽어도 data race 가 아니다 (relaxed 라 일반 float 와 같은 속도). 생성 후 크기 불변
             std::unique_ptr<std::atomic<float>[]> data { new std::atomic<float>[size] {} };
@@ -206,7 +217,10 @@ namespace rig
             bool copyLatest (float* dest, int numSamples) const noexcept;   // UI 스레드
         };
 
-        ScopeRing outputScope;
+        SampleRing inputRing;   // 튜너용 입력. 튜너가 닫혀 있어도 늘 기록 (다시 열었을 때 옛 소리를 읽지 않게)
+
+        // [SPECTRUM] begin (테스트용)
+        SampleRing outputScope;
         std::atomic<bool> scopeEnabled { false };   // 스펙트럼 창이 보일 때만 true
         // [SPECTRUM] end
 

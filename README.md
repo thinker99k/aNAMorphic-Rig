@@ -81,6 +81,6 @@ NAM(Neural Amp Modeler) based multi-effector plugin
 - `nam/` : `.nam` 캡처 파일을 여기에 넣으면 블록 선택기의 NAM 목록에 나타납니다
 - `ir/` : `.wav` IR 파일을 여기에 넣으면 블록 선택기의 IR 목록에 나타납니다
 - `patch/` : 패치 32개가 저장됩니다. 편집하면 자동으로 저장됩니다
-- `settings.json`, `audio-device.xml` : 볼륨과 오디오 장치 설정
+- `settings.json`, `audio-device.xml` : 볼륨·튜너 기준음과 오디오 장치 설정
 
 코드 구조와 파일 형식은 [개발 문서](docs/DEVELOPMENT.md) 를 보세요.

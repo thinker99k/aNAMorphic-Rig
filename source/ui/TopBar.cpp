@@ -122,6 +122,9 @@ namespace rig
         addAndMakeVisible (undoButton);
         addAndMakeVisible (redoButton);
 
+        tunerButton.onClick = [this] { if (onTunerClicked) onTunerClicked(); };
+        addAndMakeVisible (tunerButton);
+
         updateNavigationButtons();
     }
 
@@ -174,6 +177,8 @@ namespace rig
         area.removeFromLeft (4);
         nextPatchButton.setBounds (area.removeFromLeft (28));
         settingsButton.setBounds (area.removeFromRight (110));
+        area.removeFromRight (6);
+        tunerButton.setBounds (area.removeFromRight (80));
 
         const int sideMargin = juce::jmax (area.getX(), getWidth() - area.getRight()) + 48;
         const int nameWidth = juce::jlimit (0, 420, getWidth() - 2 * sideMargin);

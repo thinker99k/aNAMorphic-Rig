@@ -23,7 +23,8 @@ namespace rig
     //==============================================================================
     // 앱 전역 설정 : ~/Documents/aNAMorphic-Rig/settings.json  (JSON)
     //
-    //  { "version": 1, "inputGainDb": 0.0, "outputGainDb": -3.5 }
+    //  { "version": 1, "inputGainDb": 0.0, "outputGainDb": -3.5, "tunerPitch": 440 }
+    //  tunerPitch 가 숫자가 아니면 440, 범위 밖은 410 ~ 470 으로 자른다
 
     void RigModel::loadSettings()
     {
@@ -37,6 +38,11 @@ namespace rig
                                          (float) json.getProperty ("inputGainDb", 0.0));
             outputGainDb = juce::jlimit (AudioEngine::outputMinDb, AudioEngine::outputMaxDb,
                                          (float) json.getProperty ("outputGainDb", 0.0));
+
+            const auto pitch = json.getProperty ("tunerPitch", {});
+
+            if (pitch.isInt() || pitch.isDouble())
+                setTunerPitchHz ((int) std::lround ((double) pitch));
         }
 
         engine.setInputGainDb (inputGainDb);
@@ -49,6 +55,7 @@ namespace rig
         root->setProperty ("version", 1);
         root->setProperty ("inputGainDb", steps::roundTo (inputGainDb, steps::dbDecimals));    // float 꼬리 없이
         root->setProperty ("outputGainDb", steps::roundTo (outputGainDb, steps::dbDecimals));
+        root->setProperty ("tunerPitch", tunerPitchHz);
 
         // 소수 자릿수 0 = 필요한 만큼 (패치 파일과 같다)
         // 실패는 알리지 않는다 (볼륨 값 두 개뿐, Live 중에 노브를 놓을 때 경고가 뜨지 않게. 종료 때 다시 저장)
@@ -288,7 +295,7 @@ namespace rig
         engine.setOutputGainDb (outputGainDb);
     }
 
-    void RigModel::saveGains()
+    void RigModel::saveAppSettings()
     {
         saveSettings();
     }
@@ -300,6 +307,10 @@ namespace rig
         engine.setOutputGainDb (outputMuted ? AudioEngine::outputMinDb : outputGainDb);
     }
 
+    void RigModel::setTunerPitchHz (int hz)
+    {
+        tunerPitchHz = juce::jlimit (tunerPitchMinHz, tunerPitchMaxHz, hz);
+    }
 
     RigModel::Slot RigModel::readSlot (const juce::var& json, juce::uint64 id)
     {

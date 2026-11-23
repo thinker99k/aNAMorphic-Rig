@@ -42,6 +42,8 @@ namespace rig
             topBar.setPatchName (model.getPatchName());
         };
         topBar.onSettingsClicked = [this] { openSettings(); };
+        topBar.onTunerClicked = [this] { openTuner(); };
+
         // [SPECTRUM] begin (테스트용) 실행 인자 --spectrum 을 줬을 때만 패치맵 오른쪽 위에 버튼
         if (juce::JUCEApplicationBase::getCommandLineParameterArray().contains ("--spectrum"))
             editView.showSpectrumButton ([this] { openSpectrum(); });
@@ -57,8 +59,8 @@ namespace rig
         model.onPatchSaved = [this] (bool ok, const juce::File& file) { reportWriteResult (*this, ok, file); };
 
         // 볼륨 저장은 드래그가 끝났을 때 한 번만
-        statusBar.inputKnob.onDragEnded  = [this] { model.saveGains(); };
-        statusBar.outputKnob.onDragEnded = [this] { model.saveGains(); };
+        statusBar.inputKnob.onDragEnded  = [this] { model.saveAppSettings(); };
+        statusBar.outputKnob.onDragEnded = [this] { model.saveAppSettings(); };
 
         statusBar.muteButton.onClick = [this]
         {
@@ -193,5 +195,19 @@ namespace rig
 
         editView.setVisible (! live);
         liveView.setVisible (live);
+    }
+
+    void MainComponent::openTuner()
+    {
+        // 튜너가 열려 있는 동안 출력은 엔진이 무음으로 한다 (MUTE 버튼·출력 노브는 그대로)
+        topBar.setTunerActive (true);
+
+        juce::Component::SafePointer<MainComponent> safeThis (this);
+
+        TunerDialog::show (engine, model, this, [safeThis]
+        {
+            if (safeThis != nullptr)
+                safeThis->topBar.setTunerActive (false);
+        });
     }
 }

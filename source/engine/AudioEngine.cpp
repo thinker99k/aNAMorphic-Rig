@@ -261,6 +261,8 @@ namespace rig
         outputSmoothed.reset (sr, transitionSeconds);
         inputSmoothed.setCurrentAndTargetValue (inputGain.load (std::memory_order_relaxed));
         outputSmoothed.setCurrentAndTargetValue (outputGain.load (std::memory_order_relaxed));
+        tunerFade.reset (sr, transitionSeconds);
+        tunerFade.setCurrentAndTargetValue (tunerActive.load (std::memory_order_relaxed) ? 1.0f : 0.0f);
 
         if (owned != nullptr)
             owned->forEachBlock ([sr, bs] (Block& block)
@@ -376,8 +378,7 @@ namespace rig
         return c;
     }
 
-    // [SPECTRUM] begin (테스트용)
-    void AudioEngine::ScopeRing::write (const float* samples, int n) noexcept
+    void AudioEngine::SampleRing::write (const float* samples, int n) noexcept
     {
         const auto pos = writePos.load (std::memory_order_relaxed);   // 쓰는 쪽은 오디오 스레드 하나
 
@@ -387,7 +388,7 @@ namespace rig
         writePos.store (pos + (juce::uint64) n, std::memory_order_release);
     }
 
-    bool AudioEngine::ScopeRing::copyLatest (float* dest, int numSamples) const noexcept
+    bool AudioEngine::SampleRing::copyLatest (float* dest, int numSamples) const noexcept
     {
         const auto end = writePos.load (std::memory_order_acquire);
 
@@ -402,7 +403,6 @@ namespace rig
         // 복사하는 사이 오디오 스레드가 start 구간을 덮어썼다면 이번 프레임은 버린다
         return writePos.load (std::memory_order_acquire) - start <= (juce::uint64) size;
     }
-    // [SPECTRUM] end
 
     void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
                                                         int numInputChannels,
@@ -429,6 +429,7 @@ namespace rig
 
         inputSmoothed.setTargetValue (inputGain.load (std::memory_order_relaxed));
         outputSmoothed.setTargetValue (outputGain.load (std::memory_order_relaxed));
+        tunerFade.setTargetValue (tunerActive.load (std::memory_order_relaxed) ? 1.0f : 0.0f);
 
         for (int offset = 0; offset < numSamples && blockSize > 0; offset += blockSize)
         {
@@ -454,6 +455,8 @@ namespace rig
                 juce::FloatVectorOperations::clear (a, n);
             }
 
+            inputRing.write (a, n);   // 튜너용: 입력 볼륨 전
+
             // 입력 볼륨 (IN 미터는 게인 뒤에서 잰다 = 모델에 들어가는 레벨)
             inputSmoothed.applyGain (a, n);
 
@@ -470,6 +473,13 @@ namespace rig
 
             // 출력 볼륨 (OUT 미터는 게인 뒤에서 잰다)
             outputSmoothed.applyGain (a, n);
+
+            // 튜너가 켜져 있으면 무음. 켜고 끌 때는 등전력(cos)으로 줄이고 키운다
+            if (tunerFade.isSmoothing())
+                for (int i = 0; i < n; ++i)
+                    a[i] *= std::cos (tunerFade.getNextValue() * juce::MathConstants<float>::halfPi);
+            else if (tunerFade.getTargetValue() > 0.0f)
+                juce::FloatVectorOperations::clear (a, n);
 
             storeMax (outputPeak, juce::FloatVectorOperations::findMaximum (a, n));
             storeMax (outputPeak, -juce::FloatVectorOperations::findMinimum (a, n));

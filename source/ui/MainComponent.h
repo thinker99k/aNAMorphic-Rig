@@ -7,6 +7,7 @@
 #include "ui/SpectrumWindow.h"   // [SPECTRUM]
 #include "ui/StatusBar.h"
 #include "ui/TopBar.h"
+#include "tuner/TunerDialog.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -52,6 +53,7 @@ namespace rig
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
         void updateUndoButtons();  // 되돌릴 것 / 다시 할 것이 있을 때만 TopBar 의 Undo / Redo 활성
         void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태
+        void openTuner();          // 튜너 모달. 열려 있는 동안 출력 무음 (AudioEngine::setTunerActive)
 
         juce::AudioDeviceManager& deviceManager;
         AudioEngine& engine;
