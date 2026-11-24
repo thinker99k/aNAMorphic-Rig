@@ -14,6 +14,8 @@
 
 namespace rig
 {
+    struct LibraryImportResult;
+
     // 화면 배치
     //  ┌──────────────────────────────────────────────┐
     //  │ TopBar   : Patch [콤보] [◀][▶]  [패치명]  [Settings] │
@@ -44,6 +46,7 @@ namespace rig
         void paint (juce::Graphics&) override;
         void resized() override;
 
+        // 외부 파일 드롭 (Edit 모드에서만): .nam / .wav 를 라이브러리로 가져오고 결과를 알린다 (LibraryImport.h)
         bool isInterestedInFileDrag (const juce::StringArray& files) override;
         void filesDropped (const juce::StringArray& files, int x, int y) override;
 
@@ -58,6 +61,7 @@ namespace rig
         void updateUndoButtons();  // 되돌릴 것 / 다시 할 것이 있을 때만 TopBar 의 Undo / Redo 활성
         void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태
         void openTuner();          // 튜너 모달. 열려 있는 동안 출력 무음 (AudioEngine::setTunerActive)
+        void libraryImported (const LibraryImportResult&);   // 드롭 가져오기가 끝난 뒤 (메시지 스레드)
 
         juce::AudioDeviceManager& deviceManager;
         AudioEngine& engine;

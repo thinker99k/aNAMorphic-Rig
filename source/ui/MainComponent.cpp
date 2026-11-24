@@ -96,7 +96,7 @@ namespace rig
 
     MainComponent::~MainComponent()
     {
-        libraryImports.removeAllJobs (true, -1);   // 대기 작업 취소, 진행 중 복사는 버퍼 경계에서 정리
+        libraryImports.removeAllJobs (true, 10000);   // 대기 작업 취소, 진행 중 복사는 버퍼 경계에서 정리 (RigModel 로더와 같게 최대 10초)
         model.removeChangeListener (this);
         model.onPatchSaved = nullptr;
     }
@@ -151,19 +151,16 @@ namespace rig
         });
     }
 
-    bool MainComponent::isInterestedInFileDrag (const juce::StringArray& files)
+    // Edit 모드에서만 받는다. 받은 항목은 모두 처리하고 결과를 알린다 (폴더, 다른 파일도 실패로 보여 준다)
+    bool MainComponent::isInterestedInFileDrag (const juce::StringArray&)
     {
-        return std::any_of (files.begin(), files.end(), [] (const juce::String& path)
-        {
-            const juce::File file (path);
-            return isLibraryFile (file) && file.existsAsFile();
-        });
+        return viewMode == ViewMode::edit;
     }
 
     void MainComponent::filesDropped (const juce::StringArray& files, int x, int y)
     {
         // MainComponent 만 파일 드롭 대상이다. 제목 표시줄은 부모 DocumentWindow 영역.
-        if (! getLocalBounds().contains (x, y) || isCurrentlyBlockedByAnotherModalComponent())
+        if (viewMode != ViewMode::edit || ! getLocalBounds().contains (x, y) || isCurrentlyBlockedByAnotherModalComponent())
             return;
 
         const auto namDirectory = paths::namDir();
@@ -180,32 +177,27 @@ namespace rig
             // SafePointer 는 이 UI 콜백에서만 검사한다 (작업 스레드는 UI 에 접근하지 않는다).
             juce::MessageManager::callAsync ([safeThis, result = std::move (imported)]
             {
-                if (safeThis == nullptr)
-                    return;
-
-                safeThis->editView.refreshLibrary();
-                if (result.skipped.isEmpty() && result.failed.isEmpty())
-                    return;
-
-                juce::String message = "Imported: " + juce::String (result.imported)
-                                     + "\nAlready in library: " + juce::String (result.alreadyPresent);
-                const auto append = [&message] (const juce::String& label, const juce::StringArray& details)
-                {
-                    if (details.isEmpty())
-                        return;
-
-                    message += "\n\n" + label + " (" + juce::String (details.size()) + "):\n";
-                    constexpr int maxDetails = 6;
-                    for (int i = 0; i < juce::jmin (maxDetails, details.size()); ++i)
-                        message += details[i] + "\n";
-                    if (details.size() > maxDetails)
-                        message += "... and " + juce::String (details.size() - maxDetails) + " more.\n";
-                };
-                append ("Skipped (only .nam and .wav files are supported)", result.skipped);
-                append ("Could not import", result.failed);
-                showAlert (*safeThis, "Library import", message, { { "OK", 0 } });
+                if (safeThis != nullptr)
+                    safeThis->libraryImported (result);
             });
         });
+    }
+
+    // 드롭 한 번에 결과 알림 하나: 성공 x / 실패 y, 실패가 있으면 그 이름 목록
+    void MainComponent::libraryImported (const LibraryImportResult& result)
+    {
+        if (! result.imported.isEmpty())
+            editView.refreshLibrary();
+
+        const int succeeded = result.imported.size(), failed = result.failed.size();
+        juce::StringArray lines;
+
+        if (succeeded > 0)
+            lines.add (juce::String (succeeded) + " imported");
+        if (failed > 0)
+            lines.add (juce::String (failed) + " failed");
+
+        showNotice (*this, "Library Import", lines.joinIntoString ("\n"), result.failed);
     }
 
     void MainComponent::updateMuteButton()

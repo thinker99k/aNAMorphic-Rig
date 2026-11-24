@@ -13,7 +13,7 @@ namespace rig
     //  - 입력 소스(드라이버 종류 + 입력 장치), 출력 장치, 샘플레이트와 버퍼 크기 선택
     //  - 채널은 장치의 모든 채널을 열고, 어느 채널을 쓸지는 패치(IN / OUT 노드)에서 고른다
     //  - [Save] 를 누르면 장치에 적용하고 ~/Documents/aNAMorphic-Rig/audio-device.xml 에 저장
-    //  - [Refresh Library] 는 즉시 라이브러리만 갱신 (오디오 설정 저장과 독립)
+    //  - [Refresh Library] 는 즉시 NAM / IR 폴더 전체를 다시 읽고 "Library refreshed." 알림 (오디오 설정 저장과 독립)
     //  - [Cancel] 을 누르면 오디오 설정을 적용하지 않고 닫힘
     //  - 창 닫기(X)와 ESC 는 없앰: 저장/취소 중 하나로만 나갈 수 있음
     class SettingsDialog final : public juce::Component

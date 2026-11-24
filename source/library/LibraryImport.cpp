@@ -1,118 +1,56 @@
 #include "LibraryImport.h"
 
-#include "AppPaths.h"
-
-#include <array>
-#include <cerrno>
-#include <cstdio>
-#include <system_error>
+#include <vector>
 
 namespace rig
 {
     namespace
     {
-        juce::String systemError (int code)
-        {
-            return juce::String (std::error_code (code, std::generic_category()).message());
-        }
+        constexpr int copyBufferSize = 64 * 1024;
 
-        // wbx 는 이미 있는 파일을 열거나 지우지 않는다. 존재 확인 뒤 copyFileTo() 를 쓰면
-        // 그 사이 다른 프로세스가 만든 파일을 덮어쓸 수 있으므로 생성 자체를 배타적으로 한다.
-        std::FILE* createNewFile (const juce::File& file)
-        {
-           #if JUCE_WINDOWS
-            return _wfopen (paths::toStdPath (file).c_str(), L"wbx");
-           #else
-            return std::fopen (paths::toStdPath (file).c_str(), "wbx");
-           #endif
-        }
+        enum class CopyResult { ok, failed, cancelled };
 
-        struct CopyTarget
-        {
-            juce::File file;
-            std::unique_ptr<std::FILE, decltype (&std::fclose)> stream { nullptr, &std::fclose };
-            bool complete = false;
-
-            ~CopyTarget()
-            {
-                stream.reset();
-                if (! complete && file != juce::File())
-                    file.deleteFile();   // 실패·취소한 이번 복사의 불완전한 파일만 지운다
-            }
-        };
-
-        juce::Result copyFile (const juce::File& source, const juce::File& folder,
-                               const std::function<bool()>& shouldCancel)
+        // 같은 폴더의 숨은 임시 파일에 다 쓴 뒤 target 을 교체한다 (paths::writeText 와 같은 방식).
+        // 원본을 다 읽고 나서 교체하므로 source == target (라이브러리 안의 파일을 다시 드롭) 이어도 안전
+        CopyResult copyFile (const juce::File& source, const juce::File& target, const std::function<bool()>& shouldCancel)
         {
             juce::FileInputStream input (source);
-            if (input.failedToOpen())
-                return input.getStatus();
-            const auto expectedSize = input.getTotalLength();
+            if (input.failedToOpen() || target.getParentDirectory().createDirectory().failed())
+                return CopyResult::failed;
 
-            const auto created = folder.createDirectory();
-            if (created.failed())
-                return created;
+            juce::TemporaryFile temp (target, juce::TemporaryFile::useHiddenFile);   // 교체하지 않으면 소멸자가 지운다
 
-            CopyTarget target;
-            const auto stem = source.getFileNameWithoutExtension();
-            const auto extension = source.getFileExtension().toLowerCase();
-
-            for (int number = 1; ; ++number)
             {
-                if (shouldCancel())
-                    return juce::Result::fail ("Import cancelled.");
+                juce::FileOutputStream output (temp.getFile());
+                if (! output.openedOk())
+                    return CopyResult::failed;
 
-                const auto suffix = number == 1 ? juce::String() : " (" + juce::String (number) + ")";
-                const auto candidate = folder.getChildFile (stem + suffix + extension);
-                target.stream.reset (createNewFile (candidate));
+                std::vector<char> buffer ((size_t) copyBufferSize);
 
-                if (target.stream != nullptr)
+                for (;;)
                 {
-                    target.file = candidate;
-                    break;
+                    if (shouldCancel())
+                        return CopyResult::cancelled;
+
+                    const auto count = input.read (buffer.data(), copyBufferSize);
+                    if (count < 0 || input.getStatus().failed())
+                        return CopyResult::failed;
+                    if (count == 0)
+                        break;
+                    if (! output.write (buffer.data(), (size_t) count))
+                        return CopyResult::failed;
                 }
 
-                const int error = errno;
-                if (error != EEXIST && ! candidate.exists() && ! candidate.isSymbolicLink())
-                    return juce::Result::fail (systemError (error));
+                output.flush();
+                if (output.getStatus().failed())
+                    return CopyResult::failed;
             }
 
-            std::array<char, 64 * 1024> buffer;
-            // isExhausted() 는 원본 경로를 다시 stat 한다. 복사 중 원본이 이동해도 열린
-            // 스트림을 끝까지 읽도록 EOF 를 사용하고, 크기가 바뀌었다면 실패로 처리한다.
-            for (;;)
-            {
-                if (shouldCancel())
-                    return juce::Result::fail ("Import cancelled.");
-
-                const auto count = input.read (buffer.data(), (int) buffer.size());
-                if (input.getStatus().failed())
-                    return input.getStatus();
-                if (count < 0)
-                    return juce::Result::fail ("The source file changed or could not be read.");
-                if (count == 0)
-                    break;
-                if (std::fwrite (buffer.data(), 1, (size_t) count, target.stream.get()) != (size_t) count)
-                    return juce::Result::fail (systemError (errno));
-            }
-
-            if (input.getPosition() != expectedSize)
-                return juce::Result::fail ("The source file changed during import. Please try again.");
-
-            // fclose 의 flush 실패도 복사 실패로 처리한다.
-            if (std::fclose (target.stream.release()) != 0)
-                return juce::Result::fail (systemError (errno));
             if (shouldCancel())
-                return juce::Result::fail ("Import cancelled.");
+                return CopyResult::cancelled;
 
-            target.complete = true;
-            return juce::Result::ok();
+            return temp.overwriteTargetFileWithTemporary() ? CopyResult::ok : CopyResult::failed;
         }
-    }
-
-    bool isLibraryFile (const juce::File& file)
-    {
-        return file.hasFileExtension (".nam;.wav");
     }
 
     LibraryImportResult importLibraryFiles (const juce::StringArray& files,
@@ -130,34 +68,26 @@ namespace rig
             }
 
             const juce::File source (path);
-            if (source.isDirectory() || ! isLibraryFile (source))
+            if (! source.existsAsFile() || ! source.hasFileExtension (".nam;.wav"))
             {
-                result.skipped.add (path);
-                continue;
-            }
-            if (! source.existsAsFile())
-            {
-                result.failed.add (path + ": File not found.");
+                result.failed.add (source.getFileName());
                 continue;
             }
 
             const auto& folder = source.hasFileExtension (".nam") ? namDirectory : irDirectory;
-            if (source.isAChildOf (folder))
-            {
-                ++result.alreadyPresent;
-                continue;
-            }
+            const auto target = folder.getChildFile (source.getFileNameWithoutExtension() + source.getFileExtension().toLowerCase());
 
-            const auto copied = copyFile (source, folder, shouldCancel);
-            if (shouldCancel())
+            const auto copied = copyFile (source, target, shouldCancel);
+            if (copied == CopyResult::cancelled)
             {
                 result.cancelled = true;
                 break;
             }
-            if (copied.wasOk())
-                ++result.imported;
+
+            if (copied == CopyResult::ok)
+                result.imported.add (target);
             else
-                result.failed.add (path + ": " + copied.getErrorMessage());
+                result.failed.add (source.getFileName());
         }
         return result;
     }

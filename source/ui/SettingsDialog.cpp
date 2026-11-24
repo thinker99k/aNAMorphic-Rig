@@ -80,7 +80,13 @@ namespace rig
     {
         auto content = std::make_unique<SettingsDialog> (dm);
         content->onClosed = std::move (onClosed);
-        content->refreshButton.onClick = std::move (onRefreshLibrary);
+        content->refreshButton.onClick = [dialog = content.get(), refreshLibrary = std::move (onRefreshLibrary)]
+        {
+            if (refreshLibrary != nullptr)
+                refreshLibrary();
+
+            showNotice (*dialog, "Library Refresh", "Library refreshed.");   // 설정창 위에 뜬다
+        };
 
         auto* window = new SettingsWindow (std::move (content), parent);
 
