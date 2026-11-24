@@ -78,7 +78,8 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 │   │       ├── nam/                    NamParams (B / M / T, Freq, Middle Q), EqStage (3밴드 peak EQ)
 │   │       └── ir/                     IrParams (L. Cut / H. Cut), CutStage (Butterworth 24 dB/oct)
 │   ├── library/
-│   │   └── NamMetadata.*               .nam 파일의 메타데이터(이름, 장비 종류 등)만 읽기
+│   │   ├── NamMetadata.*               .nam 파일의 메타데이터(이름, 장비 종류 등)만 읽기
+│   │   └── LibraryImport.*             외부 NAM / WAV 파일을 라이브러리로 복사(같은 이름은 덮어쓰기), 성공 / 실패 집계
 │   ├── model/
 │   │   └── RigModel.*                  체인(직렬/병렬 트리) 편집 상태, 패치·씬, 자동 저장, 백그라운드 로딩
 │   ├── tuner/                          튜너 (모달 창)
@@ -87,14 +88,14 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 │   │   ├── TunerGauge.*                반원 게이지
 │   │   └── TunerButton.*               상단 바 Tuner 버튼
 │   └── ui/                             화면
-│       ├── MainComponent.*             전체 배치, Edit / Live 모드 전환
+│       ├── MainComponent.*             전체 배치, Edit / Live 모드 전환, 외부 파일 드롭과 가져오기 큐
 │       ├── TopBar.*                    패치 콤보박스, 이전/다음, Undo / Redo, 패치 이름(Rename / Patch Reset), Tuner / 설정 버튼
 │       ├── StatusBar.*                 입출력 볼륨 노브, IN / OUT 미터, CPU, 출력 뮤트
 │       ├── GainKnob.*                  볼륨 노브
 │       ├── ParamKnob.*                 블록 파라미터 노브 ([노브][이름 / 값])
-│       ├── SettingsDialog.*            설정 모달 (드라이버, 입출력 장치, 저장/취소)
+│       ├── SettingsDialog.*            설정 모달 (오디오 장치·형식, 저장/취소, Refresh Library)
 │       ├── SpectrumWindow.*            출력 주파수 분석 창 (실행 인자 --spectrum 일 때만, 테스트용)
-│       ├── Widgets.h                   공용 위젯, 마우스 규칙, 기본 LookAndFeel, 노브 외형, 전원 버튼
+│       ├── Widgets.h                   공용 위젯, 마우스 규칙, 기본 LookAndFeel, 노브 외형, 전원 버튼, 경고창(버튼으로만 닫힘) / 알림창(Esc·Enter도)
 │       ├── edit/                       Edit 모드 화면
 │       │   ├── EditView.*              Edit 화면 배치
 │       │   ├── ChainView.*             패치 맵 (직렬/병렬 체인, 합류 버튼), 왼쪽 위 오류·경고 문구
@@ -133,6 +134,17 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 ```
 
 출력 뮤트는 저장하지 않습니다 (패치를 바꿔도 유지, 앱을 다시 켜면 해제).
+
+라이브러리 가져오기와 갱신
+
+- `MainComponent`가 OS 파일 드롭을 Edit 모드에서만 받습니다(Live 모드는 `isInterestedInFileDrag`가 false). 제목표시줄은 부모 `DocumentWindow`이므로 제외되며, Edit의 모든 자식 영역은 메인 컴포넌트로 전달됩니다. 앱 내부의 블록 드래그와는 별도 경로입니다.
+- 드롭한 항목마다 성공 / 실패만 있습니다. `.nam` / `.wav`는 대소문자 구분 없이 받아 `nam/` / `ir/` 바로 아래에 같은 이름으로 저장하고(확장자는 소문자), 같은 이름이 있으면 덮어씁니다. 라이브러리 안의 파일도 예외 없이 다시 씁니다. 폴더, 다른 확장자, 복사 오류는 실패입니다(이유는 따로 보여 주지 않음).
+- `LibraryImport`는 UI·모델·오디오를 참조하지 않습니다. 단일 `ThreadPool`에서 드롭 순서대로 복사합니다. 같은 폴더의 숨은 임시 파일에 다 쓴 뒤 교체하므로(`paths::writeText`와 같은 방식) 실패·취소해도 기존 파일은 그대로이고, 자기 자신을 다시 드롭해도 안전합니다.
+- 종료 시 대기 작업을 취소하고 진행 중 작업은 버퍼 단위로 중단합니다(최대 10초, `RigModel` 로더와 같음). 완료 콜백은 메시지 스레드에서 `SafePointer`를 확인한 뒤 드롭당 한 번 결과 알림(`showNotice`: `x imported` / `y failed` + 실패 이름 목록)을 띄웁니다.
+- 드롭 뒤 목록은 전체 스캔(`refresh()`) 대신 `EditView::addLibraryFiles()` → `BlockEditor::addFiles()`로 저장한 파일만 메타데이터를 읽어 캐시에 넣습니다(같은 경로면 교체). 검색어만 지웁니다(탭·강조는 그대로).
+- 같은 이름을 덮어써 지금 패치가 그 파일을 쓰고 있으면 `RigModel::reloadFile()`이 그 블록을 다시 로딩합니다(옛 소리 유지 → 준비되면 20 ms 크로스페이드, 파라미터 유지, Undo·저장 없음). 되돌리기 이력은 파일 경로 단위라, 이력 안의 같은 파일 블록에 로딩 표시를 해 두어 되돌릴 때 `step()`이 새 내용으로 다시 로딩합니다.
+- 설정창 Refresh Library는 `SettingsDialog::show()`의 `onRefreshLibrary` → `EditView::refreshLibrary()` → `BlockEditor::refresh()`로 NAM / IR 하위 폴더를 재귀 스캔한 뒤 설정창 위에 "Library refreshed." 알림을 띄웁니다. 선택기는 블록을 다시 고른 것처럼 맞춥니다(검색어 지움, 정렬·열 폭 유지). Refresh는 오디오 설정 Save/Cancel과 독립적입니다.
+- 블록 선택기의 `Show Folder`는 `paths::root().startAsProcess()`로 사용자 데이터 폴더를 엽니다(Linux xdg-open, macOS Finder, Windows 탐색기). 선택기와 같이 IN/OUT·합류 버튼 선택 중에는 비활성입니다. 파일 관리자가 뜨지 않아도 경고는 띄우지 않습니다. 파일 이동 추적이나 패치 경로 마이그레이션은 하지 않으므로, 사용 중인 파일을 옮겼다면 블록에 새 경로를 다시 지정해야 합니다.
 
 패치 파일 형식
 

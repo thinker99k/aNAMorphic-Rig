@@ -32,6 +32,9 @@ namespace rig
 
         std::function<void()> onLiveClicked;   // 씬 바의 Live 버튼
 
+        void refreshLibrary() { blockEditor.refresh(); }                                          // 설정창 Refresh Library
+        void addLibraryFiles (const juce::Array<juce::File>& files) { blockEditor.addFiles (files); }   // 드롭 가져오기
+
         void showSpectrumButton (std::function<void()> onClick) { chainView.showSpectrumButton (std::move (onClick)); }   // [SPECTRUM]
 
         void cancelEditing() { sceneBar.cancelEditing(); }   // 씬 바의 Copy / Swap 모드와 씬 이름 편집을 끝낸다

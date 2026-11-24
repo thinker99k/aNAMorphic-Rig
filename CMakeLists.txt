@@ -137,6 +137,7 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/engine/param/ir/CutStage.cpp
         source/model/RigModel.cpp
         source/library/NamMetadata.cpp
+        source/library/LibraryImport.cpp
         source/tuner/PitchDetector.cpp
         source/tuner/TunerGauge.cpp
         source/tuner/TunerDialog.cpp

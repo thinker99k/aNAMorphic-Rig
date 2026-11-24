@@ -1341,6 +1341,45 @@ namespace rig
         sendChangeMessage();
     }
 
+    // 지금 체인의 블록은 옛 소리를 내다가 새 DSP 가 준비되면 크로스페이드 (블록 교체와 같은 경로).
+    // 이력 안의 같은 파일 블록은 로딩 중으로 표시만 한다: 되돌리면 step() 이 로딩 중이던 블록을 다시 로딩하므로 옛 DSP 가 되살아나지 않는다
+    void RigModel::reloadFile (const juce::File& file)
+    {
+        const auto mark = [&file] (std::vector<Item>& items)
+        {
+            for (auto& item : items)
+            {
+                if (auto* slot = std::get_if<Slot> (&item))
+                    slot->loading = slot->loading || slot->file == file;
+                else
+                    for (auto& branch : std::get<Parallel> (item).branches)
+                        for (auto& s : branch)
+                            s.loading = s.loading || s.file == file;
+            }
+        };
+
+        for (auto* stack : { &undoStack, &redoStack })
+            for (auto& past : *stack)
+                mark (past.chain);
+
+        if (pendingUndo.has_value())
+            mark (pendingUndo->chain);
+
+        bool reloading = false;
+
+        forEachSlot ([&] (Slot& slot)
+        {
+            if (slot.file == file)
+            {
+                startLoading (slot);
+                reloading = true;
+            }
+        });
+
+        if (reloading)
+            sendChangeMessage();
+    }
+
     //==============================================================================
     void RigModel::startLoading (Slot& slot)
     {

@@ -1,5 +1,7 @@
 #include "MainComponent.h"
 
+#include "AppPaths.h"
+#include "library/LibraryImport.h"
 #include "ui/SettingsDialog.h"
 
 namespace rig
@@ -94,6 +96,7 @@ namespace rig
 
     MainComponent::~MainComponent()
     {
+        libraryImports.removeAllJobs (true, 10000);   // 대기 작업 취소, 진행 중 복사는 버퍼 경계에서 정리 (RigModel 로더와 같게 최대 10초)
         model.removeChangeListener (this);
         model.onPatchSaved = nullptr;
     }
@@ -141,7 +144,64 @@ namespace rig
         {
             if (safeThis != nullptr && saved)
                 safeThis->model.deviceChanged();
+        }, [safeThis]
+        {
+            if (safeThis != nullptr)
+                safeThis->editView.refreshLibrary();
         });
+    }
+
+    // Edit 모드에서만 받는다. 받은 항목은 모두 처리하고 결과를 알린다 (폴더, 다른 파일도 실패로 보여 준다)
+    bool MainComponent::isInterestedInFileDrag (const juce::StringArray&)
+    {
+        return viewMode == ViewMode::edit;
+    }
+
+    void MainComponent::filesDropped (const juce::StringArray& files, int x, int y)
+    {
+        // MainComponent 만 파일 드롭 대상이다. 제목 표시줄은 부모 DocumentWindow 영역.
+        if (viewMode != ViewMode::edit || ! getLocalBounds().contains (x, y) || isCurrentlyBlockedByAnotherModalComponent())
+            return;
+
+        const auto namDirectory = paths::namDir();
+        const auto irDirectory = paths::irDir();
+        juce::Component::SafePointer<MainComponent> safeThis (this);
+
+        libraryImports.addJob ([files, namDirectory, irDirectory, safeThis]
+        {
+            auto* job = juce::ThreadPoolJob::getCurrentThreadPoolJob();
+            auto imported = importLibraryFiles (files, namDirectory, irDirectory, [job] { return job->shouldExit(); });
+            if (imported.cancelled || job->shouldExit())
+                return;
+
+            // SafePointer 는 이 UI 콜백에서만 검사한다 (작업 스레드는 UI 에 접근하지 않는다).
+            juce::MessageManager::callAsync ([safeThis, result = std::move (imported)]
+            {
+                if (safeThis != nullptr)
+                    safeThis->libraryImported (result);
+            });
+        });
+    }
+
+    // 드롭 한 번에 결과 알림 하나: 성공 x / 실패 y, 실패가 있으면 그 이름 목록
+    void MainComponent::libraryImported (const LibraryImportResult& result)
+    {
+        editView.addLibraryFiles (result.imported);
+
+        for (const auto& file : result.imported)
+            model.reloadFile (file);   // 같은 이름을 덮어써 지금 쓰는 블록이 있으면 새 내용으로
+
+        const int succeeded = result.imported.size(), failed = result.failed.size();
+        juce::StringArray lines;
+
+        if (succeeded > 0)
+            lines.add (juce::String (succeeded) + " imported");
+        if (failed > 0)
+            lines.add (juce::String (failed) + " failed");
+
+        // 성공만 = 정보, 실패가 하나라도 있으면 (일부 실패, 실패만) 경고 아이콘
+        showNotice (*this, "Library Import", lines.joinIntoString ("\n"), result.failed,
+                    failed > 0 ? juce::MessageBoxIconType::WarningIcon : juce::MessageBoxIconType::InfoIcon);
     }
 
     void MainComponent::updateMuteButton()

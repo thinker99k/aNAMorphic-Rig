@@ -18,12 +18,14 @@ namespace rig
     //   - 항목을 끌어 패치맵에 놓으면 추가 / 교체 / 병렬 (패치맵이 놓은 자리로 판단)
     //   - 왼쪽 열 아래 검색창: 현재 카테고리만, 공백으로 나눈 단어를 모두 포함하는 행 (대소문자 무시).
     //     검색은 한 블록의 한 카테고리 안에서만: 카테고리 변경(탭 클릭, 다른 카테고리 블록 선택), 다른 블록 선택,
-    //     IN / OUT·합류 버튼 선택, 패치 전환이면 검색어를 지운다. 씬 전환은 같은 블록이라 유지
+    //     IN / OUT·합류 버튼 선택, 패치 전환, 설정창 Refresh Library 면 검색어를 지운다. 씬 전환은 같은 블록이라 유지
     //   - 파일 카테고리(NAM / IR) : ~/Documents/aNAMorphic-Rig/nam (*.nam) 또는 ir (*.wav) 의 파일 표
-    //       - 폴더 스캔은 refresh() 에서만 한다 (생성 시 한 번). 모델 변경 알림 때는 캐시에서 목록만 다시 고른다
+    //       - 폴더 스캔은 refresh() 에서만 한다 (생성 시 한 번, 설정창 Refresh Library). 모델 변경 알림 때는 캐시에서 목록만 다시 고른다
+    //       - 드롭 가져오기는 저장한 파일만 읽어 캐시에 넣고(addFiles) 검색어만 지운다 (탭·강조는 그대로)
     //       - NAM / IR 표를 따로 두어 열 폭과 정렬 상태를 각자 유지한다 (메모리에만, 다시 켜면 기본값)
     //   - 파일 없는 카테고리(Built-in 등) : 내장 블록 목록. 새 카테고리는 categories 에 탭 이름과 내장 블록 목록만 추가하면 된다
     //   - 선택된 블록이 없어도 끌어올 라이브러리로 활성 (둘러보던 탭과 강조 유지, 더블클릭은 무동작). IN / OUT 이나 합류 버튼을 고른 동안만 비활성
+    //   - 검색창 위 Show Folder: ~/Documents/aNAMorphic-Rig 를 OS 파일 관리자로 연다 (선택기와 같이 비활성)
     class BlockEditor final : public juce::Component,
                               private juce::ChangeListener,
                               private juce::TableListBoxModel
@@ -34,6 +36,9 @@ namespace rig
 
         // 편집 화면이 숨겨진 동안(Live 모드) 변경 알림으로 목록을 다시 고르지 않는다. 다시 켜면 한 번 맞춘다
         void setUpdatesPaused (bool paused);
+
+        void refresh();   // 설정창 Refresh Library: NAM / IR 전체를 다시 스캔
+        void addFiles (const juce::Array<juce::File>& files);   // 드롭 가져오기: 저장한 파일만 읽어 넣고 검색어를 지운다
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -74,7 +79,6 @@ namespace rig
         static Entry makeEntry (const juce::File& file, bool readMetadata);
 
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
-        void refresh();
         void updateFromModel();
         void showCategory (bool resetHighlight);
         Highlight currentHighlight();
@@ -152,8 +156,9 @@ namespace rig
         BuiltInListModel builtInListModel { *this };
         juce::TableListBox builtInList;
         LeftClickOnly<juce::TextEditor> searchBox;
+        LeftClickOnly<juce::TextButton> showFolderButton { "Show Folder" };   // 사용자 데이터 폴더를 파일 관리자로 연다
 
-        std::vector<Entry> namEntries, irEntries;   // refresh() 의 스캔 결과
+        std::vector<Entry> namEntries, irEntries;   // refresh() 의 스캔 결과 (+ addFiles() 로 가져온 파일)
         Entry outsideEntry;                         // 폴더 밖의 현재 파일 (메타데이터를 매번 읽지 않도록 보관)
 
         std::vector<Entry> allRows;                 // 현재 카테고리의 전체 파일 목록 (정렬된 상태)

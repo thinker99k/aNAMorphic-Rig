@@ -66,6 +66,7 @@ namespace rig
         cancelButton.onClick = [this] { close (false); };
         addAndMakeVisible (saveButton);
         addAndMakeVisible (cancelButton);
+        addAndMakeVisible (refreshButton);
 
         refreshDeviceTypes();
         refreshFormatOptions();
@@ -74,10 +75,18 @@ namespace rig
 
     void SettingsDialog::show (juce::AudioDeviceManager& dm,
                                juce::Component* parent,
-                               std::function<void (bool)> onClosed)
+                               std::function<void (bool)> onClosed,
+                               std::function<void()> onRefreshLibrary)
     {
         auto content = std::make_unique<SettingsDialog> (dm);
         content->onClosed = std::move (onClosed);
+        content->refreshButton.onClick = [dialog = content.get(), refreshLibrary = std::move (onRefreshLibrary)]
+        {
+            if (refreshLibrary != nullptr)
+                refreshLibrary();
+
+            showNotice (*dialog, "Library Refresh", "Library refreshed.");   // 설정창 위에 뜬다
+        };
 
         auto* window = new SettingsWindow (std::move (content), parent);
 
@@ -357,6 +366,7 @@ namespace rig
         bufferBox.setBounds (formats);
 
         auto buttons = area.removeFromBottom (28);
+        refreshButton.setBounds (buttons.removeFromLeft (140));
         cancelButton.setBounds (buttons.removeFromRight (90));
         buttons.removeFromRight (8);
         saveButton.setBounds (buttons.removeFromRight (90));

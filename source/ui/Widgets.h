@@ -6,6 +6,8 @@
 
 #include <cmath>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -459,15 +461,23 @@ namespace rig
         }
     };
 
-    // AlertWindow 와 같은 모양의 경고창. 버튼만 LeftClickOnly 로 직접 만든다 (AlertWindow::addButton 은 JUCE TextButton 을 만든다).
+    // AlertWindow 와 같은 모양의 경고창 / 알림창. 버튼만 LeftClickOnly 로 직접 만든다 (AlertWindow::addButton 은 JUCE TextButton 을 만든다).
     // 버튼 자리는 AlertWindow::updateLayout 과 같다: 버튼 높이만큼 빈 칸(spacer)을 넣어 창 크기를 맞추고, 아래 95 % 선에 가운데 정렬
+    //  content 가 있으면 글과 버튼 사이에 넣는다. closeWithKeys 면 Esc / Enter 도 첫 버튼 값으로 닫는다 (알림창)
     class LeftClickAlertWindow final : public LeftClickOnly<juce::AlertWindow>
     {
     public:
         LeftClickAlertWindow (const juce::String& title, const juce::String& message, juce::Component* associatedComponent,
-                              const std::vector<std::pair<juce::String, int>>& buttonList)
-            : LeftClickOnly (title, message, juce::MessageBoxIconType::WarningIcon, associatedComponent)
+                              const std::vector<std::pair<juce::String, int>>& buttonList,
+                              juce::MessageBoxIconType icon = juce::MessageBoxIconType::WarningIcon,
+                              std::unique_ptr<juce::Component> contentToOwn = nullptr, bool closeWithKeys = false)
+            : LeftClickOnly (title, message, icon, associatedComponent),
+              content (std::move (contentToOwn)),
+              keyResult (closeWithKeys && ! buttonList.empty() ? std::optional<int> (buttonList.front().second) : std::nullopt)
         {
+            if (content != nullptr)
+                addCustomComponent (content.get());
+
             for (const auto& [name, result] : buttonList)
             {
                 auto* button = buttons.add (new LeftClickOnly<juce::TextButton> (name));
@@ -508,8 +518,21 @@ namespace rig
             }
         }
 
+        bool keyPressed (const juce::KeyPress& key) override
+        {
+            if (keyResult.has_value() && (key == juce::KeyPress::escapeKey || key == juce::KeyPress::returnKey))
+            {
+                exitModalState (*keyResult);
+                return true;
+            }
+
+            return juce::AlertWindow::keyPressed (key);
+        }
+
     private:
         static constexpr int spacing = 16;
+        std::unique_ptr<juce::Component> content;
+        std::optional<int> keyResult;   // Esc / Enter 로 닫을 때의 값 (없으면 버튼으로만 닫힘)
         juce::OwnedArray<juce::TextButton> buttons;
         juce::Component spacer;
     };
@@ -526,6 +549,46 @@ namespace rig
             if (onResult != nullptr)
                 onResult (result);
         }), true);
+    }
+
+    // 알림창 (사용자가 한 동작의 결과): 같은 자리에 OK 하나, OK / Esc / Enter 어느 것으로도 닫힌다.
+    // 아이콘은 결과에 따라: 모두 잘 됨 = 정보(i), 실패가 있음 = 경고(!). list 가 있으면 글 아래에 읽기 전용 목록
+    // (모두 볼 수 있게 noticeListRows 줄을 넘으면 스크롤)
+    inline void showNotice (juce::Component& origin, const juce::String& title, const juce::String& message,
+                            const juce::StringArray& list = {},
+                            juce::MessageBoxIconType icon = juce::MessageBoxIconType::InfoIcon)
+    {
+        constexpr int noticeListRows = 8;      // 목록이 한 번에 보여 주는 최대 줄 수
+        constexpr int noticeListWidth = 280;   // AlertWindow 최소 폭 350 의 80 % (커스텀 칸은 폭의 10 % 에서 시작)
+        constexpr float noticeListBrighter = 0.3f;   // 목록 바탕 = 알림창 바탕보다 밝은 회색 (같은 색이면 목록 칸이 구분되지 않는다)
+
+        std::unique_ptr<juce::Component> content;
+
+        if (! list.isEmpty())
+        {
+            auto box = std::make_unique<LeftClickOnly<juce::TextEditor>>();
+            box->setMultiLine (true, true);
+            box->setReadOnly (true);
+            box->setCaretVisible (false);
+            box->setPopupMenuEnabled (false);   // 입력칸 오른쪽 클릭 메뉴는 쓰지 않는다 (마우스 규칙)
+            box->setScrollbarsShown (true);
+            box->setWantsKeyboardFocus (false);   // Esc / Enter 는 알림창이 받는다
+            box->setMouseClickGrabsKeyboardFocus (false);
+            box->setColour (juce::TextEditor::backgroundColourId,
+                            juce::LookAndFeel::getDefaultLookAndFeel().findColour (juce::AlertWindow::backgroundColourId).brighter (noticeListBrighter));
+            box->setText (list.joinIntoString ("\n"), false);
+
+            const int rows = juce::jmin (list.size(), noticeListRows);
+            const auto border = box->getBorder();
+            const int height = juce::roundToInt (box->getFont().getHeight() * (float) rows)
+                             + border.getTopAndBottom() + box->getTopIndent() * 2;
+            box->setSize (noticeListWidth, height);
+            content = std::move (box);
+        }
+
+        auto* alert = new LeftClickAlertWindow (title, message, origin.getTopLevelComponent(), { { "OK", 0 } },
+                                                icon, std::move (content), true);
+        alert->enterModalState (true, nullptr, true);
     }
 
     // 파일 쓰기 결과 알림 (패치 저장, 설정창 Save 의 audio-device.xml). 앱 전체에 상태 하나:

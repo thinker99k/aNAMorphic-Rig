@@ -88,6 +88,11 @@ namespace rig
         };
         addAndMakeVisible (searchBox);
 
+        // 사용자 데이터 폴더(nam/, ir/, patch/, settings.json 이 보이는 곳)를 OS 파일 관리자로 연다.
+        // 폴더는 paths::root() 가 늘 만들어 둔다. 파일 관리자가 안 뜨면 그뿐, 경고는 띄우지 않는다
+        showFolderButton.onClick = [] { paths::root().startAsProcess(); };
+        addAndMakeVisible (showFolderButton);
+
         // 더블클릭(왼쪽)해야 블록에 지정된다
         fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
 
@@ -174,7 +179,7 @@ namespace rig
                  metadata.gearType, metadata.toneType, metadata.modeledBy };
     }
 
-    // 추후 설정창 refresh library 버튼에서 호출 예정
+    // 생성할 때와 설정창 Refresh Library 때 호출
     // nam/, ir/ 폴더를 스캔하고 NAM 메타데이터를 읽어 캐시에 둔다 (디스크를 읽는 곳은 여기뿐)
     void BlockEditor::refresh()
     {
@@ -194,6 +199,30 @@ namespace rig
         outsideEntry = {};
         shownSlotId = 0;   // 목록이 바뀌었으니 강조도 다시 맞춘다
         updateFromModel();
+    }
+
+    // 드롭 가져오기가 끝난 뒤 (전체 스캔 없이 저장한 파일만 메타데이터를 읽는다). 같은 경로가 이미 있으면 그 항목을 바꾼다 (덮어쓰기).
+    // 화면은 검색어만 지운다 (탭과 강조는 그대로. 방금 끌어온 파일은 사용자가 안다)
+    void BlockEditor::addFiles (const juce::Array<juce::File>& files)
+    {
+        if (files.isEmpty())
+            return;
+
+        for (const auto& file : files)
+        {
+            const bool isNam = file.hasFileExtension (".nam");
+            auto& entries = isNam ? namEntries : irEntries;
+            auto entry = makeEntry (file, isNam);
+            const auto existing = std::find_if (entries.begin(), entries.end(), [&file] (const Entry& e) { return e.file == file; });
+
+            if (existing != entries.end())
+                *existing = std::move (entry);
+            else
+                entries.push_back (std::move (entry));
+        }
+
+        clearSearch();
+        showCategory (false);
     }
 
     int BlockEditor::categoryFor (BlockType type) const
@@ -218,7 +247,7 @@ namespace rig
         // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 이나 합류 버튼을 고른 동안만 비활성
         const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none && model.getSelectedParallelId() == 0;
 
-        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox })
+        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox, &showFolderButton })
         {
             c->setEnabled (enabled);
             c->setAlpha (enabled ? 1.0f : 0.4f);
@@ -603,15 +632,17 @@ namespace rig
         //  - 위: 12 = 구분선 1 + 빈 공간 11
         //  - 왼쪽/오른쪽 끝: 10 + 창 테두리 1 px(배경과 같은 색) = 11
         //  - 탭-목록: 11
-        constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
+        //  - 왼쪽 열 카테고리 / Show Folder / 검색 사이: 14 (1024 x 768 에서 카테고리 151 + 14 + 24 + 14 + 24 = 227)
+        constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12, leftColumnGap = 14;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 오른쪽 표 높이는 유지하고, 왼쪽 열 위 2/3 는 카테고리, 맨 아래 한 줄은 검색에 쓴다
+        // 왼쪽 열: 아래부터 검색, Show Folder, 나머지는 카테고리
         auto leftColumn = area.removeFromLeft (categoryListWidth);
-        const int categoryHeight = juce::jmax (0, juce::jmin (leftColumn.getHeight() * 2 / 3,
-                                                            leftColumn.getHeight() - rowHeight - middleGap));
-        categoryList.setBounds (leftColumn.withHeight (categoryHeight));
         searchBox.setBounds (leftColumn.removeFromBottom (rowHeight));
+        leftColumn.removeFromBottom (leftColumnGap);
+        showFolderButton.setBounds (leftColumn.removeFromBottom (rowHeight));
+        leftColumn.removeFromBottom (leftColumnGap);
+        categoryList.setBounds (leftColumn);
         categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);
         area.removeFromLeft (middleGap);
 

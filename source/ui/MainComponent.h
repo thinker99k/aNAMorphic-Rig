@@ -14,6 +14,8 @@
 
 namespace rig
 {
+    struct LibraryImportResult;
+
     // 화면 배치
     //  ┌──────────────────────────────────────────────┐
     //  │ TopBar   : Patch [콤보] [◀][▶]  [패치명]  [Settings] │
@@ -29,6 +31,7 @@ namespace rig
     //   - 맨 아래 줄은 둘 다 가운데 높이의 1/8 이라, 모드를 바꿔도 Live 버튼이 같은 자리에 있다
     //  TopBar 와 StatusBar 는 두 모드에서 그대로
     class MainComponent final : public juce::Component,
+                                public juce::FileDragAndDropTarget,
                                 private juce::Timer,
                                 private juce::ChangeListener
     {
@@ -43,6 +46,10 @@ namespace rig
         void paint (juce::Graphics&) override;
         void resized() override;
 
+        // 외부 파일 드롭 (Edit 모드에서만): .nam / .wav 를 라이브러리로 가져오고 결과를 알린다 (LibraryImport.h)
+        bool isInterestedInFileDrag (const juce::StringArray& files) override;
+        void filesDropped (const juce::StringArray& files, int x, int y) override;
+
     private:
         enum class ViewMode { edit, live };
 
@@ -54,6 +61,7 @@ namespace rig
         void updateUndoButtons();  // 되돌릴 것 / 다시 할 것이 있을 때만 TopBar 의 Undo / Redo 활성
         void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태
         void openTuner();          // 튜너 모달. 열려 있는 동안 출력 무음 (AudioEngine::setTunerActive)
+        void libraryImported (const LibraryImportResult&);   // 드롭 가져오기가 끝난 뒤 (메시지 스레드)
 
         juce::AudioDeviceManager& deviceManager;
         AudioEngine& engine;
@@ -67,6 +75,8 @@ namespace rig
         ViewMode viewMode = ViewMode::edit;   // 항상 Edit 로 시작, 저장하지 않는다
 
         std::unique_ptr<SpectrumWindow> spectrumWindow;   // [SPECTRUM] 비모달 창. 닫으면 숨기기만 하고 MainComponent 와 함께 지워진다
+
+        juce::ThreadPool libraryImports { 1 };   // 외부 파일 복사만 순차 실행. 완료 알림은 메시지 스레드로
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
     };
