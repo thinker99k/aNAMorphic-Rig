@@ -558,6 +558,7 @@ namespace rig
     {
         constexpr int noticeListRows = 8;      // 목록이 한 번에 보여 주는 최대 줄 수
         constexpr int noticeListWidth = 280;   // AlertWindow 최소 폭 350 의 80 % (커스텀 칸은 폭의 10 % 에서 시작)
+        constexpr float noticeListBrighter = 0.3f;   // 목록 바탕 = 알림창 바탕보다 밝은 회색 (같은 색이면 목록 칸이 구분되지 않는다)
 
         std::unique_ptr<juce::Component> content;
 
@@ -571,6 +572,8 @@ namespace rig
             box->setScrollbarsShown (true);
             box->setWantsKeyboardFocus (false);   // Esc / Enter 는 알림창이 받는다
             box->setMouseClickGrabsKeyboardFocus (false);
+            box->setColour (juce::TextEditor::backgroundColourId,
+                            juce::LookAndFeel::getDefaultLookAndFeel().findColour (juce::AlertWindow::backgroundColourId).brighter (noticeListBrighter));
             box->setText (list.joinIntoString ("\n"), false);
 
             const int rows = juce::jmin (list.size(), noticeListRows);
