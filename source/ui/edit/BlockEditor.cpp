@@ -88,15 +88,14 @@ namespace rig
         };
         addAndMakeVisible (searchBox);
 
-        browseButton.onClick = [this]
+        // 사용자 데이터 폴더(nam/, ir/, patch/, settings.json 이 보이는 곳)를 OS 파일 관리자로 연다. 폴더는 paths::root() 가 늘 만들어 둔다
+        showFolderButton.onClick = [this]
         {
             const auto folder = paths::root();
-            if (! folder.isDirectory() || ! folder.startAsProcess())
-                showAlert (*this, "Could not open library folder",
-                           folder.getFullPathName() + "\n\nCheck folder permissions and your file manager.",
-                           { { "OK", 0 } });
+            if (! folder.startAsProcess())
+                showAlert (*this, "Could not open folder", folder.getFullPathName(), { { "OK", 0 } });
         };
-        addAndMakeVisible (browseButton);
+        addAndMakeVisible (showFolderButton);
 
         // 더블클릭(왼쪽)해야 블록에 지정된다
         fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
@@ -270,7 +269,7 @@ namespace rig
         // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 이나 합류 버튼을 고른 동안만 비활성
         const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none && model.getSelectedParallelId() == 0;
 
-        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox })
+        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox, &showFolderButton })
         {
             c->setEnabled (enabled);
             c->setAlpha (enabled ? 1.0f : 0.4f);
@@ -655,17 +654,17 @@ namespace rig
         //  - 위: 12 = 구분선 1 + 빈 공간 11
         //  - 왼쪽/오른쪽 끝: 10 + 창 테두리 1 px(배경과 같은 색) = 11
         //  - 탭-목록: 11
-        constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12;
+        //  - 왼쪽 열 카테고리 / Show Folder / 검색 사이: 14 (1024 x 768 에서 카테고리 151 + 14 + 24 + 14 + 24 = 227)
+        constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12, leftColumnGap = 14;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 오른쪽 표는 유지. 왼쪽 아래는 Browse + 검색, 나머지 위 2/3 까지를 카테고리에 쓴다
+        // 왼쪽 열: 아래부터 검색, Show Folder, 나머지는 카테고리
         auto leftColumn = area.removeFromLeft (categoryListWidth);
-        const int categoryHeight = juce::jmax (0, juce::jmin (leftColumn.getHeight() * 2 / 3,
-                                                            leftColumn.getHeight() - 2 * (rowHeight + middleGap)));
-        categoryList.setBounds (leftColumn.withHeight (categoryHeight));
         searchBox.setBounds (leftColumn.removeFromBottom (rowHeight));
-        leftColumn.removeFromBottom (juce::jmin (middleGap, leftColumn.getHeight()));
-        browseButton.setBounds (leftColumn.removeFromBottom (rowHeight));
+        leftColumn.removeFromBottom (leftColumnGap);
+        showFolderButton.setBounds (leftColumn.removeFromBottom (rowHeight));
+        leftColumn.removeFromBottom (leftColumnGap);
+        categoryList.setBounds (leftColumn);
         categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);
         area.removeFromLeft (middleGap);
 
