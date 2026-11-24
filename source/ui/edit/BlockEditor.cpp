@@ -80,7 +80,12 @@ namespace rig
             searchWords.removeEmptyStrings();
             applyFilter (currentHighlight());
         };
-        searchBox.onEscapeKey = [this] { searchBox.setText ({}, true); };
+        // Esc: 검색어를 지우고 검색창에서 빠져나온다 (키보드 포커스를 놓아 커서가 사라진다)
+        searchBox.onEscapeKey = [this]
+        {
+            searchBox.setText ({}, true);
+            searchBox.giveAwayKeyboardFocus();
+        };
         addAndMakeVisible (searchBox);
 
         // 더블클릭(왼쪽)해야 블록에 지정된다
