@@ -16,12 +16,14 @@ namespace rig
     //   네 목록 모두 같은 모양의 표 (머리글 + 같은 행 높이와 색). 머리글 높이가 같아 왼쪽과 오른쪽의 윗선이 맞는다
     //   - 더블클릭해야 블록에 지정된다 (이때 패치도 저장). 탭 클릭/클릭/방향키는 둘러보기(강조)만
     //   - 항목을 끌어 패치맵에 놓으면 추가 / 교체 / 병렬 (패치맵이 놓은 자리로 판단)
-    //   - 왼쪽 열 아래 검색창: 현재 카테고리만, 공백으로 나눈 단어를 모두 포함하는 행 (대소문자 무시). 탭을 바꿔도 검색어 유지
+    //   - 왼쪽 열 아래 검색창: 현재 카테고리만, 공백으로 나눈 단어를 모두 포함하는 행 (대소문자 무시).
+    //     검색은 한 블록의 한 카테고리 안에서만: 카테고리 변경(탭 클릭, 다른 카테고리 블록 선택), 다른 블록 선택,
+    //     IN / OUT·합류 버튼 선택, 패치 전환이면 검색어를 지운다. 씬 전환은 같은 블록이라 유지
     //   - 파일 카테고리(NAM / IR) : ~/Documents/aNAMorphic-Rig/nam (*.nam) 또는 ir (*.wav) 의 파일 표
     //       - 폴더 스캔은 refresh() 에서만 한다 (생성 시 한 번). 모델 변경 알림 때는 캐시에서 목록만 다시 고른다
     //       - NAM / IR 표를 따로 두어 열 폭과 정렬 상태를 각자 유지한다 (메모리에만, 다시 켜면 기본값)
     //   - 파일 없는 카테고리(Built-in 등) : 내장 블록 목록. 새 카테고리는 categories 에 탭 이름과 내장 블록 목록만 추가하면 된다
-    //   - 선택된 블록이 없어도 끌어올 라이브러리로 활성 (둘러보던 탭과 강조 유지, 더블클릭은 무동작). IN / OUT 을 고른 동안만 비활성
+    //   - 선택된 블록이 없어도 끌어올 라이브러리로 활성 (둘러보던 탭과 강조 유지, 더블클릭은 무동작). IN / OUT 이나 합류 버튼을 고른 동안만 비활성
     class BlockEditor final : public juce::Component,
                               private juce::ChangeListener,
                               private juce::TableListBoxModel
@@ -79,6 +81,7 @@ namespace rig
         Highlight currentHighlight();
         void restoreHighlight (const Highlight&);
         void applyFilter (const Highlight&);
+        void clearSearch();
         int categoryFor (BlockType type) const;
         const Category& shownCategory() const { return categories[(size_t) shownCategoryIndex]; }
 

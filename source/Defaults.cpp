@@ -69,6 +69,7 @@ namespace rig::defaults
                 { "version", 1 },
                 { "inputGainDb", 0.0 },
                 { "outputGainDb", 0.0 },
+                { "tunerPitch", RigModel::tunerPitchDefaultHz },
             };
 
             juce::var json;

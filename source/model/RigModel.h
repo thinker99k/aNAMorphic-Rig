@@ -111,11 +111,16 @@ namespace rig
         float getOutputGainDb() const noexcept { return outputGainDb; }
         void setInputGainDb (float db);
         void setOutputGainDb (float db);   // 뮤트도 함께 해제한다
-        void saveGains();                   // 노브 드래그가 끝났을 때 settings.json 에 저장
+        void saveAppSettings();             // 볼륨 노브·튜너 기준음 끌기가 끝났을 때, 기준음 입력 적용 때 settings.json 에 저장
 
         // 출력 뮤트: settings.json 에 저장하지 않고 패치를 바꿔도 유지된다. 뮤트 중에도 outputGainDb 는 원래 값
         bool isOutputMuted() const noexcept { return outputMuted; }
         void setOutputMuted (bool shouldBeMuted);
+
+        // 튜너 A4 기준음 (Hz 정수, 앱 전역, settings.json 에 저장). 저장 시점은 볼륨과 같다 (노브 드래그 끝, 앱 종료)
+        static constexpr int tunerPitchMinHz = 410, tunerPitchMaxHz = 470, tunerPitchDefaultHz = 440;
+        int getTunerPitchHz() const noexcept { return tunerPitchHz; }
+        void setTunerPitchHz (int hz);   // 범위 밖은 끝 값으로
 
         // 체인 편집 (블록 개수 제한 없음: CPU 가 버티는 만큼). 블록과 병렬은 id 로 가리킨다
         const std::vector<Item>& getChain() const noexcept { return chain; }
@@ -274,6 +279,7 @@ namespace rig
         juce::String patchName { "config01" };
         float inputGainDb = 0.0f, outputGainDb = 0.0f;
         bool outputMuted = false;               // loadPatch() 에서 초기화하지 않는다
+        int tunerPitchHz = tunerPitchDefaultHz;
         std::vector<Item> chain;
         juce::uint64 selectedSlotId = 0, selectedParallelId = 0;   // 0 = 선택 없음
         Endpoint selectedEndpoint = Endpoint::none;

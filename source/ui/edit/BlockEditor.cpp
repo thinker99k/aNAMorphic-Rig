@@ -80,7 +80,12 @@ namespace rig
             searchWords.removeEmptyStrings();
             applyFilter (currentHighlight());
         };
-        searchBox.onEscapeKey = [this] { searchBox.setText ({}, true); };
+        // Esc: 검색어를 지우고 검색창에서 빠져나온다 (키보드 포커스를 놓아 커서가 사라진다)
+        searchBox.onEscapeKey = [this]
+        {
+            searchBox.setText ({}, true);
+            searchBox.giveAwayKeyboardFocus();
+        };
         addAndMakeVisible (searchBox);
 
         browseButton.onClick = [this]
@@ -220,8 +225,8 @@ namespace rig
     {
         const auto* slot = model.getSelectedSlot();
 
-        // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 을 고른 동안만 비활성
-        const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none;
+        // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 이나 합류 버튼을 고른 동안만 비활성
+        const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none && model.getSelectedParallelId() == 0;
 
         for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox })
         {
@@ -229,9 +234,10 @@ namespace rig
             c->setAlpha (enabled ? 1.0f : 0.4f);
         }
 
-        // 고른 블록이 없으면 둘러보던 탭과 강조를 그대로 둔다
+        // 고른 블록이 없으면(IN / OUT, 합류 버튼, 빈 패치) 둘러보던 탭과 강조는 그대로 두고 검색은 끝
         if (slot == nullptr)
         {
+            clearSearch();
             shownSlotId = 0;
             showCategory (false);
             return;
@@ -241,10 +247,17 @@ namespace rig
 
         if (reset)
         {
+            const int category = categoryFor (slot->type);
+
+            // 다른 블록(패치 전환 포함, id 가 새로 붙는다)이거나 카테고리가 바뀌면 검색은 끝.
+            // 같은 블록에 같은 카테고리 파일을 지정한 경우와 씬 전환(같은 블록)은 유지
+            if (slot->id != shownSlotId || category != shownCategoryIndex)
+                clearSearch();
+
             shownSlotId = slot->id;
             shownType = slot->type;
             shownFile = slot->file;
-            shownCategoryIndex = categoryFor (slot->type);
+            shownCategoryIndex = category;
         }
 
         showCategory (reset);
@@ -396,6 +409,13 @@ namespace rig
         list.repaint();
     }
 
+    // 검색어를 지운다. 알림 없이 지우므로 목록은 이어서 부르는 showCategory 가 한 번만 거른다
+    void BlockEditor::clearSearch()
+    {
+        searchBox.setText ({}, false);
+        searchWords.clear();
+    }
+
     int BlockEditor::getNumRows()
     {
         return (int) rows.size();
@@ -456,6 +476,7 @@ namespace rig
 
         if (lastRowSelected != owner.shownCategoryIndex)
         {
+            owner.clearSearch();
             owner.shownCategoryIndex = lastRowSelected;
             owner.showCategory (true);
         }
