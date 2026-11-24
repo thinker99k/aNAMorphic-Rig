@@ -198,6 +198,10 @@ namespace rig
         // 오디오 장치(샘플레이트 등)가 바뀐 뒤 호출: 꺼진(Off) 블록까지 다시 준비
         void deviceChanged();
 
+        // 라이브러리 파일의 내용이 바뀐 뒤 호출 (드롭 가져오기가 같은 이름을 덮어씀): 그 파일을 쓰는 블록을 새 내용으로 다시 로딩.
+        // 경로는 그대로라 패치 편집이 아니다 (Undo·저장 없음, 파라미터 유지). 되돌리기 이력도 파일 경로 단위로 새 내용을 쓴다
+        void reloadFile (const juce::File& file);
+
         // 블록 파라미터 (현재 씬의 값). index 는 BlockParams::specs (slot.type) 순서, 스위치는 0 / 1
         float getParam (const Slot& slot, int index) const noexcept { return slot.paramValues[(size_t) currentScene][(size_t) index]; }
         void setParam (juce::uint64 slotId, int index, float value, bool save = true);   // 노브 드래그 중에는 save = false, 끝에 true. 드래그 한 번 = Undo 한 단계

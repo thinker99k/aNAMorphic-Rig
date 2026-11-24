@@ -142,6 +142,7 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 - `LibraryImport`는 UI·모델·오디오를 참조하지 않습니다. 단일 `ThreadPool`에서 드롭 순서대로 복사합니다. 같은 폴더의 숨은 임시 파일에 다 쓴 뒤 교체하므로(`paths::writeText`와 같은 방식) 실패·취소해도 기존 파일은 그대로이고, 자기 자신을 다시 드롭해도 안전합니다.
 - 종료 시 대기 작업을 취소하고 진행 중 작업은 버퍼 단위로 중단합니다(최대 10초, `RigModel` 로더와 같음). 완료 콜백은 메시지 스레드에서 `SafePointer`를 확인한 뒤 드롭당 한 번 결과 알림(`showNotice`: `x imported` / `y failed` + 실패 이름 목록)을 띄웁니다.
 - 드롭 뒤 목록은 전체 스캔(`refresh()`) 대신 `EditView::addLibraryFiles()` → `BlockEditor::addFiles()`로 저장한 파일만 메타데이터를 읽어 캐시에 넣습니다(같은 경로면 교체). 선택 상태와 상관없이 가져온 종류의 탭(섞였으면 지금 탭이 그 종류면 그대로, 아니면 NAM)으로 가서 검색어를 지우고, 정렬 순서로 맨 위의 가져온 파일을 강조합니다.
+- 같은 이름을 덮어써 지금 패치가 그 파일을 쓰고 있으면 `RigModel::reloadFile()`이 그 블록을 다시 로딩합니다(옛 소리 유지 → 준비되면 20 ms 크로스페이드, 파라미터 유지, Undo·저장 없음). 되돌리기 이력은 파일 경로 단위라, 이력 안의 같은 파일 블록에 로딩 표시를 해 두어 되돌릴 때 `step()`이 새 내용으로 다시 로딩합니다.
 - 설정창 Refresh Library는 `SettingsDialog::show()`의 `onRefreshLibrary` → `EditView::refreshLibrary()` → `BlockEditor::refresh()`로 NAM / IR 하위 폴더를 재귀 스캔한 뒤 설정창 위에 "Library refreshed." 알림을 띄웁니다. 선택기는 블록을 다시 고른 것처럼 맞춥니다(검색어 지움, 정렬·열 폭 유지). Refresh는 오디오 설정 Save/Cancel과 독립적입니다.
 - 블록 선택기의 `Browse`는 `paths::root().startAsProcess()`로 루트를 엽니다. IN/OUT 선택 중에도 활성입니다. 파일 이동 추적이나 패치 경로 마이그레이션은 하지 않으므로, 사용 중인 파일을 옮겼다면 블록에 새 경로를 다시 지정해야 합니다.
 

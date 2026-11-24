@@ -188,6 +188,9 @@ namespace rig
     {
         editView.addLibraryFiles (result.imported);
 
+        for (const auto& file : result.imported)
+            model.reloadFile (file);   // 같은 이름을 덮어써 지금 쓰는 블록이 있으면 새 내용으로
+
         const int succeeded = result.imported.size(), failed = result.failed.size();
         juce::StringArray lines;
 
