@@ -21,7 +21,7 @@ namespace rig
     //     IN / OUT·합류 버튼 선택, 패치 전환, 설정창 Refresh Library 면 검색어를 지운다. 씬 전환은 같은 블록이라 유지
     //   - 파일 카테고리(NAM / IR) : ~/Documents/aNAMorphic-Rig/nam (*.nam) 또는 ir (*.wav) 의 파일 표
     //       - 폴더 스캔은 refresh() 에서만 한다 (생성 시 한 번, 설정창 Refresh Library). 모델 변경 알림 때는 캐시에서 목록만 다시 고른다
-    //       - 드롭 가져오기는 저장한 파일만 읽어 캐시에 넣고(addFiles), 그 카테고리로 가서 검색어를 지우고 가져온 파일을 강조한다
+    //       - 드롭 가져오기는 저장한 파일만 읽어 캐시에 넣고(addFiles) 검색어만 지운다 (탭·강조는 그대로)
     //       - NAM / IR 표를 따로 두어 열 폭과 정렬 상태를 각자 유지한다 (메모리에만, 다시 켜면 기본값)
     //   - 파일 없는 카테고리(Built-in 등) : 내장 블록 목록. 새 카테고리는 categories 에 탭 이름과 내장 블록 목록만 추가하면 된다
     //   - 선택된 블록이 없어도 끌어올 라이브러리로 활성 (둘러보던 탭과 강조 유지, 더블클릭은 무동작). IN / OUT 이나 합류 버튼을 고른 동안만 비활성
@@ -38,7 +38,7 @@ namespace rig
         void setUpdatesPaused (bool paused);
 
         void refresh();   // 설정창 Refresh Library: NAM / IR 전체를 다시 스캔
-        void addFiles (const juce::Array<juce::File>& files);   // 드롭 가져오기: 저장한 파일만 읽어 넣고 보여 준다
+        void addFiles (const juce::Array<juce::File>& files);   // 드롭 가져오기: 저장한 파일만 읽어 넣고 검색어를 지운다
 
         void paint (juce::Graphics&) override;
         void resized() override;

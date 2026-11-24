@@ -206,16 +206,15 @@ namespace rig
     }
 
     // 드롭 가져오기가 끝난 뒤 (전체 스캔 없이 저장한 파일만 메타데이터를 읽는다). 같은 경로가 이미 있으면 그 항목을 바꾼다 (덮어쓰기).
-    // 가져온 파일이 보이게: 탭 = 가져온 종류 (섞였으면 지금 탭이 그 종류면 그대로, 아니면 NAM) → 검색어 지움 → 정렬 순서로 맨 위의 가져온 파일 강조
+    // 화면은 검색어만 지운다 (탭과 강조는 그대로. 방금 끌어온 파일은 사용자가 안다)
     void BlockEditor::addFiles (const juce::Array<juce::File>& files)
     {
-        bool hasNam = false, hasIr = false;
+        if (files.isEmpty())
+            return;
 
         for (const auto& file : files)
         {
             const bool isNam = file.hasFileExtension (".nam");
-            (isNam ? hasNam : hasIr) = true;
-
             auto& entries = isNam ? namEntries : irEntries;
             auto entry = makeEntry (file, isNam);
             const auto existing = std::find_if (entries.begin(), entries.end(), [&file] (const Entry& e) { return e.file == file; });
@@ -226,25 +225,8 @@ namespace rig
                 entries.push_back (std::move (entry));
         }
 
-        if (! hasNam && ! hasIr)
-            return;
-
-        const auto& current = shownCategory();
-        const bool keepTab = current.usesFiles && (current.fileType == BlockType::Nam ? hasNam : hasIr);
-        shownCategoryIndex = keepTab ? shownCategoryIndex : categoryFor (hasNam ? BlockType::Nam : BlockType::Ir);
-
         clearSearch();
         showCategory (false);
-
-        auto& list = activeList();
-
-        for (size_t i = 0; i < rows.size(); ++i)
-            if (files.contains (rows[i].file))
-            {
-                list.selectRow ((int) i);
-                list.scrollToEnsureRowIsOnscreen ((int) i);
-                break;
-            }
     }
 
     int BlockEditor::categoryFor (BlockType type) const
