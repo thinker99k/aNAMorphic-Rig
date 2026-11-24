@@ -186,8 +186,7 @@ namespace rig
     // 드롭 한 번에 결과 알림 하나: 성공 x / 실패 y, 실패가 있으면 그 이름 목록
     void MainComponent::libraryImported (const LibraryImportResult& result)
     {
-        if (! result.imported.isEmpty())
-            editView.refreshLibrary();
+        editView.addLibraryFiles (result.imported);
 
         const int succeeded = result.imported.size(), failed = result.failed.size();
         juce::StringArray lines;

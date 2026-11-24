@@ -184,7 +184,7 @@ namespace rig
                  metadata.gearType, metadata.toneType, metadata.modeledBy };
     }
 
-    // 설정창 Refresh Library 및 파일 가져오기 완료 때 호출
+    // 생성할 때와 설정창 Refresh Library 때 호출
     // nam/, ir/ 폴더를 스캔하고 NAM 메타데이터를 읽어 캐시에 둔다 (디스크를 읽는 곳은 여기뿐)
     void BlockEditor::refresh()
     {
@@ -204,6 +204,48 @@ namespace rig
         outsideEntry = {};
         shownSlotId = 0;   // 목록이 바뀌었으니 강조도 다시 맞춘다
         updateFromModel();
+    }
+
+    // 드롭 가져오기가 끝난 뒤 (전체 스캔 없이 저장한 파일만 메타데이터를 읽는다). 같은 경로가 이미 있으면 그 항목을 바꾼다 (덮어쓰기).
+    // 가져온 파일이 보이게: 탭 = 가져온 종류 (섞였으면 지금 탭이 그 종류면 그대로, 아니면 NAM) → 검색어 지움 → 정렬 순서로 맨 위의 가져온 파일 강조
+    void BlockEditor::addFiles (const juce::Array<juce::File>& files)
+    {
+        bool hasNam = false, hasIr = false;
+
+        for (const auto& file : files)
+        {
+            const bool isNam = file.hasFileExtension (".nam");
+            (isNam ? hasNam : hasIr) = true;
+
+            auto& entries = isNam ? namEntries : irEntries;
+            auto entry = makeEntry (file, isNam);
+            const auto existing = std::find_if (entries.begin(), entries.end(), [&file] (const Entry& e) { return e.file == file; });
+
+            if (existing != entries.end())
+                *existing = std::move (entry);
+            else
+                entries.push_back (std::move (entry));
+        }
+
+        if (! hasNam && ! hasIr)
+            return;
+
+        const auto& current = shownCategory();
+        const bool keepTab = current.usesFiles && (current.fileType == BlockType::Nam ? hasNam : hasIr);
+        shownCategoryIndex = keepTab ? shownCategoryIndex : categoryFor (hasNam ? BlockType::Nam : BlockType::Ir);
+
+        clearSearch();
+        showCategory (false);
+
+        auto& list = activeList();
+
+        for (size_t i = 0; i < rows.size(); ++i)
+            if (files.contains (rows[i].file))
+            {
+                list.selectRow ((int) i);
+                list.scrollToEnsureRowIsOnscreen ((int) i);
+                break;
+            }
     }
 
     int BlockEditor::categoryFor (BlockType type) const
