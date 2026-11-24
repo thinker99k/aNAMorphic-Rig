@@ -199,7 +199,9 @@ namespace rig
         if (failed > 0)
             lines.add (juce::String (failed) + " failed");
 
-        showNotice (*this, "Library Import", lines.joinIntoString ("\n"), result.failed);
+        // 성공만 = 정보, 실패가 하나라도 있으면 (일부 실패, 실패만) 경고 아이콘
+        showNotice (*this, "Library Import", lines.joinIntoString ("\n"), result.failed,
+                    failed > 0 ? juce::MessageBoxIconType::WarningIcon : juce::MessageBoxIconType::InfoIcon);
     }
 
     void MainComponent::updateMuteButton()

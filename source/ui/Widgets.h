@@ -551,10 +551,12 @@ namespace rig
         }), true);
     }
 
-    // 알림창 (경고가 아니라 사용자가 한 동작의 결과): 같은 자리에 OK 하나, OK / Esc / Enter 어느 것으로도 닫힌다.
-    // list 가 있으면 글 아래에 읽기 전용 목록 (모두 볼 수 있게 noticeListRows 줄을 넘으면 스크롤)
+    // 알림창 (사용자가 한 동작의 결과): 같은 자리에 OK 하나, OK / Esc / Enter 어느 것으로도 닫힌다.
+    // 아이콘은 결과에 따라: 모두 잘 됨 = 정보(i), 실패가 있음 = 경고(!). list 가 있으면 글 아래에 읽기 전용 목록
+    // (모두 볼 수 있게 noticeListRows 줄을 넘으면 스크롤)
     inline void showNotice (juce::Component& origin, const juce::String& title, const juce::String& message,
-                            const juce::StringArray& list = {})
+                            const juce::StringArray& list = {},
+                            juce::MessageBoxIconType icon = juce::MessageBoxIconType::InfoIcon)
     {
         constexpr int noticeListRows = 8;      // 목록이 한 번에 보여 주는 최대 줄 수
         constexpr int noticeListWidth = 280;   // AlertWindow 최소 폭 350 의 80 % (커스텀 칸은 폭의 10 % 에서 시작)
@@ -585,7 +587,7 @@ namespace rig
         }
 
         auto* alert = new LeftClickAlertWindow (title, message, origin.getTopLevelComponent(), { { "OK", 0 } },
-                                                juce::MessageBoxIconType::InfoIcon, std::move (content), true);
+                                                icon, std::move (content), true);
         alert->enterModalState (true, nullptr, true);
     }
 

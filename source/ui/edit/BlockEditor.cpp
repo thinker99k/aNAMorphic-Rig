@@ -88,13 +88,9 @@ namespace rig
         };
         addAndMakeVisible (searchBox);
 
-        // 사용자 데이터 폴더(nam/, ir/, patch/, settings.json 이 보이는 곳)를 OS 파일 관리자로 연다. 폴더는 paths::root() 가 늘 만들어 둔다
-        showFolderButton.onClick = [this]
-        {
-            const auto folder = paths::root();
-            if (! folder.startAsProcess())
-                showAlert (*this, "Could not open folder", folder.getFullPathName(), { { "OK", 0 } });
-        };
+        // 사용자 데이터 폴더(nam/, ir/, patch/, settings.json 이 보이는 곳)를 OS 파일 관리자로 연다.
+        // 폴더는 paths::root() 가 늘 만들어 둔다. 파일 관리자가 안 뜨면 그뿐, 경고는 띄우지 않는다
+        showFolderButton.onClick = [] { paths::root().startAsProcess(); };
         addAndMakeVisible (showFolderButton);
 
         // 더블클릭(왼쪽)해야 블록에 지정된다
