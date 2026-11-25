@@ -7,7 +7,7 @@ namespace rig
 {
     namespace
     {
-        // 칸: 편집 화면 씬 바와 같은 14칸 격자 (bottomBarCell). Patch / Stomp 는 Copy / Swap, Live 는 씬 바 Live 와 같은 칸
+        // 칸: 편집 화면 씬 바와 같은 14칸 격자 (bottomBarCell). Live 는 씬 바 Live 와 같은 칸
         //   [채널 0~5] [빈칸 6] [튜너 스위치 7] [간이 튜너 8~9] [Patch 10] [Stomp 11] [빈칸 12] [Live 13]
         constexpr int tunerCell = 7, stripCell = 8, stripCells = 2, patchCell = 10, stompCell = 11;
 

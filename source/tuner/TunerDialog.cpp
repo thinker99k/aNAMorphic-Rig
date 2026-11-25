@@ -9,45 +9,44 @@ namespace rig
         const juce::Rectangle<int> gaugeBounds  { 8, 8, TunerGauge::panelWidth, TunerGauge::panelHeight };
 
         constexpr int pixelsPerHz = 2;   // 값 상자를 위아래로 끌 때 1 Hz 당 픽셀 (위 = 올림)
-
-        // DialogWindow::LaunchOptions::create 가 만드는 창과 같지만, 제목 표시줄 끌기도 왼쪽 클릭만 (SettingsDialog 와 같은 방식)
-        struct TunerWindow final : public LeftClickOnly<juce::DialogWindow>
-        {
-            TunerWindow (std::unique_ptr<TunerDialog> content, juce::Component* parent)
-                : LeftClickOnly ("Tuner",
-                                 parent != nullptr ? parent->getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId)
-                                                   : juce::Colours::darkgrey,
-                                 false,   // ESC 로 닫히지 않게
-                                 true,
-                                 parent != nullptr ? juce::Component::getApproximateScaleFactorForComponent (parent) : 1.0f)
-            {
-                setUsingNativeTitleBar (false);
-                setTitleBarHeight (tunerTitleBarHeight);
-                setContentOwned (content.release(), true);
-                setResizable (false, false);
-                centreAroundComponent (parent, getWidth(), getHeight());
-            }
-
-            void closeButtonPressed() override
-            {
-                if (auto* dialog = dynamic_cast<TunerDialog*> (getContentComponent()))
-                    dialog->close();
-            }
-        };
     }
 
-    void TunerDialog::show (AudioEngine& engine, RigModel& model, juce::Component* parent, std::function<void()> onClosed)
+    TunerWindow::TunerWindow (AudioEngine& engine, RigModel& model, juce::Component* parent, std::function<void()> onClosed)
+        : LeftClickOnly ("Tuner",
+                         parent != nullptr ? parent->getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId)
+                                           : juce::Colours::darkgrey,
+                         false,   // ESC 는 escapeKeyPressed 가 받는다 (닫기 버튼 단축키로 걸면 값 입력칸의 Esc 취소에도 닫힌다)
+                         true,
+                         parent != nullptr ? juce::Component::getApproximateScaleFactorForComponent (parent) : 1.0f),
+          dialog (*new TunerDialog (engine, model))
     {
-        auto content = std::make_unique<TunerDialog> (engine, model);
-        content->onClosed = std::move (onClosed);
+        dialog.onClosed = std::move (onClosed);
 
-        auto* window = new TunerWindow (std::move (content), parent);
+        setUsingNativeTitleBar (false);
+        setTitleBarHeight (tunerTitleBarHeight);
+        setContentOwned (&dialog, true);
+        setResizable (false, false);
+        setTitleBarButtonsRequired (juce::DocumentWindow::closeButton, false);   // X 만
+        centreAroundComponent (parent, getWidth(), getHeight());
+        setVisible (true);
+        toFront (true);   // 바로 ESC 를 받도록 포커스도
+    }
 
-        // X(닫기) 버튼만 남긴다. 이 호출은 창(peer)을 다시 만들기 때문에 반드시 모달로 만들기 "전에" 해야 한다 (SettingsDialog 참고)
-        window->setTitleBarButtonsRequired (juce::DocumentWindow::closeButton, false);
+    void TunerWindow::close()
+    {
+        dialog.close();
+        setVisible (false);
+    }
 
-        // 모달로 띄운다: 닫히기 전에는 메인 창을 조작할 수 없음 (닫히면 창은 스스로 삭제)
-        window->enterModalState (true, nullptr, true);
+    void TunerWindow::closeButtonPressed()
+    {
+        close();
+    }
+
+    bool TunerWindow::escapeKeyPressed()
+    {
+        close();   // DialogWindow 기본 동작(숨기기만)이 아니라 튜너도 끈다
+        return true;
     }
 
     TunerDialog::TunerDialog (AudioEngine& e, RigModel& m)
@@ -102,9 +101,6 @@ namespace rig
 
         stopTimer();
         engine.setTunerActive (false);   // 소리를 되살리는 페이드는 엔진이 한다
-
-        if (auto* window = findParentComponentOfClass<juce::DialogWindow>())
-            window->exitModalState (0);   // 창은 이후 스스로 삭제됨
 
         if (callback)
             callback();

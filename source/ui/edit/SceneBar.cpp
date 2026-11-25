@@ -8,7 +8,9 @@ namespace rig
     namespace
     {
         // 실행 뒤 테두리: 자동차 할로겐 방향지시등처럼 부드럽게 두 번 깜빡인다 (한 번 = blinkMs, sin² 곡선)
-        constexpr juce::uint32 blinkMs = 380, numBlinks = 2, flashMs = blinkMs * numBlinks;
+        constexpr juce::uint32 blinkMs = 400, numBlinks = 2, flashMs = blinkMs * numBlinks;
+        constexpr juce::uint32 pulseMs = 1200;   // 고른 src 밝기가 한 번 오르내리는 시간
+        constexpr int animationHz = 60;         // src 밝기 오르내림·실행 뒤 깜빡임 다시 그리기
         constexpr int gap = bottomBarGap;       // 바깥 여백 (버튼 사이도 같은 값, 14칸 격자 bottomBarCell)
         constexpr int saveButtonSize = 24;      // 이름 입력칸 오른쪽 위 귀퉁이의 정사각형 체크 버튼
         constexpr float sceneCorner = 5.0f;     // 씬 버튼 둥근 모서리 반지름
@@ -29,9 +31,11 @@ namespace rig
             // 눌러도 키보드 포커스를 가져가지 않는다 (ESC 는 씬 바가 받는다)
             b->setWantsKeyboardFocus (false);
             b->setMouseClickGrabsKeyboardFocus (false);
-            b->setColour (juce::TextButton::buttonOnColourId, juce::Colours::orange.darker (0.2f));
             addAndMakeVisible (b);
         }
+
+        for (auto* b : { &copyButton, &swapButton })
+            indicator::setColours (*b, indicator::amberFill, indicator::amber);   // 모드 중 = 켜짐 표시 (주황)
 
         copyButton.setTooltip ("Copy a scene: pick the source scene, then the destination");
         swapButton.setTooltip ("Swap two scenes: pick one scene, then the other");
@@ -290,7 +294,7 @@ namespace rig
         if (flashing || pulsing)
         {
             if (! isTimerRunning())
-                startTimerHz (30);
+                startTimerHz (animationHz);
         }
         else
         {
@@ -316,7 +320,9 @@ namespace rig
         g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.15f));
 
         const auto now = juce::Time::getMillisecondCounter();
-        const float pulse = 0.5f + 0.5f * std::sin ((float) now * 0.001f * juce::MathConstants<float>::twoPi * 1.5f);
+        // 위상은 정수 나머지로 (ms 카운터를 통째로 float 로 바꾸면 부팅 뒤 시간이 길수록 정밀도가 떨어져 계단이 된다)
+        const float phase = (float) (now % pulseMs) / (float) pulseMs;
+        const float pulse = 0.5f + 0.5f * std::sin (phase * juce::MathConstants<float>::twoPi);
 
         for (int i = 0; i < RigModel::numScenes; ++i)
         {
@@ -326,7 +332,7 @@ namespace rig
 
             auto fill = current ? juce::Colours::lightgrey : juce::Colour (0xff3a4148);
             if (source)
-                fill = fill.interpolatedWith (juce::Colours::white, 0.15f + 0.55f * pulse);
+                fill = fill.interpolatedWith (juce::Colours::white, 0.1f + 0.35f * pulse);   // 흰 글자가 읽히는 밝기까지만
 
             if (i == renamingScene)
                 fill = juce::Colours::black.withAlpha (0.4f).overlaidWith (juce::Colour (0xff1e2328));   // 입력칸 바탕
@@ -350,7 +356,8 @@ namespace rig
             if (const auto& scenes = model.getHighlight().scenes; std::find (scenes.begin(), scenes.end(), i) != scenes.end())
                 drawHighlight (g, bounds.reduced (2.0f), highlightAlpha (model.getHighlightStart()), sceneCorner);
 
-            const auto textColour = current || (source && pulse > 0.5f) ? juce::Colours::black : juce::Colours::white;
+            // src 는 밝기가 오르내리는 동안 글자색을 바꾸지 않는다 (중간에 흑백이 뒤집히면 뚝 끊겨 보인다)
+            const auto textColour = current ? juce::Colours::black : juce::Colours::white;
 
             // 번호: 왼쪽 위, 크게 / 이름: 아래 가운데
             g.setColour (textColour.withAlpha (0.7f));
@@ -370,16 +377,18 @@ namespace rig
     {
         const auto area = getLocalBounds().reduced (gap);
 
-        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [1] ~ [8] [Copy] [Swap] [ ] [Live]
-        // 전체 리셋은 왼쪽 끝, Live 는 오른쪽 끝. 버튼은 모두 같은 한 칸 (바깥 여백·버튼 사이 6 px)
+        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [1] ~ [8] [Copy / Swap] [ ] [ ] [Live]
+        // 전체 리셋은 왼쪽 끝, Live 는 오른쪽 끝. 버튼은 모두 같은 한 칸 (바깥 여백·버튼 사이 6 px). Copy / Swap 은 한 칸을 위아래로 나눈다 (사이 6 px)
         sceneResetButton.setBounds (bottomBarCell (area, 0));
         liveButton.setBounds (bottomBarCell (area, bottomBarCells - 1));
 
         for (int i = 0; i < RigModel::numScenes; ++i)
             sceneBounds[(size_t) i] = bottomBarCell (area, 2 + i);
 
-        copyButton.setBounds (bottomBarCell (area, 2 + RigModel::numScenes));
-        swapButton.setBounds (bottomBarCell (area, 3 + RigModel::numScenes));
+        auto modeCell = bottomBarCell (area, 2 + RigModel::numScenes);
+        copyButton.setBounds (modeCell.removeFromTop ((modeCell.getHeight() - gap) / 2));
+        modeCell.removeFromTop (gap);
+        swapButton.setBounds (modeCell);
 
         if (renamingScene >= 0)
             layoutNameEditor();

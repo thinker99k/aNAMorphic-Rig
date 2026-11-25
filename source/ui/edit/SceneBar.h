@@ -10,10 +10,10 @@
 
 namespace rig
 {
-    // 화면 아래 씬 바: [Scene Reset]      [1] [2] ... [8] [Copy] [Swap]      [Live]
+    // 화면 아래 씬 바: [Scene Reset]      [1] [2] ... [8] [Copy / Swap]      [Live]
     //  - 버튼은 모두 14칸 격자의 한 칸 (bottomBarCell, Live 아래 줄과 같음). 바깥 여백과 버튼 사이 모두 6 px.
     //    씬 버튼: 번호는 왼쪽 위, 이름은 아래 가운데
-    //  - Scene Reset 은 왼쪽 끝 (0번 칸, 전체 리셋은 왼쪽), 씬 8개는 2 ~ 9번, Copy 10번, Swap 11번, Live 는 오른쪽 끝 (13번 칸)
+    //  - Scene Reset 은 왼쪽 끝 (0번 칸, 전체 리셋은 왼쪽), 씬 8개는 2 ~ 9번, Copy / Swap 은 10번 칸 위아래, Live 는 오른쪽 끝 (13번 칸)
     //  - Live 를 누르면 onLiveClicked (Live 화면으로 전환)
     //  - 버튼은 왼쪽 클릭에만 반응한다 (앱 전체 마우스 규칙, Widgets.h LeftClickOnly). 가운데 클릭은 씬 버튼에서도 동작 없음
     //  - 왼쪽 버튼을 누르는 순간 그 씬으로 전환 (더블클릭 기능 없음)

@@ -34,6 +34,31 @@ namespace rig
         void mouseDoubleClick (const juce::MouseEvent& e) override { if (isLeftClick (e)) Base::mouseDoubleClick (e); }
     };
 
+    // 켜짐 표시 버튼 (모드·상태가 켜진 버튼, Live 화면 Live / 튜너 스위치와 같은 모양): 어두운 색 바탕 + 2 px 색 테두리, 글자도 그 색 굵게
+    namespace indicator
+    {
+        inline const juce::Colour amber     { 0xffffa500 };   // 튜너, Copy / Swap (앱 강조색 주황)
+        inline const juce::Colour amberFill { 0xff3b2c12 };
+        inline const juce::Colour red       { 0xffd9534f };   // MUTE (Live Patch 빨강과 같은 색)
+        inline const juce::Colour redFill   { 0xff3b1c1c };
+        constexpr float corner = 5.0f;
+
+        inline void drawBox (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour fill, juce::Colour outline)
+        {
+            g.setColour (fill);
+            g.fillRoundedRectangle (area, corner);
+            g.setColour (outline);
+            g.drawRoundedRectangle (area.reduced (1.0f), corner, 2.0f);
+        }
+
+        // TextButton 을 켜짐 표시로: 토글 상태가 켜지면 AppLookAndFeel 이 이 색으로 그린다
+        inline void setColours (juce::TextButton& b, juce::Colour fill, juce::Colour accent)
+        {
+            b.setColour (juce::TextButton::buttonOnColourId, fill);
+            b.setColour (juce::TextButton::textColourOnId, accent);
+        }
+    }
+
     // 장치 채널 번호 표시 (first 는 0부터, 화면은 1부터): 하나 = "3", 둘 = "1+2"
     inline juce::String channelText (int first, int count)
     {
@@ -475,6 +500,22 @@ namespace rig
                 return new WindowCloseButton();
 
             return juce::LookAndFeel_V4::createDocumentWindowButton (buttonType);
+        }
+
+        // 토글이 켜진 TextButton (Copy / Swap, MUTE) = 켜짐 표시: buttonOnColourId 바탕 + textColourOnId 2 px 테두리
+        void drawButtonBackground (juce::Graphics& g, juce::Button& button, const juce::Colour& background,
+                                   bool highlighted, bool down) override
+        {
+            if (! button.getToggleState())
+                return juce::LookAndFeel_V4::drawButtonBackground (g, button, background, highlighted, down);
+
+            auto fill = background;
+            if (down)
+                fill = fill.brighter (0.2f);
+            else if (highlighted)
+                fill = fill.brighter (0.1f);
+
+            indicator::drawBox (g, button.getLocalBounds().toFloat(), fill, button.findColour (juce::TextButton::textColourOnId));
         }
 
         void drawButtonText (juce::Graphics& g, juce::TextButton& button, bool, bool) override

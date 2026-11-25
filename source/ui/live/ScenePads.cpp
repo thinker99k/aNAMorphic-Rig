@@ -7,6 +7,8 @@ namespace rig
         constexpr int columns = 4, rows = 2;
         constexpr int padMargin = 13;   // 바깥 여백 (위·아래·좌·우)
         constexpr int padGap = 10;      // 패드 사이 (가로·세로)
+        constexpr int padInset = 8;     // 패드 안 여백 (번호·이름 모두 사방 같은 값)
+        constexpr float padCorner = 6.0f;   // 둥근 모서리 반지름
         static_assert (RigModel::numScenes == columns * rows);
 
         // 색 (시안)
@@ -72,8 +74,9 @@ namespace rig
         const int current = model.getCurrentScene();
 
         // 글꼴은 패드마다 만들지 않고 한 번만
-        const auto numberFont = boldFont (40.0f);
-        const auto nameFont = semiBoldFont (24.0f);
+        // 이름이 주인공, 번호는 작게
+        const auto numberFont = boldFont (24.0f);
+        const auto nameFont = semiBoldFont (40.0f);
 
         for (int i = 0; i < RigModel::numScenes; ++i)
         {
@@ -83,16 +86,17 @@ namespace rig
             const float thickness = active ? 2.0f : 1.0f;
 
             g.setColour (active ? activeFill : padFill);
-            g.fillRoundedRectangle (area, 8.0f);
+            g.fillRoundedRectangle (area, padCorner);
             g.setColour (active ? activeBorder : padBorder);
-            g.drawRoundedRectangle (area.reduced (thickness / 2.0f), 8.0f, thickness);
+            g.drawRoundedRectangle (area.reduced (thickness / 2.0f), padCorner, thickness);
 
+            const auto inner = pad.reduced (padInset);
             g.setColour (active ? textDark : textLight);
             g.setFont (numberFont);
-            g.drawText (juce::String (i + 1), pad.withTrimmedLeft (12).withTrimmedTop (4), juce::Justification::topLeft, false);
+            g.drawText (juce::String (i + 1), inner, juce::Justification::topLeft, false);
 
             g.setFont (nameFont);
-            g.drawText (model.getSceneName (i), pad.reduced (12, 0), juce::Justification::centred, true);
+            g.drawText (model.getSceneName (i), inner, juce::Justification::centred, true);
         }
     }
 
