@@ -7,7 +7,7 @@
 namespace rig
 {
     // 상단 바의 Tuner 버튼: 다른 버튼과 같은 배경 + 왼쪽 14 x 14 아이콘(반원 호와 바늘) + "Tuner"
-    // 튜너 대화상자가 열려 있는 동안(setActive (true)) 테두리와 글자가 주황
+    // 튜너 대화상자가 열려 있는 동안(setActive (true)) 테두리와 글자가 주황, 글자는 굵게
     class TunerButton final : public LeftClickOnly<juce::Button>
     {
     public:

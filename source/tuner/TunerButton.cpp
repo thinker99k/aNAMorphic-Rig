@@ -43,7 +43,8 @@ namespace rig
                                    : findColour (juce::TextButton::textColourOffId).withMultipliedAlpha (isEnabled() ? 1.0f : 0.5f);
 
         // 아이콘 + 글자를 한 덩어리로 가운데에
-        const juce::Font font (juce::FontOptions (juce::jmin (15.0f, (float) getHeight() * 0.6f)));
+        const juce::Font font (juce::FontOptions (juce::jmin (15.0f, (float) getHeight() * 0.6f),
+                                                  active ? juce::Font::bold : juce::Font::plain));   // 튜너 모드 중이면 굵게
         const juce::String text = getButtonText();
         const float textWidth = juce::GlyphArrangement::getStringWidth (font, text);
         const float left = ((float) getWidth() - (iconSize + iconGap + textWidth)) * 0.5f;

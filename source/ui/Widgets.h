@@ -472,9 +472,12 @@ namespace rig
             const auto text = button.getButtonText().trim();
             const auto maxHeight = juce::LookAndFeel_V4::getTextButtonFont (button, button.getHeight()).getHeight();
 
+            // 모드 스위치 원칙: 토글이 켜져 있으면 (그 모드에 들어가 있으면, 예: Copy / Swap) 글자를 굵게
+            const int style = button.getToggleState() ? juce::Font::bold : juce::Font::plain;
+
             const auto bestFont = [&] (const juce::StringArray& lines)
             {
-                auto font = juce::Font (juce::FontOptions (juce::jmin (maxHeight, area.getHeight() / (float) lines.size())));
+                auto font = juce::Font (juce::FontOptions (juce::jmin (maxHeight, area.getHeight() / (float) lines.size()), style));
 
                 const auto fits = [&]
                 {
