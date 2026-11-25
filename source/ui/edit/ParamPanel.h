@@ -20,6 +20,9 @@ namespace rig
         ParamPanel() { setInterceptsMouseClicks (false, true); }
 
         virtual void refresh() = 0;   // 모델 값(선택된 블록의 현재 씬) -> 화면
+
+        // 파라미터 번호(BlockParams::specs 순서)를 다루는 컨트롤 (Undo / Redo 강조용). 공용 Output 은 ParamBar 가 갖는다
+        virtual juce::Component* componentForParam (int) { return nullptr; }
     };
 
     // 블록 종류에 맞는 패널. 파라미터가 없는 종류는 nullptr.

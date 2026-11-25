@@ -53,6 +53,15 @@ namespace rig
             item.knob.setValue (model.getParam (*slot, item.index));
     }
 
+    juce::Component* NamParamPanel::componentForParam (int index)
+    {
+        for (const auto& item : items)
+            if (item.index == index)
+                return &item.knob;
+
+        return nullptr;
+    }
+
     void NamParamPanel::paint (juce::Graphics& g)
     {
         for (const int cell : separatorsAfter)

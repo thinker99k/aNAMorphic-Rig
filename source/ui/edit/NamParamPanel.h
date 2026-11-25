@@ -18,6 +18,7 @@ namespace rig
         explicit NamParamPanel (RigModel& model);
 
         void refresh() override;
+        juce::Component* componentForParam (int index) override;
         void paint (juce::Graphics&) override;
         void resized() override;
 

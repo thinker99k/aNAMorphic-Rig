@@ -346,6 +346,10 @@ namespace rig
                 g.drawRoundedRectangle (bounds.reduced (1.5f), sceneCorner, 3.0f);
             }
 
+            // Undo / Redo 로 되돌아간 씬
+            if (const auto& scenes = model.getHighlight().scenes; std::find (scenes.begin(), scenes.end(), i) != scenes.end())
+                drawHighlight (g, bounds.reduced (2.0f), highlightAlpha (model.getHighlightStart()), sceneCorner);
+
             const auto textColour = current || (source && pulse > 0.5f) ? juce::Colours::black : juce::Colours::white;
 
             // 번호: 왼쪽 위, 크게 / 이름: 아래 가운데

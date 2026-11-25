@@ -142,6 +142,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .patchName = true });
         patchName = trimmedName;
         saveEdit();
     }
@@ -152,7 +153,8 @@ namespace rig
         chain.clear();
         undoStack.clear();   // 되돌리기 이력은 패치마다 (패치를 바꾸면 비운다)
         redoStack.clear();
-        pendingUndo.reset();
+        forgetEdit();
+        highlightStart = 0;
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
         currentScene = 0;
@@ -235,12 +237,7 @@ namespace rig
             startLoading (slot);
         });
 
-        if (! chain.empty())
-        {
-            const auto& first = chain.front();
-            selectedSlotId = std::holds_alternative<Slot> (first) ? std::get<Slot> (first).id
-                                                                  : std::get<Parallel> (first).branches[0].front().id;
-        }
+        // 패치는 미선택으로 연다 (selectedSlotId 등은 위에서 0)
 
         // 새 패치의 Merge 는 아직 오디오 스레드가 쓰지 않으므로 바로 맞춘다
         forEachParallel ([this] (Parallel& p) { applyMerge (p, true); });
@@ -258,6 +255,7 @@ namespace rig
     void RigModel::resetPatch()
     {
         remember();
+        touch ({ .patchName = true });
         chain.clear();
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
@@ -464,6 +462,7 @@ namespace rig
         // 드래그 한 번 = 되돌리기 한 단계 (합류 레벨과 같다): 첫 값에서 잡고 끝(save)의 saveEdit 에서 닫는다.
         // 전원(L. Cut / H. Cut)은 save = true 한 번이라 누를 때마다 한 단계
         remember();
+        touch ({ .params = { index } });
         slot->paramValues[(size_t) currentScene][(size_t) index] = (float) specs[(size_t) index].constrain (value);
         applyParams (*slot);   // 소리는 바로 따라간다 (DSP 가 20 ms 스무딩)
 
@@ -481,6 +480,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .endpoint = Endpoint::input });
         routing.input = channel;
         changed();   // 저장 + 엔진이 옛/새 채널을 크로스페이드 + UI 알림
     }
@@ -491,6 +491,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .endpoint = Endpoint::output });
         routing.output = firstChannel;
         routing.stereoOutput = stereo;
         changed();
@@ -703,7 +704,14 @@ namespace rig
     // 자리가 바뀌는 편집은 늘 새 인스턴스를 쓰므로, 되돌린 체인의 인스턴스가 지금 소리와 다른 자리에서 겹치는 일은 없다
     RigModel::Snapshot RigModel::snapshot (int scene) const
     {
-        return { chain, routing, sceneNames, patchName, selectedSlotId, selectedParallelId, selectedEndpoint, scene };
+        Snapshot s;
+        s.chain = chain;
+        s.routing = routing;
+        s.sceneNames = sceneNames;
+        s.patchName = patchName;
+        s.selection = currentSelection();
+        s.scene = scene;
+        return s;
     }
 
     void RigModel::remember()
@@ -712,12 +720,28 @@ namespace rig
             pendingUndo = snapshot (currentScene);
     }
 
+    void RigModel::touch (Touched before, Touched after)
+    {
+        pendingBefore = std::move (before);
+        pendingAfter = std::move (after);
+    }
+
+    void RigModel::forgetEdit()
+    {
+        pendingUndo.reset();
+        pendingBefore = pendingAfter = {};
+    }
+
     void RigModel::saveEdit()
     {
         if (pendingUndo.has_value())
         {
             if (! sameContent (*pendingUndo))
             {
+                // 이 칸을 Undo 하면 편집 직전 선택·강조로, 그 뒤 Redo 하면 지금(편집 직후) 선택·강조로
+                pendingUndo->otherSelection = currentSelection();
+                pendingUndo->touched = pendingBefore;
+                pendingUndo->otherTouched = pendingAfter;
                 undoStack.push_back (std::move (*pendingUndo));
 
                 if ((int) undoStack.size() > maxUndoSteps)
@@ -726,7 +750,7 @@ namespace rig
                 redoStack.clear();
             }
 
-            pendingUndo.reset();
+            forgetEdit();
         }
 
         savePatch();
@@ -773,17 +797,26 @@ namespace rig
 
         auto target = std::move (from.back());
         from.pop_back();
-        to.push_back (snapshot (target.scene));
-        pendingUndo.reset();
+
+        // 지금 상태를 반대쪽에 쌓는다: 다시 건너오면 target 의 반대쪽 선택·강조
+        auto current = snapshot (target.scene);
+        current.selection = target.otherSelection;
+        current.otherSelection = target.selection;
+        current.touched = target.otherTouched;
+        current.otherTouched = target.touched;
+        to.push_back (std::move (current));
+        forgetEdit();
 
         chain = std::move (target.chain);
         routing = target.routing;
         sceneNames = target.sceneNames;
         patchName = target.patchName;
         currentScene = target.scene;
-        selectedSlotId = findSlot (target.selectedSlotId) != nullptr ? target.selectedSlotId : 0;
-        selectedParallelId = findParallel (target.selectedParallelId) != nullptr ? target.selectedParallelId : 0;
-        selectedEndpoint = target.selectedEndpoint;
+        selectedSlotId = findSlot (target.selection.slot) != nullptr ? target.selection.slot : 0;
+        selectedParallelId = findParallel (target.selection.parallel) != nullptr ? target.selection.parallel : 0;
+        selectedEndpoint = target.selection.endpoint;
+        highlight = std::move (target.touched);
+        highlightStart = juce::jmax ((juce::uint32) 1, juce::Time::getMillisecondCounter());
 
         // 스냅샷을 찍을 때 로딩 중이던 블록은 그 결과가 이미 다른 상태로 갔을 수 있으므로 다시 로딩
         forEachSlot ([this] (Slot& slot)
@@ -833,6 +866,7 @@ namespace rig
         remember();
         auto slot = makeSlot (type, file);
         const auto id = slot.id;
+        touch ({}, { .slots = { id } });
         insertSlot (where, std::move (slot));
         startLoading (*editSlot (id));
         setSelectedSlot (id);
@@ -878,10 +912,11 @@ namespace rig
 
         if (! wrapInParallel (belowSlotId, std::move (slot)))
         {
-            pendingUndo.reset();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
+            forgetEdit();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
             return;
         }
 
+        touch ({ .slots = { belowSlotId } }, { .slots = { id }, .parallels = { parallelOf (id) } });
         setSelectedSlot (id);
         changed();
     }
@@ -901,11 +936,12 @@ namespace rig
 
         if (! wrapInParallel (belowSlotId, std::move (moved)))
         {
-            pendingUndo.reset();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
+            forgetEdit();   // 못 넣었다: 아무것도 안 바뀌었으니 이력을 건드리지 않는다
             return;
         }
 
         eraseSlot (slotId);
+        touch ({ .slots = { slotId, belowSlotId } }, { .slots = { movedId }, .parallels = { parallelOf (movedId) } });
         setSelectedSlot (movedId);
         changed();
     }
@@ -940,6 +976,7 @@ namespace rig
         if (auto* slot = editSlot (movedId); ! slot->loading)   // 병렬 해제로 이미 다시 로딩 중일 수 있다
             startLoading (*slot);
 
+        touch ({ .slots = { slotId } }, { .slots = { movedId } });
         setSelectedSlot (movedId);
         changed();
     }
@@ -956,6 +993,7 @@ namespace rig
             return;
 
         remember();   // 옮길 블록이 하나도 없으면 아래에서 버린다
+        touch ({ .parallels = { parallelId } });
         std::vector<juce::uint64> moved;
 
         // 넣기: 병렬 바로 뒤 본 줄 블록부터 (병렬을 만나면 멈춘다)
@@ -980,7 +1018,7 @@ namespace rig
 
         if (moved.empty())
         {
-            pendingUndo.reset();   // 아무것도 안 바뀌었다: 이력을 건드리지 않는다
+            forgetEdit();   // 아무것도 안 바뀌었다: 이력을 건드리지 않는다
             return;
         }
 
@@ -992,6 +1030,131 @@ namespace rig
         changed();
     }
 
+    bool RigModel::canJoinParallel (juce::uint64 parallelId) const
+    {
+        for (size_t i = 0; i + 1 < chain.size(); ++i)
+            if (const auto* p = std::get_if<Parallel> (&chain[i]); p != nullptr && p->id == parallelId)
+                return std::holds_alternative<Parallel> (chain[i + 1]);
+
+        return false;
+    }
+
+    void RigModel::joinParallel (juce::uint64 parallelId)
+    {
+        if (! canJoinParallel (parallelId))
+            return;
+
+        size_t item = 0;
+        while (std::get_if<Parallel> (&chain[item]) == nullptr || std::get<Parallel> (chain[item]).id != parallelId)
+            ++item;
+
+        remember();
+
+        // 합류 버튼이 남는 쪽 = 뒤 병렬 (id·Merge·씬별 갈래 값 유지). 앞 병렬의 블록이 뒤 병렬 갈래 앞으로 들어간다
+        auto front = std::move (std::get<Parallel> (chain[item]));
+        chain.erase (chain.begin() + (int) item);
+        auto& joined = std::get<Parallel> (chain[item]);
+        touch ({ .parallels = { front.id, joined.id } }, { .parallels = { joined.id } });
+
+        if (selectedParallelId == front.id)
+            selectedParallelId = joined.id;
+
+        for (size_t b = 0; b < 2; ++b)
+        {
+            auto& branch = joined.branches[b];
+            const auto count = front.branches[b].size();
+            branch.insert (branch.begin(), std::make_move_iterator (front.branches[b].begin()), std::make_move_iterator (front.branches[b].end()));
+
+            // 앞 병렬 블록은 처리 자리(속한 병렬)가 바뀌므로 새 인스턴스로 (같은 인스턴스를 두 번 처리할 수 없다)
+            for (size_t k = 0; k < count; ++k)
+                if (! branch[k].loading)
+                    startLoading (branch[k]);
+        }
+
+        changed();
+    }
+
+    void RigModel::splitParallel (juce::uint64 parallelId, int upperCount, int lowerCount)
+    {
+        size_t item = 0;
+        while (item < chain.size() && (std::get_if<Parallel> (&chain[item]) == nullptr || std::get<Parallel> (chain[item]).id != parallelId))
+            ++item;
+
+        if (item == chain.size())
+            return;
+
+        // 두 갈래 모두 블록 사이에서 나눠야 네 갈래가 비지 않는다
+        const std::array<int, 2> counts { upperCount, lowerCount };
+        const auto& original = std::get<Parallel> (chain[item]);
+
+        for (size_t b = 0; b < 2; ++b)
+            if (counts[b] < 1 || counts[b] >= (int) original.branches[b].size())
+                return;
+
+        remember();
+
+        // 앞 병렬 = 새 합류 버튼 (기본값), 뒤 병렬 = 원래 합류 버튼 (값 유지). 앞으로 옮긴 블록은 새 인스턴스로
+        auto front = makeParallel();
+
+        for (size_t b = 0; b < 2; ++b)
+        {
+            auto& branch = std::get<Parallel> (chain[item]).branches[b];
+            front.branches[b].assign (std::make_move_iterator (branch.begin()), std::make_move_iterator (branch.begin() + counts[b]));
+            branch.erase (branch.begin(), branch.begin() + counts[b]);
+        }
+
+        applyMerge (front, true);   // 아직 오디오 스레드가 쓰지 않는다
+        const auto frontId = front.id;
+        chain.insert (chain.begin() + (int) item, std::move (front));
+        touch ({ .parallels = { parallelId } }, { .parallels = { frontId, parallelId } });
+
+        for (auto& branch : std::get<Parallel> (chain[item]).branches)
+            for (auto& slot : branch)
+                if (! slot.loading)
+                    startLoading (slot);
+
+        changed();
+    }
+
+    void RigModel::swapBlocks (juce::uint64 slotId, juce::uint64 otherSlotId)
+    {
+        const auto a = findPlace (slotId), b = findPlace (otherSlotId);
+        if (slotId == otherSlotId || ! a.has_value() || ! b.has_value())
+            return;
+
+        remember();
+
+        // 자리만 맞바꾼다 (모양 그대로). 두 블록 모두 처리 자리가 바뀌므로 새 id, 새 인스턴스
+        const auto slotAt = [this] (const Place& place) -> Slot&
+        {
+            if (place.branch < 0)
+                return std::get<Slot> (chain[(size_t) place.item]);
+
+            return std::get<Parallel> (chain[(size_t) place.item]).branches[(size_t) place.branch][(size_t) place.index];
+        };
+
+        std::swap (slotAt (*a), slotAt (*b));
+        auto& first = slotAt (*b);    // 옮겨 간 slotId 블록
+        auto& second = slotAt (*a);   // 옮겨 간 otherSlotId 블록
+
+        for (auto* slot : { &first, &second })
+        {
+            slot->id = nextId++;
+            slot->loading = false;   // 옛 id 로 진행 중이던 로딩 결과는 버려진다
+            startLoading (*slot);
+        }
+
+        touch ({ .slots = { slotId, otherSlotId } }, { .slots = { first.id, second.id } });
+        setSelectedSlot (first.id);
+        changed();
+    }
+
+    juce::uint64 RigModel::parallelOf (juce::uint64 slotId) const
+    {
+        const auto place = findPlace (slotId);
+        return place.has_value() && place->branch >= 0 ? std::get<Parallel> (chain[(size_t) place->item]).id : 0;
+    }
+
     void RigModel::removeBlock (juce::uint64 slotId)
     {
         const auto place = findPlace (slotId);
@@ -1000,7 +1163,7 @@ namespace rig
 
         remember();
 
-        // 지운 뒤 선택: 신호 흐름상 바로 앞 블록 (갈래 첫 블록이면 병렬 앞), 앞에 블록이 없으면 IN
+        // 지운 뒤 선택: 신호 흐름상 바로 앞 블록 (갈래 첫 블록이면 병렬 앞), 앞에 블록이 없으면(체인 맨 앞) 미선택
         juce::uint64 previous = 0;
 
         if (place->branch >= 0 && place->index > 0)
@@ -1015,11 +1178,8 @@ namespace rig
         }
 
         eraseSlot (slotId);
-
-        setSelectedSlot (previous);
-
-        if (previous == 0)
-            selectedEndpoint = Endpoint::input;
+        touch ({ .slots = { slotId } }, previous != 0 ? Touched { .slots = { previous } } : Touched {});
+        setSelectedSlot (previous);   // 0 = 미선택
         changed();
     }
 
@@ -1030,6 +1190,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .slots = { slotId }, .power = true });
 
         // 프로그램은 그대로 두고 블록의 wet/dry 목표만 바꾼다 (오디오 스레드가 크로스페이드)
         slot->on[(size_t) currentScene] = shouldBeOn;
@@ -1049,6 +1210,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .parallels = { parallelId }, .branchPower = { branch } });
         p->branchOn[(size_t) branch][(size_t) currentScene] = shouldBeOn;
         mergeEdited (*p);
     }
@@ -1061,6 +1223,7 @@ namespace rig
 
         // 드래그 한 번 = 되돌리기 한 단계: 첫 값에서 잡고(이미 잡혀 있으면 그대로) 끝(save)의 saveEdit 에서 닫는다
         remember();
+        touch ({ .parallels = { parallelId }, .branchLevel = { branch } });
         p->levelDb[(size_t) branch][(size_t) currentScene] = juce::jlimit (mergeMinDb, mergeMaxDb, db);
 
         if (save)
@@ -1079,6 +1242,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .parallels = { parallelId }, .branchLevel = { 0, 1 } });
         resetLevelValues (*p, (size_t) currentScene);
         mergeEdited (*p);
     }
@@ -1090,6 +1254,10 @@ namespace rig
             return;
 
         remember();
+        Touched all { .slots = { slotId } };
+        for (int k = 0; k < (int) BlockParams::specs (slot->type).size(); ++k)
+            all.params.push_back (k);
+        touch (all);
         resetParamValues (*slot, (size_t) currentScene);
         applyParams (*slot);   // DSP 가 20 ms 동안 기본값으로 따라간다
         saveEdit();
@@ -1133,6 +1301,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .scenes = { destination } });
         const auto s = (size_t) source, d = (size_t) destination;
         sceneNames[d] = sceneNames[s];
 
@@ -1149,6 +1318,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .scenes = { source, destination } });
         const auto s = (size_t) source, d = (size_t) destination;
         std::swap (sceneNames[s], sceneNames[d]);
 
@@ -1165,6 +1335,7 @@ namespace rig
 
         // 블록 모두 On, 병렬 갈래 모두 On + 기본 레벨, 기본 이름
         remember();
+        touch ({ .scenes = { scene } });
         const auto i = (size_t) scene;
         sceneNames[i] = defaultSceneName (scene);
 
@@ -1177,6 +1348,10 @@ namespace rig
     void RigModel::resetAllScenes()
     {
         remember();
+        Touched all;
+        for (int i = 0; i < numScenes; ++i)
+            all.scenes.push_back (i);
+        touch (all);
 
         for (size_t i = 0; i < (size_t) numScenes; ++i)
         {
@@ -1194,6 +1369,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .scenes = { scene } });
         sceneNames[(size_t) scene] = sanitizeSceneName (name, scene);
         saveEdit();
         sendChangeMessage();
@@ -1310,6 +1486,7 @@ namespace rig
             return;
 
         remember();
+        touch ({ .slots = { slotId } });
 
         // 교체 = 같은 종류여도 8 씬 모두 기본값. 같은 파일을 다시 시도할 때만 (로딩 실패 후) 값을 둔다
         // 옛 DSP 는 옛 객체를 들고 있어서 크로스페이드가 끝날 때까지 옛 값으로 소리를 낸다

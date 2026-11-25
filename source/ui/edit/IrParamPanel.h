@@ -15,6 +15,7 @@ namespace rig
         explicit IrParamPanel (RigModel& model);
 
         void refresh() override;
+        juce::Component* componentForParam (int index) override;
         void resized() override;
 
     private:

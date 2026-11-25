@@ -708,17 +708,81 @@ namespace rig
     //==============================================================================
     // 블록 양식: 패치맵 블록, IN / OUT, 선택기에서 끌 때 보이는 블록이 같이 쓴다.
     // 색 하나로: 바탕 = 색.darker (0.6), 윗줄(종류 / IN·OUT) = 색.brighter (0.4) 굵게, 아랫줄(파일명 / 채널) = 흰색, 테두리 = 색
+    // Undo / Redo 로 되돌아간 것 강조 (RigModel::getHighlight): 노란 테두리가 켜졌다가 highlightMs 동안 사라진다
+    constexpr int highlightMs = 1000;
+
+    inline float highlightAlpha (juce::uint32 start)
+    {
+        if (start == 0)
+            return 0.0f;
+
+        const auto elapsed = juce::Time::getMillisecondCounter() - start;
+        return elapsed >= (juce::uint32) highlightMs ? 0.0f : 1.0f - (float) elapsed / (float) highlightMs;
+    }
+
+    inline void drawHighlight (juce::Graphics& g, juce::Rectangle<float> area, float alpha, float corner = 3.0f)
+    {
+        if (alpha <= 0.0f)
+            return;
+
+        g.setColour (juce::Colours::yellow.withAlpha (alpha));
+        g.drawRoundedRectangle (area.expanded (2.0f), corner, 3.0f);
+    }
+
+    // 강조가 사라지는 동안 화면 갱신마다 component 를 다시 그린다 (끝난 뒤 한 번 더 그려 지운다)
+    class HighlightRepaint
+    {
+    public:
+        HighlightRepaint (juce::Component& component, std::function<juce::uint32()> getStart)
+            : vblank (&component, [this, &component, startOf = std::move (getStart)]
+              {
+                  const bool on = highlightAlpha (startOf()) > 0.0f;
+                  if (on || active)
+                      component.repaint();
+                  active = on;
+              })
+        {
+        }
+
+    private:
+        bool active = false;
+        juce::VBlankAttachment vblank;
+    };
+
+    // dB 값 글자 (파라미터 노브 팝업, 블록 타일의 중요 값): "+3.0 dB", "0.0 dB", "-3.0 dB".
+    // 0.1 단위로 맞춘 뒤 판단해야 -0.04 같은 값이 "-0.0" 으로 보이지 않는다
+    inline juce::String dbText (double value)
+    {
+        const int tenths = juce::roundToInt (value * 10.0);
+        const auto text = juce::String (tenths / 10.0, 1) + " dB";
+        return tenths > 0 ? "+" + text : tenths == 0 ? juce::String ("0.0 dB") : text;
+    }
+
     namespace block
     {
-        constexpr int width = 130;           // 블록 폭 (예전 150)
-        constexpr int height = 44;           // 블록 높이 (예전 72): 위 여백 5 + 종류 줄 16 + 파일명 줄 18 + 아래 여백 5
-        constexpr float corner = 8.0f;
+        // 블록 = 박스 안 박스 3줄: [머리띠: 종류 (종류 색으로 채움, 흰 글자)] / 본문 [이름 칸] [값 칸]
+        //   높이 60 = 머리띠 18 + 본문 42.
+        //   - 머리띠: 실제 글꼴의 대문자 높이를 머리띠 가운데에 (대문자에는 아래 획이 없어 줄 가운데에 두면 위로 쏠려 보인다)
+        //   - 본문: 글자 칸 2개 (칸 높이 = 각 글꼴 높이), 칸 사이 lineGap, 두 칸 묶음을 본문 세로 가운데에. 이름은 왼쪽, 값은 오른쪽 정렬
+        constexpr int width = 130;           // 블록 폭
+        constexpr int height = 60;
+        constexpr float corner = 3.0f;       // 모서리 (예전 8, 날카롭게)
 
-        // 글자 배치: 윗줄 + 아랫줄 묶음을 세로 가운데에. 높이 44 기준 위아래 여백 (44 - 16 - 18) / 2 = 5 px 씩
-        constexpr int headerLineHeight = 16, valueLineHeight = 18;
-        constexpr int textInsetX = 10;           // 좌우 여백
-        constexpr float headerFontSize = 12.0f;  // 윗줄
-        constexpr float valueFontSize = 13.0f;   // 아랫줄
+        constexpr int bandHeight = 18;
+        constexpr float lineGap = 6.0f;           // 본문 이름 칸과 값 칸 사이 (본문 위아래 여백은 남는 만큼 반씩)
+        constexpr int textInsetX = 8;            // 좌우 여백
+        constexpr float headerFontSize = 11.0f;  // 머리띠 글자 (굵게)
+        constexpr float nameFontSize = 13.0f;    // 이름
+        constexpr float valueFontSize = 12.0f;   // 중요 값
+
+        // 미지정 블록: 어두운 회색 머리띠 "EMPTY" (IN / OUT 의 테마 회청색과 구분) + 검정보다 살짝 밝은 본문에 "Passthrough" (소리 그대로 통과)
+        const juce::Colour emptyFill (0xff1e1e1e);
+        const juce::Colour emptyBand (0xff555555);
+
+        // IN / OUT: 앱 테마 색 (JUCE LookAndFeel_V4 다크) = 머리띠·테두리 = 테두리색, 본문 = 콤보박스 바탕
+        const juce::Colour endpointBand (0xff8e989b);
+        const juce::Colour endpointFill (0xff263238);
+        inline const juce::String emptyText { "Passthrough" };
 
         inline juce::Colour colourFor (BlockType t)
         {
@@ -729,7 +793,7 @@ namespace rig
                 case BlockType::None: break;
             }
 
-            return juce::Colours::black;
+            return emptyBand;   // 미지정 블록
         }
 
         inline juce::String labelFor (BlockType t)
@@ -741,18 +805,53 @@ namespace rig
                 case BlockType::None: break;
             }
 
-            return {};
+            return "EMPTY";
         }
 
-        inline juce::Rectangle<int> textBlock (juce::Rectangle<int> area)
+        inline juce::Rectangle<int> band (juce::Rectangle<int> area) { return area.withHeight (bandHeight); }
+
+        inline juce::Font headerFont() { return juce::Font (juce::FontOptions (headerFontSize, juce::Font::bold)); }
+        inline juce::Font nameFont()   { return juce::Font (juce::FontOptions (nameFontSize)); }
+        inline juce::Font valueFont()  { return juce::Font (juce::FontOptions (valueFontSize)); }
+
+        // 글꼴의 대문자 높이 (실제 그린 "H" 의 높이). 글꼴은 OS 마다 다르므로 처음 쓸 때 한 번 잰다
+        inline float capHeight (const juce::Font& font)
         {
-            return area.reduced (textInsetX, 0).withSizeKeepingCentre (area.getWidth() - 2 * textInsetX, headerLineHeight + valueLineHeight);
+            juce::GlyphArrangement glyphs;
+            glyphs.addLineOfText (font, "H", 0.0f, 0.0f);
+            return glyphs.getBoundingBox (0, -1, true).getHeight();
         }
 
-        inline juce::Rectangle<int> headerLine (juce::Rectangle<int> area) { return textBlock (area).removeFromTop (headerLineHeight); }
-        inline juce::Rectangle<int> valueLine (juce::Rectangle<int> area)  { return textBlock (area).withTrimmedTop (headerLineHeight); }
+        // baseline 에 글자가 앉도록 그릴 칸 (drawText 는 글꼴 높이를 칸 세로 가운데에 놓으므로 칸 높이 = 글꼴 높이면 baseline = 위 + ascent)
+        inline juce::Rectangle<int> lineAt (juce::Rectangle<int> area, const juce::Font& font, float baseline)
+        {
+            return juce::Rectangle<float> ((float) area.getX() + (float) textInsetX, baseline - font.getAscent(),
+                                           (float) (area.getWidth() - 2 * textInsetX), font.getHeight()).getSmallestIntegerContainer();
+        }
 
-        inline juce::Font valueFont() { return juce::Font (juce::FontOptions (valueFontSize)); }
+        inline juce::Rectangle<int> headerLine (juce::Rectangle<int> area)
+        {
+            static const float cap = capHeight (headerFont());
+            return lineAt (area, headerFont(), (float) area.getY() + (float) bandHeight * 0.5f + cap * 0.5f);
+        }
+
+        inline juce::Rectangle<int> body (juce::Rectangle<int> area) { return area.withTrimmedTop (bandHeight); }
+
+        // 본문 글자 칸 2개: [이름 칸][값 칸] 사이 간격 0, 묶음을 본문 세로 가운데에
+        inline juce::Rectangle<float> nameLineF (juce::Rectangle<int> area)
+        {
+            const auto inner = body (area).toFloat().reduced ((float) textInsetX, 0.0f);
+            const float total = nameFont().getHeight() + lineGap + valueFont().getHeight();
+            return inner.withY (inner.getY() + (inner.getHeight() - total) * 0.5f).withHeight (nameFont().getHeight());
+        }
+
+        inline juce::Rectangle<int> nameLine (juce::Rectangle<int> area)  { return nameLineF (area).getSmallestIntegerContainer(); }
+
+        inline juce::Rectangle<int> valueLine (juce::Rectangle<int> area)
+        {
+            const auto name = nameLineF (area);
+            return name.withY (name.getBottom() + lineGap).withHeight (valueFont().getHeight()).getSmallestIntegerContainer();
+        }
 
         // 로딩 실패 표시: 블록 위에 굵은 빨간 대각선 하나 (테두리와 같은 굵기)
         constexpr float errorThickness = 4.0f;
@@ -774,12 +873,31 @@ namespace rig
             g.fillRoundedRectangle (area.toFloat().reduced (1.5f), corner);
         }
 
-        // rightInset: 윗줄 오른쪽에 비울 폭 (일반 블록의 삭제 칸)
-        inline void drawBlockHeader (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, juce::Colour colour, int rightInset = 0)
+        // 머리띠: 종류 색으로 채운 윗줄 (위 두 모서리만 둥글게) + 흰 종류 글자 (굵게)
+        // textColour: 꺼진 블록은 흐린 흰색
+        inline void drawBlockHeader (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, juce::Colour colour,
+                                     juce::Colour textColour = juce::Colours::white)
         {
+            const auto strip = band (area).toFloat().reduced (1.5f, 0).withTrimmedTop (1.5f);
+            juce::Path path;
+            path.addRoundedRectangle (strip.getX(), strip.getY(), strip.getWidth(), strip.getHeight(), corner, corner, true, true, false, false);
             g.setColour (colour);
-            g.setFont (juce::FontOptions (headerFontSize, juce::Font::bold));
-            g.drawText (text, headerLine (area).withTrimmedRight (rightInset), juce::Justification::centredLeft, true);
+            g.fillPath (path);
+
+            g.setColour (textColour);
+            g.setFont (headerFont());
+            g.drawText (text, headerLine (area), juce::Justification::centredLeft, true);
+        }
+
+        // 본문 두 줄: 이름 + 중요 값 (같은 색, 보통 흰색). 넘치면 말줄임
+        inline void drawBlockText (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, const juce::String& value,
+                                   juce::Colour nameColour)
+        {
+            g.setColour (nameColour);
+            g.setFont (nameFont());
+            g.drawText (name, nameLine (area), juce::Justification::centredLeft, true);
+            g.setFont (valueFont());
+            g.drawText (value, valueLine (area), juce::Justification::centredRight, true);
         }
 
         // 테두리: 선택 = 흰색 2.5 px, 아니면 border 1.5 px.
@@ -826,7 +944,35 @@ namespace rig
         // 끄는 동안 커서에 붙는 블록 그림의 불투명도 (밑의 놓을 자리 표시가 비쳐 보이게)
         constexpr float dragImageAlpha = 0.6f;
 
-        // 선택기에서 끌 때 커서에 붙는 블록 그림 (삭제 칸 없음). 미지정 블록은 "Empty"
+        // 떼면 삭제되는 위치에서 커서의 블록 그림: 블록 오른쪽 위 꼭짓점에서 안쪽으로 deleteMarkInset 들어간 곳을 중심으로 빨간 원 안 흰 X.
+        // 원이 블록 밖으로 나가므로 끄는 그림은 위·오른쪽에 (반지름 - 안쪽) 만큼 여백을 둔다 (보통 그림도 같은 크기라 블록 위치가 그대로)
+        constexpr float deleteMarkRadius = 10.0f, deleteMarkInset = 3.0f;
+
+        // 블록 그림 → 끄는 그림 (여백 포함). withMark 면 X 원을 얹는다
+        inline juce::Image createDragImage (const juce::Image& block, bool withMark)
+        {
+            const int pad = (int) std::ceil (deleteMarkRadius - deleteMarkInset);
+            juce::Image image (juce::Image::ARGB, block.getWidth() + pad, block.getHeight() + pad, true);
+            juce::Graphics g (image);
+            g.drawImageAt (block, 0, pad);
+
+            if (withMark)
+            {
+                const juce::Point<float> centre ((float) block.getWidth() - deleteMarkInset, (float) pad + deleteMarkInset);
+                g.setColour (juce::Colours::red);
+                g.fillEllipse (juce::Rectangle<float> (deleteMarkRadius * 2.0f, deleteMarkRadius * 2.0f).withCentre (centre));
+
+                const float arm = deleteMarkRadius * 0.4f;
+                g.setColour (juce::Colours::white);
+                g.drawLine (centre.x - arm, centre.y - arm, centre.x + arm, centre.y + arm, 2.0f);
+                g.drawLine (centre.x + arm, centre.y - arm, centre.x - arm, centre.y + arm, 2.0f);
+            }
+
+            image.multiplyAllAlphas (dragImageAlpha);
+            return image;
+        }
+
+        // 선택기에서 끌 때 커서에 붙는 블록 그림. 미지정 블록은 emptyFill / emptyText, 그 밖은 중요 값 줄에 새 블록의 기본값
         inline juce::Image createImage (BlockType type, const juce::String& name)
         {
             const juce::Rectangle<int> area (width, height);
@@ -835,11 +981,9 @@ namespace rig
             const bool none = type == BlockType::None;
             const auto colour = colourFor (type);
 
-            drawBlockBackground (g, area, none ? juce::Colours::black : colour.darker (0.6f));
-            drawBlockHeader (g, area, labelFor (type), colour.brighter (0.4f));
-            g.setColour (none ? juce::Colours::grey : juce::Colours::white);
-            g.setFont (valueFont());
-            g.drawText (none ? juce::String ("Empty") : name, valueLine (area), juce::Justification::centredLeft, true);
+            drawBlockBackground (g, area, none ? emptyFill : colour.darker (0.75f));
+            drawBlockHeader (g, area, labelFor (type), colour);
+            drawBlockText (g, area, none ? emptyText : name, none ? juce::String() : dbText (0.0), juce::Colours::white);
             drawBlockFrame (g, area, none ? juce::Colours::grey.darker() : colour, false, false);
             image.multiplyAllAlphas (dragImageAlpha);
             return image;

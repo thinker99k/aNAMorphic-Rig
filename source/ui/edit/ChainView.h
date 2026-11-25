@@ -67,6 +67,7 @@ namespace rig
         MarqueeKey marqueeKey;
         juce::uint32 marqueeStartMs = 0;
         bool updatesPaused = false;
+        HighlightRepaint highlightRepaint { *this, [this] { return model.getHighlightStart(); } };   // Undo / Redo 강조가 사라지는 동안
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChainView)
     };

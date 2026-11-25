@@ -24,8 +24,15 @@ namespace rig
         };
 
         // 되돌리면 패치 이름도 돌아올 수 있다 (이름은 TopBar 가 들고 있으므로 다시 넣는다)
-        topBar.onUndo = [this] { model.undo(); topBar.setPatchName (model.getPatchName()); updateUndoButtons(); };
-        topBar.onRedo = [this] { model.redo(); topBar.setPatchName (model.getPatchName()); updateUndoButtons(); };
+        // Undo / Redo: 되돌아간 패치 이름 강조 (나머지 강조는 각 화면이 모델에서 읽는다)
+        const auto stepped = [this]
+        {
+            topBar.setPatchName (model.getPatchName());
+            topBar.highlightPatchName (model.getHighlight().patchName ? model.getHighlightStart() : 0);
+            updateUndoButtons();
+        };
+        topBar.onUndo = [this, stepped] { model.undo(); stepped(); };
+        topBar.onRedo = [this, stepped] { model.redo(); stepped(); };
         topBar.onPatchChanged = [this] (int number)
         {
             model.loadPatch (number);

@@ -131,7 +131,7 @@ namespace rig
         const Slot* getSelectedSlot() const { return findSlot (selectedSlotId); }
         juce::uint64 getSelectedParallelId() const noexcept { return selectedParallelId; }
         Endpoint getSelectedEndpoint() const noexcept { return selectedEndpoint; }
-        void selectSlot (juce::uint64 id);
+        void selectSlot (juce::uint64 id);   // 0 = 미선택 (패치맵 빈 바탕 클릭)
         void selectParallel (juce::uint64 id);
         void selectEndpoint (Endpoint);
 
@@ -140,10 +140,18 @@ namespace rig
         void addParallel (juce::uint64 belowSlotId, BlockType type, const juce::File& file);   // 본 줄 블록 아래에 새 블록 → 병렬
         void moveBlock (juce::uint64 slotId, Place where);   // where 는 옮기기 전 트리 기준 (먼저 넣고 나중에 지운다)
         void moveBlockBelow (juce::uint64 slotId, juce::uint64 belowSlotId);   // 본 줄 블록 아래로 옮겨 병렬 (먼저 넣고 나중에 지운다)
+        void swapBlocks (juce::uint64 slotId, juce::uint64 otherSlotId);       // 두 블록 자리 맞바꾸기 (씬별 값은 블록을 따라간다, 둘 다 새 인스턴스)
         // 합류 지점 옮기기: delta > 0 이면 병렬 바로 뒤 본 줄 블록을 delta 개 위 갈래 끝으로 넣고,
         // delta < 0 이면 위 갈래 끝 블록을 -delta 개 병렬 바로 뒤 본 줄로 뺀다. 위 갈래는 블록 1개 이상, 다른 병렬은 넘지 못한다
         void moveMerge (juce::uint64 parallelId, int delta);
-        void removeBlock (juce::uint64 slotId);   // 갈래가 비면 병렬 해제. 선택은 신호 흐름상 바로 앞 블록, 없으면 IN
+        // 합류 버튼의 씬별 갈래 값: 남거나 원래 있던 합류 버튼은 값 유지, 새로 생긴 합류 버튼은 기본값 (사용자 눈에 병렬 = 합류 버튼)
+        // 이어붙이기: 바로 뒤가 병렬이면 위 갈래는 위끼리, 아래 갈래는 아래끼리 이어 병렬 하나로. 합류 버튼이 남는 뒤 병렬의 값
+        bool canJoinParallel (juce::uint64 parallelId) const;
+        void joinParallel (juce::uint64 parallelId);
+        // 나누기 (이어붙이기의 역): 위 갈래 upperCount 개 / 아래 갈래 lowerCount 개 뒤에 합류+갈림을 넣어 병렬 둘로.
+        // 두 갈래 모두 블록 사이여야 한다 (1 <= count < 갈래 길이). 뒤 병렬 = 원래 합류 버튼(값 유지), 앞 병렬 = 새 합류(기본값)
+        void splitParallel (juce::uint64 parallelId, int upperCount, int lowerCount);
+        void removeBlock (juce::uint64 slotId);   // 갈래가 비면 병렬 해제. 선택은 신호 흐름상 바로 앞 블록, 없으면(체인 맨 앞) 미선택
         void setOn (juce::uint64 slotId, bool shouldBeOn);   // 현재 씬의 값만 바꾼다
         bool isOn (const Slot& slot) const noexcept { return slot.on[(size_t) currentScene]; }
 
@@ -190,8 +198,24 @@ namespace rig
 
         // 되돌리기 / 다시 하기 (패치마다 메모리에만, 패치를 바꾸면 비운다. 최대 maxUndoSteps 단계).
         // 대상: 블록·병렬·합류·채널·On/Off·씬 편집·패치 이름/리셋. 제외: 패치 전환, 볼륨 / MUTE, 씬 전환, 선택.
-        // 되돌리면 그 편집을 한 씬으로 함께 바뀌고, 소리는 다른 편집과 같이 크로스페이드
+        // Undo = 그 편집 직전 상태와 직전 화면(씬·선택), Redo = 그 편집 직후 상태와 직후 화면. 사이에 고른 선택은 무관.
+        // 소리는 다른 편집과 같이 크로스페이드
         static constexpr int maxUndoSteps = 100;
+        // Undo / Redo 로 되돌아간 것 (UI 가 노란 테두리로 잠깐 강조). 편집 함수가 touch 로 정한 대상, 되돌아간 쪽 상태의 id
+        struct Touched
+        {
+            std::vector<juce::uint64> slots {}, parallels {};   // 패치맵 블록 타일 / 합류 버튼
+            std::vector<int> params {};                         // 선택된 블록의 파라미터 번호 (파라미터 바)
+            bool power = false;                                 // 선택된 블록의 전원 (파라미터 바 [14])
+            std::vector<int> branchPower {}, branchLevel {};    // 선택된 합류의 갈래 전원 / 레벨 (파라미터 바)
+            std::vector<int> scenes {};                         // 씬 버튼
+            bool patchName = false;                       // 패치 이름 칸
+            Endpoint endpoint = Endpoint::none;           // IN / OUT 노드
+        };
+
+        const Touched& getHighlight() const noexcept { return highlight; }
+        juce::uint32 getHighlightStart() const noexcept { return highlightStart; }   // Undo / Redo 한 때 (Time::getMillisecondCounter, 0 = 없음)
+
         bool canUndo() const noexcept { return ! undoStack.empty(); }
         bool canRedo() const noexcept { return ! redoStack.empty(); }
         void undo();
@@ -216,6 +240,7 @@ namespace rig
 
         Slot makeSlot (BlockType type, const juce::File& file);
         Parallel makeParallel();
+        juce::uint64 parallelOf (juce::uint64 slotId) const;   // 블록이 들어 있는 병렬 (본 줄이면 0)
         void setSelectedSlot (juce::uint64 id);   // 알림 없이 (편집 함수가 마지막에 한 번 알린다)
         bool isValidInsertPlace (const Place&) const;
         void insertSlot (Place where, Slot slot);
@@ -242,16 +267,23 @@ namespace rig
         static juce::var writeSlot (const Slot&);
         static juce::var writeParallel (const Parallel&);
 
-        // 되돌리기 한 단계 = 편집 직전 상태
+        struct Selection
+        {
+            juce::uint64 slot = 0, parallel = 0;
+            Endpoint endpoint = Endpoint::none;
+        };
+
+        // 되돌리기 한 단계 = 돌아갈 상태 (Undo 쪽이면 편집 직전, Redo 쪽이면 편집 직후).
+        // other* = 반대쪽(이 상태에서 다시 건너갈 쪽)의 화면 선택과 강조 대상
         struct Snapshot
         {
             std::vector<Item> chain;
             AudioEngine::Routing routing;
             std::array<juce::String, numScenes> sceneNames;
             juce::String patchName;
-            juce::uint64 selectedSlotId = 0, selectedParallelId = 0;
-            Endpoint selectedEndpoint = Endpoint::none;
-            int scene = 0;   // 그 편집을 한 씬 (되돌리면 이 씬으로)
+            Selection selection, otherSelection;
+            Touched touched, otherTouched;
+            int scene = 0;   // 그 편집을 한 씬 (Undo / Redo 모두 이 씬으로)
         };
 
         Snapshot snapshot (int scene) const;
@@ -260,7 +292,11 @@ namespace rig
         //  - saveEdit()   : 편집이 끝나 저장할 때. 잡아 둔 상태와 지금이 다르면 그때 Undo 에 넣고 Redo 를 비운 뒤 저장
         //  - 슬라이더·노브 드래그는 첫 값에서 잡고 끝(save)에서 닫으므로 한 번 끌기 = 한 단계, 제자리로 돌아오면 남지 않는다
         void remember();
+        void touch (Touched before, Touched after);                 // 편집 함수가 바꾼 대상 (편집 직전 상태 / 직후 상태의 id)
+        void touch (const Touched& both) { touch (both, both); }
+        void forgetEdit();                                           // 잡아 둔 편집을 버린다 (아무것도 안 바뀐 경우)
         void saveEdit();
+        Selection currentSelection() const { return { selectedSlotId, selectedParallelId, selectedEndpoint }; }
         bool sameContent (const Snapshot&) const;   // 편집 내용(체인 값, 채널, 씬 이름, 패치 이름)이 같은지. 선택·DSP 는 보지 않는다
         void step (std::vector<Snapshot>& from, std::vector<Snapshot>& to);
 
@@ -297,6 +333,9 @@ namespace rig
         juce::uint64 nextId = 1;                // 슬롯과 병렬의 id (0 = 없음)
         std::vector<Snapshot> undoStack, redoStack;
         std::optional<Snapshot> pendingUndo;    // remember() 로 잡아 둔 편집 직전 상태 (saveEdit 에서 닫는다)
+        Touched pendingBefore, pendingAfter;    // touch() 로 정한 강조 대상
+        Touched highlight;                      // 마지막 Undo / Redo 로 되돌아간 것
+        juce::uint32 highlightStart = 0;
 
         JUCE_DECLARE_WEAK_REFERENCEABLE (RigModel)
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RigModel)

@@ -65,6 +65,19 @@ namespace rig
         return (int) specs (type).size() - 1;   // 공용은 Output 하나, 맨 끝
     }
 
+    int BlockParams::headlineIndex (BlockType type)
+    {
+        // NAM = Gain (드라이브), IR = Output (부스트). 블록 종류를 추가할 때는 여기에 한 경우를 더한다
+        switch (type)
+        {
+            case BlockType::Nam:  return NamParams::gainDb;
+            case BlockType::Ir:   return outputIndex (type);
+            case BlockType::None: break;
+        }
+
+        return -1;
+    }
+
     std::vector<float> BlockParams::defaults (BlockType type)
     {
         std::vector<float> values;
