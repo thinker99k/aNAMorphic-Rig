@@ -5,8 +5,8 @@ namespace rig
     namespace
     {
         constexpr int columns = 4, rows = 2;
-        constexpr int padMargin = 13;   // 바깥 여백 (위·아래·좌·우)
         constexpr int padGap = 10;      // 패드 사이 (가로·세로)
+        constexpr int padMargin = padGap;   // 바깥 여백 (위·아래·좌·우): 패드 사이와 같게
         constexpr int padInset = 8;     // 패드 안 여백 (번호·이름 모두 사방 같은 값)
         constexpr float padCorner = 6.0f;   // 둥근 모서리 반지름
         static_assert (RigModel::numScenes == columns * rows);
