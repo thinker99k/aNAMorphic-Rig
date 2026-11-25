@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/Widgets.h"
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace rig::live
@@ -63,9 +65,6 @@ namespace rig::live
     // 켜짐 표시 버튼 (Live, 튜너 스위치): 바탕 + 2 px 테두리
     inline void drawIndicatorBox (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour fill, juce::Colour outline)
     {
-        g.setColour (fill);
-        g.fillRoundedRectangle (area, 5.0f);
-        g.setColour (outline);
-        g.drawRoundedRectangle (area.reduced (1.0f), 5.0f, 2.0f);
+        indicator::drawBox (g, area, fill, outline);   // 편집 화면 켜짐 표시와 같은 모양 (Widgets.h)
     }
 }

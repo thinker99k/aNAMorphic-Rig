@@ -17,6 +17,7 @@ namespace rig
         constexpr int gap = 6;                   // 구성 요소 사이 간격
         constexpr int knobW = 56, knobH = 56;    // 노브 크기는 고정, 상태바가 커지면 위아래 여백만 늘어난다
         constexpr int muteW = 56;                // MUTE 는 "OUT" 글자 왼쪽, 높이는 이름 줄 위 ~ 막대 아래
+        constexpr int muteShiftX = -2;           // MUTE 만 2 px 왼쪽으로
         // 위쪽 여백 추가: 노브 호 맨 위~상태바 위 끝 9 px, 노브 몸통 아래~상태바 아래 끝 7 px (상태바 62 기준)
         constexpr int topExtra = 8;
         constexpr int gaugeLift = 4;             // 게이지 묶음(이름·수치·막대·MUTE)만 노브보다 4 px 위로
@@ -75,6 +76,7 @@ namespace rig
 
         addAndMakeVisible (inputKnob);
         addAndMakeVisible (outputKnob);
+        indicator::setColours (muteButton, indicator::redFill, indicator::red);   // 음소거 중 = 켜짐 표시 (빨강)
         addAndMakeVisible (muteButton);
     }
 
@@ -125,7 +127,7 @@ namespace rig
 
         // MUTE: "OUT" 글자 바로 왼쪽, 높이는 이름 줄 위 ~ 막대 아래 (위쪽 4 px 덜어냄)
         const int midY = area.getCentreY() - gaugeLift;
-        muteButton.setBounds (juce::Rectangle<int> (out.getCentreX() - muteW / 2, midY - captionGap / 2 - captionH,
+        muteButton.setBounds (juce::Rectangle<int> (out.getCentreX() - muteW / 2 + muteShiftX, midY - captionGap / 2 - captionH,
                                                     muteW, captionH + captionGap + barH).withTrimmedTop (4));
 
         // CPU: 창 정중앙, 고정 길이

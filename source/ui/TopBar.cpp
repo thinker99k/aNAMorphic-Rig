@@ -5,6 +5,11 @@
 
 namespace rig
 {
+    namespace
+    {
+        constexpr float fontSize = 16.0f;   // TopBar 글자 (Patch, 패치 이름). 콤보·버튼도 JUCE 기본 계산으로 16 (높이 28)
+    }
+
     TopBar::TopBar (int numPatches)
     {
         for (int i = 1; i <= numPatches; ++i)
@@ -74,6 +79,8 @@ namespace rig
         };
 
         patchLabel.setJustificationType (juce::Justification::centredRight);
+        patchLabel.setFont (juce::FontOptions (fontSize));
+        patchNameBox.setFont (juce::FontOptions (fontSize));   // 이름 입력칸도 Label 글꼴을 따른다
         patchNameBox.setJustificationType (juce::Justification::centred);
         patchNameBox.setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.25f));
         patchNameBox.setColour (juce::Label::outlineColourId, juce::Colours::grey);

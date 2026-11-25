@@ -51,7 +51,7 @@ namespace rig
             topBar.setPatchName (model.getPatchName());
         };
         topBar.onSettingsClicked = [this] { openSettings(); };
-        topBar.onTunerClicked = [this] { openTuner(); };
+        topBar.onTunerClicked = [this] { toggleTuner(); };
 
         // [SPECTRUM] begin (테스트용) 실행 인자 --spectrum 을 줬을 때만 패치맵 오른쪽 위에 버튼
         if (juce::JUCEApplicationBase::getCommandLineParameterArray().contains ("--spectrum"))
@@ -213,14 +213,8 @@ namespace rig
 
     void MainComponent::updateMuteButton()
     {
-        // 토글 상태는 쓰지 않는다: 상태의 주인은 RigModel, 버튼은 색으로 보여주기만 한다
-        const bool muted = model.isOutputMuted();
-        auto& muteButton = statusBar.muteButton;
-        muteButton.setColour (juce::TextButton::buttonColourId,
-                              muted ? juce::Colours::red.darker (0.2f) : juce::Colours::darkgrey);
-        muteButton.setColour (juce::TextButton::textColourOffId,
-                              muted ? juce::Colours::white : juce::Colours::grey);
-        muteButton.repaint();
+        // 상태의 주인은 RigModel. 버튼 토글 상태는 보여주기만 한다 (켜짐 표시 빨강, 색은 StatusBar)
+        statusBar.muteButton.setToggleState (model.isOutputMuted(), juce::dontSendNotification);
     }
 
     void MainComponent::timerCallback()
@@ -261,6 +255,7 @@ namespace rig
 
         if (live)
         {
+            closeTuner();               // Live 는 아래 줄에 자기 튜너가 있다
             editView.cancelEditing();   // 열려 있던 Copy/Swap 모드, 이름 편집을 끝낸다
             liveView.enter();           // 지금 패치의 채널로 시작, 튜너 꺼짐
         }
@@ -274,17 +269,19 @@ namespace rig
         liveView.setVisible (live);
     }
 
-    void MainComponent::openTuner()
+    void MainComponent::toggleTuner()
     {
+        if (tunerWindow != nullptr && tunerWindow->isVisible())
+            return closeTuner();
+
         // 튜너가 열려 있는 동안 출력은 엔진이 무음으로 한다 (MUTE 버튼·출력 노브는 그대로)
         topBar.setTunerActive (true);
+        tunerWindow = std::make_unique<TunerWindow> (engine, model, this, [this] { topBar.setTunerActive (false); });   // X / ESC 로 닫혀도
+    }
 
-        juce::Component::SafePointer<MainComponent> safeThis (this);
-
-        TunerDialog::show (engine, model, this, [safeThis]
-        {
-            if (safeThis != nullptr)
-                safeThis->topBar.setTunerActive (false);
-        });
+    void MainComponent::closeTuner()
+    {
+        if (tunerWindow != nullptr)
+            tunerWindow->close();   // onClosed 가 Tuner 버튼을 끈다
     }
 }

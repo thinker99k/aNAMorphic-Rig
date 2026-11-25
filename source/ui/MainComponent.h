@@ -59,7 +59,8 @@ namespace rig
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
         void updateUndoButtons();  // 되돌릴 것 / 다시 할 것이 있을 때만 TopBar 의 Undo / Redo 활성
         void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태
-        void openTuner();          // 튜너 모달. 열려 있는 동안 출력 무음 (AudioEngine::setTunerActive)
+        void toggleTuner();        // 튜너 창 열기 / 닫기 (모달 아님). 열려 있는 동안 출력 무음 (AudioEngine::setTunerActive)
+        void closeTuner();
         void libraryImported (const LibraryImportResult&);   // 드롭 가져오기가 끝난 뒤 (메시지 스레드)
 
         juce::AudioDeviceManager& deviceManager;
@@ -72,6 +73,8 @@ namespace rig
         StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
 
         ViewMode viewMode = ViewMode::edit;   // 항상 Edit 로 시작, 저장하지 않는다
+
+        std::unique_ptr<TunerWindow> tunerWindow;   // 닫으면 숨기만 하고, 다음에 열 때 새로 만들거나 MainComponent 와 함께 지워진다
 
         std::unique_ptr<SpectrumWindow> spectrumWindow;   // [SPECTRUM] 비모달 창. 닫으면 숨기기만 하고 MainComponent 와 함께 지워진다
 
