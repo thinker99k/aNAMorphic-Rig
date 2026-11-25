@@ -142,6 +142,8 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/tuner/TunerGauge.cpp
         source/tuner/TunerDialog.cpp
         source/tuner/TunerButton.cpp
+        source/tuner/TunerAnalyzer.cpp
+        source/tuner/TunerStrip.cpp
         source/ui/MainComponent.cpp
         source/ui/TopBar.cpp
         source/ui/SettingsDialog.cpp
@@ -156,6 +158,7 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/live/LiveView.cpp
         source/ui/live/ScenePads.cpp
         source/ui/live/PatchBar.cpp
+        source/ui/live/LiveStatusBar.cpp
         source/ui/StatusBar.cpp
         source/ui/GainKnob.cpp
         source/ui/ParamKnob.cpp

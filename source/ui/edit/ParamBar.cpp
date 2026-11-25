@@ -6,10 +6,6 @@ namespace rig
 {
     namespace
     {
-        // channelBox 항목 id: 단일 채널은 1 + 채널(0부터), 출력 스테레오 쌍은 pairIdBase + 첫 채널(0부터)
-        constexpr int pairIdBase = 1000;
-
-
         // 합류 레벨: 오디오 테이퍼. 위치 p 에서 dB = 10 * log2 (p) → 절반마다 -10 dB, -3 dB ≈ 81 %,
         // p ≤ 2^-6 (= -60 dB) 는 -inf (mergeMinDb 에 붙임). 0.1 dB 단위
         juce::NormalisableRange<double> levelRange()
@@ -190,62 +186,29 @@ namespace rig
         const auto& routing = model.getRouting();
 
         channelLabel.setText (isInput ? "Input channel" : "Output channel", juce::dontSendNotification);
-        channelBox.clear (juce::dontSendNotification);
 
         juce::StringArray names;
 
         if (auto* device = deviceManager.getCurrentAudioDevice())
             names = isInput ? device->getInputChannelNames() : device->getOutputChannelNames();
 
-        // 패치의 다른 곳이 쓰는 채널은 보이되 고를 수 없다
-        const auto used = isInput ? model.getUsedInputChannels (endpoint) : model.getUsedOutputChannels (endpoint);
-
-        if (isInput)
-        {
-            for (int i = 0; i < names.size(); ++i)
-            {
-                channelBox.addItem (channelText (i, 1) + ": " + names[i], i + 1);
-                channelBox.setItemEnabled (i + 1, ! used[i]);
-            }
-        }
-        else
-        {
-            // 엔진은 모노 결과를 고른 채널에 복사하므로, 스테레오 쌍을 먼저 보이고 그다음 단일 채널
-            for (int i = 0; i + 1 < names.size(); i += 2)
-            {
-                channelBox.addItem (channelText (i, 2) + ": " + names[i] + " / " + names[i + 1], pairIdBase + i);
-                channelBox.setItemEnabled (pairIdBase + i, ! used[i] && ! used[i + 1]);
-            }
-
-            for (int i = 0; i < names.size(); ++i)
-            {
-                channelBox.addItem (channelText (i, 1) + ": " + names[i], i + 1);
-                channelBox.setItemEnabled (i + 1, ! used[i]);
-            }
-        }
-
-        // 장치에 없는 채널이면 아무것도 선택하지 않고 패치에 저장된 번호만 보인다 (IN / OUT 노드에는 빗금)
-        const int selectedId = isInput ? routing.input + 1
-                                       : (routing.stereoOutput ? pairIdBase + routing.output : routing.output + 1);
-        channelBox.setTextWhenNothingSelected (isInput ? channelText (routing.input, 1)
-                                                       : channelText (routing.output, routing.stereoOutput ? 2 : 1));
-        channelBox.setSelectedId (channelBox.indexOfItemId (selectedId) >= 0 ? selectedId : 0, juce::dontSendNotification);
-        channelBox.setEnabled (! names.isEmpty());
+        // 패치의 다른 곳이 쓰는 채널은 보이되 고를 수 없다. 장치에 없는 채널이면 IN / OUT 노드에는 빗금
+        fillChannelList (channelBox, names, isInput,
+                         isInput ? routing.input : routing.output, routing.stereoOutput,
+                         isInput ? model.getUsedInputChannels (endpoint) : model.getUsedOutputChannels (endpoint));
     }
 
     void ParamBar::channelChosen()
     {
-        const int id = channelBox.getSelectedId();
+        const auto chosen = chosenChannel (channelBox);
 
-        if (id <= 0)
+        if (! chosen)
             return;
 
         if (model.getSelectedEndpoint() == RigModel::Endpoint::input)
-            model.setInputChannel (id - 1);
-        else if (id >= pairIdBase)
-            model.setOutputChannel (id - pairIdBase, true);
+            model.setInputChannel (chosen->first);
         else
-            model.setOutputChannel (id - 1, false);
+            model.setOutputChannel (chosen->first, chosen->second);
     }
 
     void ParamBar::FaderLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos,

@@ -12,7 +12,7 @@ namespace rig
           model (m),
           topBar (RigModel::numPatches),
           editView (m, dm),
-          liveView (m)
+          liveView (m, e, dm)
     {
         topBar.setPatchNumber (model.getPatchNumber());
         topBar.setPatchName (model.getPatchName());
@@ -72,7 +72,7 @@ namespace rig
             updateMuteButton();
         };
 
-        // 가운데 화면 전환: Live 의 PREV / NEXT 는 TopBar ◀▶ 와 같은 경로 (onPatchChanged)
+        // 화면 전환: Live 의 이전 / 다음은 TopBar ◀▶ 와 같은 경로 (onPatchChanged, TopBar 는 숨겨져 있어도 동작)
         editView.onLiveClicked = [this] { setViewMode (ViewMode::live); };
         liveView.onLiveOff     = [this] { setViewMode (ViewMode::edit); };
         liveView.onPatchStep   = [this] (int delta) { topBar.selectAdjacentPatch (delta); };
@@ -235,11 +235,13 @@ namespace rig
 
         auto area = getLocalBounds();
 
-        topBar.setBounds (area.removeFromTop (40));
         statusBar.setBounds (area.removeFromBottom (statusBarHeight));
+        liveView.setBounds (area);   // TopBar 자리까지. 보이는 쪽만 그려진다
+
+        topBar.setBounds (area.removeFromTop (40));
 
         editView.setBounds (area);
-        liveView.setBounds (area);   // 보이는 쪽만 그려진다
+        liveView.setBarHeight (area.getHeight() / 8);   // 편집 화면 씬 바와 같은 높이 (EditView::resized)
     }
 
     void MainComponent::setViewMode (ViewMode mode)
@@ -251,8 +253,16 @@ namespace rig
         const bool live = (mode == ViewMode::live);
 
         if (live)
+        {
             editView.cancelEditing();   // 열려 있던 Copy/Swap 모드, 이름 편집을 끝낸다
+            liveView.enter();           // 지금 패치의 채널로 시작, 튜너 꺼짐
+        }
+        else
+        {
+            liveView.leave();           // 튜너 끄기 (무음 해제), 패치의 채널로
+        }
 
+        topBar.setVisible (! live);
         editView.setVisible (! live);
         liveView.setVisible (live);
     }

@@ -24,6 +24,11 @@ namespace rig
         static constexpr int panelWidth = 404, panelHeight = 254;
         static constexpr float valueFontSize = 15.0f;   // 기준음 Hz 와 오차 cents 글자
 
+        // 색 (Live 아래 줄 튜너도 같이 쓴다)
+        static inline const juce::Colour inTuneColour { 0xff32cd32 };   // 전원 버튼과 같은 초록
+        static inline const juce::Colour offColour    { 0xffffa500 };   // 앱 강조색 주황
+        static inline const juce::Colour idleColour   { 0xff808080 };   // juce::Colours::grey (다른 정적 값으로 초기화하면 순서 문제)
+
         static juce::Rectangle<int> pitchArea();   // 기준음 값 상자 자리 (도면 좌표, 음 이름 왼쪽)
 
         TunerGauge();

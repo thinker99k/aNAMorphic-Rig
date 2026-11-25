@@ -38,9 +38,6 @@ namespace rig
         constexpr float noteFontSize  = 40.0f;
         constexpr float smallFontSize = 14.0f;
         constexpr float numberFontSize = 11.0f;
-        const juce::Colour inTuneColour = juce::Colour (0xff32cd32);   // 전원 버튼과 같은 초록
-        const juce::Colour offColour    = juce::Colour (0xffffa500);   // 앱 강조색 주황
-        const juce::Colour idleColour   = juce::Colours::grey;
 
         float toRadians (double cents)
         {

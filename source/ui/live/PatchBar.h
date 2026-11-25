@@ -9,11 +9,11 @@
 
 namespace rig
 {
-    // Live 화면의 하단 줄: [◀ PREV PATCH] [NEXT PATCH ▶] [Live]
-    //  - 바깥 여백과 버튼 사이 6 px (편집 화면 SceneBar 와 같은 값). Live 는 SceneBar 의 Live 버튼과 같은 사각형 (오른쪽 끝), 같은 글자 크기를 굵게
-    //  - PREV / NEXT 는 남은 폭을 반반 (NEXT 가 나머지). 바깥쪽 25% 에 화살표와 이웃 패치 번호 (두 자리, 씬 패드 번호와 같은 글꼴),
-    //    안쪽 75% 에 이름 (왼쪽 정렬). 위치는 이름 길이와 무관하게 고정
-    //  - 이웃 패치가 없으면 비활성 ("—", 눌러도 무시). 순환하지 않는다
+    // Live 화면의 위 줄 (편집 화면 TopBar 자리): [◀ 이전 번호 1/8] [패치 이름 6/8] [다음 번호 ▶ 1/8]
+    //  - 바깥 여백과 칸 사이 6 px (편집 화면 SceneBar 와 같은 값)
+    //  - 이전 / 다음은 화살표와 이웃 패치 번호 (두 자리, 씬 패드 번호와 같은 글꼴)만. 이웃이 없으면 비활성 (번호 없음, 눌러도 무시).
+    //    순환하지 않는다
+    //  - 패치 이름은 표시만 (이름 바꾸기·리셋은 편집 화면 TopBar 에서). 넘치면 "..."
     //  - 왼쪽 클릭만 받는다. 호버·눌림 효과 없음
     class PatchBar final : public juce::Component,
                            private juce::ChangeListener
@@ -22,8 +22,7 @@ namespace rig
         explicit PatchBar (RigModel& model);
         ~PatchBar() override;
 
-        std::function<void()> onLiveOff;          // Live ON 버튼
-        std::function<void (int)> onPatchStep;    // PREV = -1, NEXT = +1
+        std::function<void (int)> onPatchStep;    // 이전 = -1, 다음 = +1
 
         void paint (juce::Graphics&) override;
         void resized() override;
@@ -31,14 +30,11 @@ namespace rig
 
     private:
         void changeListenerCallback (juce::ChangeBroadcaster*) override;
-        void refreshNeighbors();   // 패치 번호가 shownPatch 와 다를 때만 이웃 패치 이름을 파일에서 읽는다 (그 외에는 바로 반환)
+        bool hasPrev() const { return model.getPatchNumber() > 1; }
+        bool hasNext() const { return model.getPatchNumber() < RigModel::numPatches; }
 
         RigModel& model;
-        juce::Rectangle<int> liveBounds, prevBounds, nextBounds;
-        int shownPatch = 0;
-        bool hasPrev = false, hasNext = false;
-        juce::String prevNumber, nextNumber;   // 이웃 패치가 없으면 빈 문자열
-        juce::String prevText, nextText;
+        juce::Rectangle<int> prevBounds, nameBounds, nextBounds;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PatchBar)
     };

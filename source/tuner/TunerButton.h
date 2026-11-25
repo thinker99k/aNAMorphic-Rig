@@ -15,6 +15,9 @@ namespace rig
         void setActive (bool shouldBeActive);  // 대화상자가 열려 있는 동안 true
         void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 
+        // 아이콘: 정사각형 icon 안에 반원 호 + 오른쪽으로 기운 바늘 (Live 아래 줄 튜너 스위치도 같이 쓴다)
+        static void drawIcon (juce::Graphics&, juce::Rectangle<float> icon, juce::Colour, float thickness);
+
     private:
         bool active = false;
 

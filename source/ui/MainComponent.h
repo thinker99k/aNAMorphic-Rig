@@ -24,12 +24,11 @@ namespace rig
     //  ├──────────────────────────────────────────────┤
     //  │ StatusBar (62): [노브] IN | CPU | [MUTE] OUT [노브] │
     //  └──────────────────────────────────────────────┘
-    //  중앙 = 창에서 TopBar(40) 와 StatusBar(62) 를 뗀 나머지
-    //   - Edit 모드: EditView = 패치 맵 : 파라미터 바 : 블록 선택기 : 씬 바 = 3 : 1 : 3 : 1 (EditView.h 참고)
-    //   - Live 모드: LiveView = 씬 패드 4 x 2 (나머지) + 패치 줄 [PREV][NEXT][Live] (1/8) (LiveView.h 참고)
-    //   - 두 뷰는 같은 영역을 받고 setVisible 로 하나만 보인다 (파괴하지 않으므로 편집 상태 유지)
-    //   - 맨 아래 줄은 둘 다 가운데 높이의 1/8 이라, 모드를 바꿔도 Live 버튼이 같은 자리에 있다
-    //  TopBar 와 StatusBar 는 두 모드에서 그대로
+    //  StatusBar 는 두 모드에서 그대로. 그 위가 모드마다 바뀐다
+    //   - Edit 모드: TopBar(40) + EditView = 패치 맵 : 파라미터 바 : 블록 선택기 : 씬 바 = 3 : 1 : 3 : 1 (EditView.h 참고)
+    //   - Live 모드: LiveView = 패치 줄 + 씬 패드 4 x 2 + 아래 줄 [채널][튜너][Patch/Stomp][Live] (LiveView.h 참고)
+    //   - 두 뷰는 파괴하지 않고 setVisible 로 하나만 보인다 (편집 상태 유지). Live 에서는 TopBar 도 숨긴다
+    //   - Live 의 위·아래 줄 높이 = 편집 화면 씬 바 높이 (EditView 높이의 1/8) 라, 모드를 바꿔도 Live 버튼이 같은 자리에 있다
     class MainComponent final : public juce::Component,
                                 public juce::FileDragAndDropTarget,
                                 private juce::Timer,
@@ -53,7 +52,7 @@ namespace rig
     private:
         enum class ViewMode { edit, live };
 
-        void setViewMode (ViewMode);   // 가운데만 EditView ↔ LiveView 로 바꾼다 (두 뷰는 파괴하지 않는다)
+        void setViewMode (ViewMode);   // TopBar + EditView ↔ LiveView (두 뷰는 파괴하지 않는다)
         void timerCallback() override;
         void openSettings();
         void openSpectrum();   // [SPECTRUM]
