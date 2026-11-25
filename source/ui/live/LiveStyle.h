@@ -11,8 +11,13 @@ namespace rig::live
     inline const juce::Colour border     { 0xff4c5860 };
     inline const juce::Colour liveFill   { 0xff1c3b22 };
     inline const juce::Colour liveGreen  { 0xff35c435 };
+    inline const juce::Colour patchFill  { 0xff3b1c1c };   // Patch 모드 켜짐 (Live 녹색과 같은 밝기의 빨강)
+    inline const juce::Colour patchRed   { 0xffd9534f };
+    inline const juce::Colour stompFill  { 0xff1c2a3b };   // Stomp 모드 켜짐 (같은 밝기의 파랑)
+    inline const juce::Colour stompBlue  { 0xff4a90d9 };
     inline const juce::Colour tunerFill  { 0xff3b2c12 };   // 튜너 켜짐 바탕 (테두리·글자는 TunerGauge::offColour 주황)
     inline const juce::Colour stepFill   { 0xff2a343b };
+    inline const juce::Colour boxFill    { 0xff1c2328 };   // 표시 칸 바탕 (패치 이름, 간이 튜너): 줄 바탕보다 어둡게
     inline const juce::Colour stepBorder { 0xff8a949b };
     inline const juce::Colour textLight  { 0xfff2f4f5 };
     inline const juce::Colour textMuted  { 0xffaeb7bd };
@@ -43,6 +48,15 @@ namespace rig::live
         g.setColour (stepFill);
         g.fillRoundedRectangle (area, 6.0f);
         g.setColour (outline);
+        g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.0f);
+    }
+
+    // 표시 칸 (패치 이름, 간이 튜너): 어두운 바탕 + 1 px 테두리
+    inline void drawDisplayBox (juce::Graphics& g, juce::Rectangle<float> area)
+    {
+        g.setColour (boxFill);
+        g.fillRoundedRectangle (area, 6.0f);
+        g.setColour (border);
         g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.0f);
     }
 

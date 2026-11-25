@@ -13,6 +13,7 @@ namespace rig
         constexpr float numberFontSize = 40.0f;   // ScenePads 의 씬 번호와 같은 글꼴
         constexpr float nameFontSize = 40.0f;
         constexpr int nameInset = 15;      // 이름 칸 안쪽 좌우 여백
+        constexpr float dividerInset = 14.0f;   // 번호 | 이름 구분선의 위아래 여백 (상자 끝까지 잇지 않는다)
 
         // iconSize x iconSize 안에 채워진 삼각형 (◀ / ▶)
         void drawTriangle (juce::Graphics& g, juce::Rectangle<float> box, bool pointsLeft)
@@ -91,9 +92,21 @@ namespace rig
         drawStepButton (g, prevBounds, true, patch - 1, hasPrev());
         drawStepButton (g, nextBounds, false, patch + 1, hasNext());
 
+        // 이름 표시 칸 (줄 바탕보다 어둡게): [지금 패치 번호 (이전 버튼과 같은 폭) | 이름]
+        live::drawDisplayBox (g, nameBounds.toFloat());
+
+        auto nameArea = nameBounds;
+        const auto numberArea = nameArea.removeFromLeft (prevBounds.getWidth());
+
+        g.setColour (live::border);
+        g.drawVerticalLine (numberArea.getRight(), (float) numberArea.getY() + dividerInset, (float) numberArea.getBottom() - dividerInset);
+
         g.setColour (live::textLight);
-        g.setFont (live::semiBoldFont (nameFontSize));
-        g.drawText (model.getPatchName(), nameBounds.reduced (nameInset, 0), juce::Justification::centred, true);
+        g.setFont (live::boldFont (numberFontSize));
+        g.drawText (juce::String (patch).paddedLeft ('0', 2), numberArea, juce::Justification::centred, false);
+
+        g.setFont (live::boldFont (nameFontSize));
+        g.drawText (model.getPatchName(), nameArea.reduced (nameInset, 0), juce::Justification::centred, true);
     }
 
     void PatchBar::mouseDown (const juce::MouseEvent& e)

@@ -7,14 +7,16 @@ namespace rig
 {
     namespace
     {
-        constexpr int units = 10;   // 폭 비율: 채널 5, 튜너 스위치 1, 간이 튜너 2, Patch / Stomp 1, Live 1
-        constexpr int channelUnits = 5, tunerUnits = 1, stripUnits = 2, modeUnits = 1;
+        // 칸: 편집 화면 씬 바와 같은 14칸 격자 (bottomBarCell). Patch / Stomp 는 Copy / Swap, Live 는 씬 바 Live 와 같은 칸
+        //   [채널 0~5] [빈칸 6] [튜너 스위치 7] [간이 튜너 8~9] [Patch 10] [Stomp 11] [빈칸 12] [Live 13]
+        constexpr int tunerCell = 7, stripCell = 8, stripCells = 2, patchCell = 10, stompCell = 11;
 
-        // 채널 줄: 파라미터 바 IN / OUT 과 같은 크기 ([이름표 110] 8 [목록 320], 높이 28), 두 줄 사이 rowGap
-        constexpr int labelWidth = 110, boxGap = 8, boxWidth = 320, rowHeight = 28, rowGap = 6;
+        // 채널 두 줄 사이 (줄 모양은 파라미터 바 IN / OUT 과 같다: Widgets.h channelCells 등)
+        constexpr int rowGap = 6;
 
         constexpr float tunerIconSize = 24.0f, tunerIconThickness = 2.0f;
         constexpr float tunerTextGap = 4.0f;   // 아이콘과 "Tuner" 사이
+        constexpr float offAlpha = 0.35f;      // 튜너가 꺼져 있을 때 간이 튜너 칸
     }
 
     LiveStatusBar::LiveStatusBar (RigModel& m, AudioEngine& e, juce::AudioDeviceManager& dm)
@@ -50,6 +52,7 @@ namespace rig
 
         addAndMakeVisible (inputBox);
         addAndMakeVisible (outputBox);
+        tunerStrip.setAlpha (offAlpha);
         addAndMakeVisible (tunerStrip);
 
         model.addChangeListener (this);
@@ -93,6 +96,7 @@ namespace rig
         engine.setTunerActive (tunerOn);   // 켜져 있는 동안 출력 무음. 켜고 끌 때 페이드는 엔진이 한다
         analyzer.reset();
         tunerStrip.setState ({});
+        tunerStrip.setAlpha (tunerOn ? 1.0f : offAlpha);   // 꺼져 있으면 튜너 칸 전체를 흐리게
 
         if (tunerOn)
             startTimerHz (TunerAnalyzer::refreshHz);
@@ -109,33 +113,27 @@ namespace rig
 
     void LiveStatusBar::resized()
     {
-        auto area = getLocalBounds().reduced (live::gap);
-        const int unit = (area.getWidth() - (units - 1) * live::gap) / units;
-        const auto take = [&] (int n)
-        {
-            auto part = area.removeFromLeft (n * unit + (n - 1) * live::gap);
-            area.removeFromLeft (live::gap);
-            return part;
-        };
+        const auto area = getLocalBounds().reduced (live::gap);
+        tunerBounds = bottomBarCell (area, tunerCell);
+        tunerStrip.setBounds (bottomBarCell (area, stripCell, stripCells));
+        patchBounds = bottomBarCell (area, patchCell);
+        stompBounds = bottomBarCell (area, stompCell);
+        liveBounds = bottomBarCell (area, bottomBarCells - 1);
 
-        auto channels = take (channelUnits).withSizeKeepingCentre (labelWidth + boxGap + boxWidth, 2 * rowHeight + rowGap);
-        channels.setX (live::gap);
+        // 채널 (0 ~ 5 칸, 파라미터 바 IN / OUT 과 같은 자리·크기), 세로 가운데에 두 줄
+        auto channels = bottomBarCell (area, 0, channelCells);
+        channels = channels.withSizeKeepingCentre (channels.getWidth(), 2 * channelRowHeight + rowGap);
 
-        auto inputRow = channels.removeFromTop (rowHeight);
+        auto inputRow = channels.removeFromTop (channelRowHeight);
         channels.removeFromTop (rowGap);
         auto outputRow = channels;
 
-        inputLabel.setBounds (inputRow.removeFromLeft (labelWidth));
-        inputRow.removeFromLeft (boxGap);
+        inputLabel.setBounds (inputRow.removeFromLeft (channelLabelWidth));
+        inputRow.removeFromLeft (channelLabelGap);
         inputBox.setBounds (inputRow);
-        outputLabel.setBounds (outputRow.removeFromLeft (labelWidth));
-        outputRow.removeFromLeft (boxGap);
+        outputLabel.setBounds (outputRow.removeFromLeft (channelLabelWidth));
+        outputRow.removeFromLeft (channelLabelGap);
         outputBox.setBounds (outputRow);
-
-        tunerBounds = take (tunerUnits);
-        tunerStrip.setBounds (take (stripUnits));
-        modeBounds = take (modeUnits);
-        liveBounds = area;   // 나머지 (나눗셈 나머지 포함), 오른쪽 끝 = 편집 화면 Live 버튼과 같은 끝
     }
 
     void LiveStatusBar::paint (juce::Graphics& g)
@@ -153,30 +151,41 @@ namespace rig
         else
             live::drawButtonBox (g, tunerArea, live::stepBorder);
 
-        const auto font = live::boldFont (live::buttonFontSize (tunerArea.getHeight()));
-        const float blockHeight = tunerIconSize + tunerTextGap + font.getHeight();
+        const auto font = live::boldFont (live::buttonFontSize (tunerArea.getHeight()));   // Patch 글자와 Live 도 같은 글꼴
+        const auto tunerFont = tunerOn ? font : juce::Font (juce::FontOptions (font.getHeight()));   // 켜져 있으면(모드 중) 굵게
+        const float blockHeight = tunerIconSize + tunerTextGap + tunerFont.getHeight();
         const auto icon = juce::Rectangle<float> (tunerIconSize, tunerIconSize)
                               .withCentre ({ tunerArea.getCentreX(), tunerArea.getCentreY() - blockHeight * 0.5f + tunerIconSize * 0.5f });
         TunerButton::drawIcon (g, icon, tunerColour, tunerIconThickness);
 
         g.setColour (tunerColour);
-        g.setFont (font);
-        g.drawText ("Tuner", tunerArea.withY (icon.getBottom() + tunerTextGap).withHeight (font.getHeight()),
+        g.setFont (tunerFont);
+        g.drawText ("Tuner", tunerArea.withY (icon.getBottom() + tunerTextGap).withHeight (tunerFont.getHeight()),
                     juce::Justification::centredTop, false);
 
-        // Patch / Stomp: 두 줄, 지금 모드(Patch)만 흰색 굵게
-        const auto modeArea = modeBounds.toFloat();
-        live::drawButtonBox (g, modeArea, live::border);
+        // Patch / Stomp: 칸 하나씩, 글자는 가운데. 지금 모드는 Live 처럼 켜짐 표시 (Patch 빨강, Stomp 파랑) + 굵게,
+        // 다른 쪽은 보통 버튼에 흐린 글자. 지금은 Patch 모드뿐
+        struct ModeCell { juce::Rectangle<int> bounds; const char* name; juce::Colour fill, colour; bool current; };
+        const ModeCell modeCells[] { { patchBounds, "Patch", live::patchFill, live::patchRed, true },
+                                     { stompBounds, "Stomp", live::stompFill, live::stompBlue, false } };
 
-        const float lineHeight = font.getHeight();
-        auto lines = modeArea.withSizeKeepingCentre (modeArea.getWidth(), lineHeight * 2.0f + tunerTextGap);
-        g.setColour (live::textLight);
-        g.setFont (font);
-        g.drawText ("Patch", lines.removeFromTop (lineHeight), juce::Justification::centred, false);
-        lines.removeFromTop (tunerTextGap);
-        g.setColour (live::textMuted.withAlpha (0.5f));
-        g.setFont (juce::FontOptions (font.getHeight()));
-        g.drawText ("Stomp", lines, juce::Justification::centred, false);
+        for (const auto& m : modeCells)
+        {
+            if (m.current)
+            {
+                live::drawIndicatorBox (g, m.bounds.toFloat(), m.fill, m.colour);
+                g.setColour (m.colour);
+                g.setFont (font);
+            }
+            else
+            {
+                live::drawButtonBox (g, m.bounds.toFloat(), live::border);
+                g.setColour (live::textMuted.withAlpha (0.5f));
+                g.setFont (juce::FontOptions (font.getHeight()));
+            }
+
+            g.drawText (m.name, m.bounds, juce::Justification::centred, false);
+        }
 
         // Live: 켜짐 표시 (편집 화면 Live 버튼과 같은 글자 크기를 굵게)
         const auto liveArea = liveBounds.toFloat();

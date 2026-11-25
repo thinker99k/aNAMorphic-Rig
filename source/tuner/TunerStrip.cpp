@@ -1,5 +1,7 @@
 #include "TunerStrip.h"
 
+#include "ui/live/LiveStyle.h"
+
 #include <cmath>
 
 namespace rig
@@ -9,11 +11,12 @@ namespace rig
         constexpr int numBars = 3;                              // 한쪽 | 개수
         constexpr double barCents[numBars - 1] { 10.0, 20.0 };  // 안쪽 | 들이 맡는 오차의 끝 (마지막 | 는 그 너머 전부)
 
-        constexpr float noteWidth = 40.0f;      // 음 이름 칸
-        constexpr float barSpacing = 12.0f;     // | 사이 (음 이름 칸 끝에서 첫 | 까지도 같은 값)
+        // 가로 폭 합 = noteWidth + 2 x (barSpacing x numBars + arrowGap + arrowSize) = 124 (칸 2개 = 148 안)
+        constexpr float noteWidth = 32.0f;      // 음 이름 칸
+        constexpr float barSpacing = 9.0f;      // | 사이 (음 이름 칸 끝에서 첫 | 까지도 같은 값)
         constexpr float barWidth = 3.0f, barHeight = 22.0f;
-        constexpr float arrowGap = 10.0f;       // 바깥 | 와 화살표 사이
-        constexpr float arrowSize = 14.0f;
+        constexpr float arrowGap = 7.0f;        // 바깥 | 와 화살표 사이
+        constexpr float arrowSize = 12.0f;
         constexpr float topShare = 0.62f;       // 윗줄이 차지하는 높이 비율
         constexpr float noteFontSize = 30.0f, centsFontSize = 14.0f;
 
@@ -43,6 +46,8 @@ namespace rig
 
     void TunerStrip::paint (juce::Graphics& g)
     {
+        live::drawDisplayBox (g, getLocalBounds().toFloat());   // 어두운 표시 칸 (꺼져 있으면 LiveStatusBar 가 칸 전체를 흐리게)
+
         auto area = getLocalBounds().toFloat();
         const auto top = area.removeFromTop (area.getHeight() * topShare);
         const auto bottom = area;
