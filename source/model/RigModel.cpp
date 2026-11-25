@@ -925,6 +925,8 @@ namespace rig
         if (sameList && (target == position || target == position + 1))
             return;
 
+        remember();
+
         // 먼저 새 자리에 넣고 나중에 옛 자리를 지운다 (지우면서 병렬이 풀려도 넣을 자리가 사라지지 않게).
         // 새 자리의 블록은 새 id, 새 인스턴스
         auto moved = *findSlot (slotId);
