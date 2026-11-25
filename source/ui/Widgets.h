@@ -874,9 +874,10 @@ namespace rig
         }
 
         // 머리띠: 종류 색으로 채운 윗줄 (위 두 모서리만 둥글게) + 흰 종류 글자 (굵게)
-        // textColour: 꺼진 블록은 흐린 흰색
+        // textColour: 꺼진 블록은 흐린 흰색. justification: 블록은 왼쪽, IN / OUT 은 가운데
         inline void drawBlockHeader (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, juce::Colour colour,
-                                     juce::Colour textColour = juce::Colours::white)
+                                     juce::Colour textColour = juce::Colours::white,
+                                     juce::Justification justification = juce::Justification::centredLeft)
         {
             const auto strip = band (area).toFloat().reduced (1.5f, 0).withTrimmedTop (1.5f);
             juce::Path path;
@@ -886,7 +887,7 @@ namespace rig
 
             g.setColour (textColour);
             g.setFont (headerFont());
-            g.drawText (text, headerLine (area), juce::Justification::centredLeft, true);
+            g.drawText (text, headerLine (area), justification, true);
         }
 
         // 본문 두 줄: 이름 + 중요 값 (같은 색, 보통 흰색). 넘치면 말줄임
@@ -942,42 +943,91 @@ namespace rig
         }
 
         // 끄는 동안 커서에 붙는 블록 그림의 불투명도 (밑의 놓을 자리 표시가 비쳐 보이게)
-        constexpr float dragImageAlpha = 0.6f;
+        constexpr float dragImageAlpha = 0.70f;
 
-        // 떼면 삭제되는 위치에서 커서의 블록 그림: 블록 오른쪽 위 꼭짓점에서 안쪽으로 deleteMarkInset 들어간 곳을 중심으로 빨간 원 안 흰 X.
-        // 원이 블록 밖으로 나가므로 끄는 그림은 위·오른쪽에 (반지름 - 안쪽) 만큼 여백을 둔다 (보통 그림도 같은 크기라 블록 위치가 그대로)
-        constexpr float deleteMarkRadius = 10.0f, deleteMarkInset = 3.0f;
+        // 끄는 그림의 표시: 블록 오른쪽 위 꼭짓점에서 안쪽으로 markInset 들어간 곳을 중심으로 원 하나
+        //  - remove : 빨간 원 + 흰 X (패치맵 블록, 떼면 삭제되는 위치)
+        //  - add    : 초록 원 + 흰 + (선택기 항목, 새 블록이 들어간다)
+        //  - replace: 어두운 노란 원 + 흰 ↔ (선택기 항목을 기존 블록 위에, 교체)
+        //  - swap   : 어두운 노란 원 + 흰 ⇄ (패치맵 블록을 다른 블록 위에, 맞바꾸기)
+        // 원이 블록 밖으로 나가므로 끄는 그림은 사방에 (반지름 - 안쪽) 만큼 여백을 둔다: 표시가 바뀌어도 블록 위치가 그대로, 그림 가운데 = 블록 가운데
+        enum class DragMark { none, remove, add, replace, swap };
+        constexpr float markRadius = 10.0f, markInset = 3.0f;
 
-        // 블록 그림 → 끄는 그림 (여백 포함). withMark 면 X 원을 얹는다
-        inline juce::Image createDragImage (const juce::Image& block, bool withMark)
+        inline juce::Image createDragImage (const juce::Image& block, DragMark mark)
         {
-            const int pad = (int) std::ceil (deleteMarkRadius - deleteMarkInset);
-            juce::Image image (juce::Image::ARGB, block.getWidth() + pad, block.getHeight() + pad, true);
+            const int pad = (int) std::ceil (markRadius - markInset);
+            juce::Image image (juce::Image::ARGB, block.getWidth() + 2 * pad, block.getHeight() + 2 * pad, true);
             juce::Graphics g (image);
-            g.drawImageAt (block, 0, pad);
+            g.drawImageAt (block, pad, pad);
 
-            if (withMark)
+            if (mark != DragMark::none)
             {
-                const juce::Point<float> centre ((float) block.getWidth() - deleteMarkInset, (float) pad + deleteMarkInset);
-                g.setColour (juce::Colours::red);
-                g.fillEllipse (juce::Rectangle<float> (deleteMarkRadius * 2.0f, deleteMarkRadius * 2.0f).withCentre (centre));
+                const juce::Point<float> centre ((float) (pad + block.getWidth()) - markInset, (float) pad + markInset);
+                g.setColour (mark == DragMark::remove ? juce::Colours::red
+                           : mark == DragMark::add  ? juce::Colours::limegreen.darker (0.2f)
+                                                    : juce::Colour (0xffc9a227));   // 어두운 노랑 (replace / swap)
+                g.fillEllipse (juce::Rectangle<float> (markRadius * 2.0f, markRadius * 2.0f).withCentre (centre));
 
-                const float arm = deleteMarkRadius * 0.4f;
+                const float arm = markRadius * 0.45f;
                 g.setColour (juce::Colours::white);
-                g.drawLine (centre.x - arm, centre.y - arm, centre.x + arm, centre.y + arm, 2.0f);
-                g.drawLine (centre.x + arm, centre.y - arm, centre.x - arm, centre.y + arm, 2.0f);
+
+                if (mark == DragMark::remove)
+                {
+                    const float d = arm * 0.9f;
+                    g.drawLine (centre.x - d, centre.y - d, centre.x + d, centre.y + d, 2.0f);
+                    g.drawLine (centre.x + d, centre.y - d, centre.x - d, centre.y + d, 2.0f);
+                }
+                else if (mark == DragMark::add)
+                {
+                    g.drawLine (centre.x - arm, centre.y, centre.x + arm, centre.y, 2.0f);
+                    g.drawLine (centre.x, centre.y - arm, centre.x, centre.y + arm, 2.0f);
+                }
+                else
+                {
+                    // 가로 화살표: replace = ↔ (한 줄, 양쪽 화살촉), swap = ⇄ (위 →, 아래 ←)
+                    const auto arrow = [&] (float y, bool right, bool left)
+                    {
+                        g.drawLine (centre.x - arm, y, centre.x + arm, y, 2.0f);
+                        const float h = 3.0f;
+
+                        if (right)
+                        {
+                            juce::Path head;
+                            head.addTriangle (centre.x + arm + 1.5f, y, centre.x + arm - h, y - h, centre.x + arm - h, y + h);
+                            g.fillPath (head);
+                        }
+
+                        if (left)
+                        {
+                            juce::Path head;
+                            head.addTriangle (centre.x - arm - 1.5f, y, centre.x - arm + h, y - h, centre.x - arm + h, y + h);
+                            g.fillPath (head);
+                        }
+                    };
+
+                    if (mark == DragMark::replace)
+                    {
+                        arrow (centre.y, true, true);
+                    }
+                    else
+                    {
+                        arrow (centre.y - 3.0f, true, false);
+                        arrow (centre.y + 3.0f, false, true);
+                    }
+                }
             }
 
             image.multiplyAllAlphas (dragImageAlpha);
             return image;
         }
 
-        // 선택기에서 끌 때 커서에 붙는 블록 그림. 미지정 블록은 emptyFill / emptyText, 그 밖은 중요 값 줄에 새 블록의 기본값
-        inline juce::Image createImage (BlockType type, const juce::String& name)
+        // 선택기에서 끌 때 커서에 붙는 블록 그림 (mark 표시 포함). 미지정 블록은 emptyFill / emptyText, 그 밖은 중요 값 줄에 새 블록의 기본값
+        inline juce::Image createImage (BlockType type, const juce::String& name, DragMark mark = DragMark::add)
         {
             const juce::Rectangle<int> area (width, height);
-            juce::Image image (juce::Image::ARGB, width, height, true);
-            juce::Graphics g (image);
+            juce::Image block (juce::Image::ARGB, width, height, true);
+            juce::Graphics g (block);
             const bool none = type == BlockType::None;
             const auto colour = colourFor (type);
 
@@ -985,8 +1035,7 @@ namespace rig
             drawBlockHeader (g, area, labelFor (type), colour);
             drawBlockText (g, area, none ? emptyText : name, none ? juce::String() : dbText (0.0), juce::Colours::white);
             drawBlockFrame (g, area, none ? juce::Colours::grey.darker() : colour, false, false);
-            image.multiplyAllAlphas (dragImageAlpha);
-            return image;
+            return createDragImage (block, mark);
         }
     }
 }
