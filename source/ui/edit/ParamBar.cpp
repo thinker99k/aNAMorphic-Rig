@@ -1,6 +1,7 @@
 #include "ParamBar.h"
 
 #include "ValueSteps.h"
+#include "engine/param/common/BlockParams.h"
 
 namespace rig
 {
@@ -93,6 +94,16 @@ namespace rig
         paramResetButton.onClick = [this] { model.resetBlockParams (model.getSelectedSlotId()); };
         addChildComponent (paramResetButton);
 
+        // 공용 Output: 파라미터가 있는 블록 종류 모두 (번호는 종류마다 BlockParams::outputIndex). 드래그가 끝나면 저장
+        auto setOutput = [this] (bool save)
+        {
+            if (const auto* slot = model.getSelectedSlot())
+                model.setParam (slot->id, BlockParams::outputIndex (slot->type), (float) outputKnob.getValue(), save);
+        };
+        outputKnob.onValueChanged = [setOutput] (double) { setOutput (false); };
+        outputKnob.onDragEnded = [setOutput] { setOutput (true); };
+        addChildComponent (outputKnob);
+
         model.addChangeListener (this);
         deviceManager.addChangeListener (this);
         updateFromModel();
@@ -130,6 +141,8 @@ namespace rig
 
         levelResetButton.setVisible (isMerge);
         paramResetButton.setVisible (false);   // 블록이면 아래에서 패널이 있을 때만
+        outputKnob.setVisible (false);
+        repaint();   // 공용 Output 앞 구분선 (Output 이 보일 때만 그린다)
 
         if (isMerge)
         {
@@ -169,6 +182,10 @@ namespace rig
         }
 
         paramResetButton.setVisible (panel != nullptr);
+        outputKnob.setVisible (panel != nullptr);
+
+        if (panel != nullptr)
+            outputKnob.setValue (model.getParam (*slot, BlockParams::outputIndex (type)));
     }
 
     void ParamBar::updateMerge (const RigModel::Parallel& parallel)
@@ -238,12 +255,15 @@ namespace rig
         g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.05f));
         g.setColour (juce::Colours::black.withAlpha (0.4f));
         g.drawHorizontalLine (0, 0.0f, (float) getWidth());
+
+        if (outputKnob.isVisible())
+            drawCellSeparator (g, getLocalBounds().reduced (bottomBarGap), outputCell - 1);   // 블록 종류별 파라미터 | 공용 Output
     }
 
     void ParamBar::resized()
     {
         // 14칸 격자 (bottomBarCell, 아래 씬 바와 같은 격자). 바깥 여백 6 px
-        //   블록 : [Param Reset 0] [ 1 ] [패널: 종류별 칸 2 ~ 12] [전원 13]
+        //   블록 : [Param Reset 0] [ 1 ] [패널: 종류별 칸 2 ~ 11] | [공용 Output 12] [전원 13]
         //   IN / OUT : [채널 0 ~ 5]
         //   합류 : [Level Reset 0] [ 1 ] [위 갈래 2 ~ 5] [ 6 ] [아래 갈래 7 ~ 10] [ 11 ~ 13 ]
         // 리셋은 왼쪽 끝 (리셋은 왼쪽). 중간 리셋이라 높이 = 큰 리셋(씬 바 Scene Reset, 같은 0번 칸)의 2/3, 세로 가운데
@@ -259,6 +279,8 @@ namespace rig
 
         if (panel != nullptr)
             panel->setBounds (grid);   // 패널이 격자 칸을 직접 고른다 (bottomBarCell)
+
+        outputKnob.setBounds (bottomBarCell (grid, outputCell));
 
         // IN / OUT 선택 시: 0 ~ 5 칸에 [이름표 channelLabelWidth] 8 [채널 목록 = 나머지], 높이 28 (Live 아래 줄 채널과 같다)
         auto row = bottomBarCell (grid, 0, channelCells);

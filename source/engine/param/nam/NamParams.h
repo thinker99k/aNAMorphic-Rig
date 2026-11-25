@@ -7,11 +7,14 @@
 
 namespace rig
 {
-    // NAM 블록용 3밴드 EQ 파라미터 정의 (값은 BlockParams, 번호는 Index). EQ 는 항상 켜져 있다 (0 dB = 그대로)
+    // NAM 블록 파라미터 정의 (값은 BlockParams, 번호는 Index). 모두 항상 켜져 있다 (0 dB = 그대로)
+    //  - Gain: 모델 앞 입력 게인 (드라이브)
+    //  - 3밴드 EQ (Bass / Middle / Treble) + Presence / Resonance: 모델 뒤
+    // 공용 Output 은 BlockParams 가 모든 종류 뒤에 붙인다
     struct NamParams
     {
         // 범위·경계선·폭 상수는 여기에만 둔다 (UI 도 이 값을 쓴다)
-        static constexpr double gainMinDb = -12.0, gainMaxDb = 12.0, gainDefaultDb = 0.0;
+        static constexpr double gainMinDb = -12.0, gainMaxDb = 12.0, gainDefaultDb = 0.0;   // dB 파라미터 모두 (Gain, Bass / Middle / Treble, Presence, Resonance)
 
         static constexpr double h1Hz = 400.0;    // Bass / Middle 경계
         static constexpr double h2Hz = 2500.0;   // Middle / Treble 경계
@@ -23,13 +26,21 @@ namespace rig
         static constexpr double middleMinHz = h1Hz, middleMaxHz = h2Hz,    middleDefaultHz = 1000.0;
         static constexpr double trebleMinHz = h2Hz, trebleMaxHz = 10000.0, trebleDefaultHz = 5000.0;
 
+        // Presence / Resonance: 실제 앰프의 파워앰프 노브를 모델 뒤 EQ 로 흉내 낸다 (캡처라 피드백·스피커 상호작용은 재현 못 함). 주파수 고정
+        //  - Presence = high shelf 4 kHz, Q 1/√2 (봉우리 없이 가장 가파름)
+        //  - Resonance = low shelf 80 Hz Q 1/√2 + peak 80 Hz Q 1.4, 두 필터 모두 노브 값의 2/3.
+        //    shelf 는 경계에서 게인의 절반이라 80 Hz 의 합 = 1/3 + 2/3 = 노브 값. +12 dB 이면 76 Hz 근처 +12.2, 그 아래 약 +8 ~ 9 dB
+        static constexpr double presenceHz = 4000.0, presenceQ = 0.70710678118654752;
+        static constexpr double resonanceHz = 80.0, resonanceShelfQ = 0.70710678118654752, resonancePeakQ = 1.4;
+        static constexpr double resonanceShare = 2.0 / 3.0;
+
         static constexpr double eqQ = 0.8;       // Bass / Treble 폭 (고정, 약 1.7 옥타브)
 
         // Middle 폭 Q (로그). 12시 = √(0.2 × 3.2) = 0.8 = 기본값 = Bass / Treble 과 같은 폭. 0.2 = 약 4.7 옥타브, 3.2 = 약 0.45 옥타브
         // 낮추면 Middle 이 H1 아래 / H2 위로 넘친다 (허용: 경계는 중심 주파수 순서만 지킨다)
         static constexpr double middleQMin = 0.2, middleQMax = 3.2, middleQDefault = 0.8;
 
-        enum Index : int { bassDb, bassHz, middleDb, middleHz, middleQ, trebleDb, trebleHz };
+        enum Index : int { bassDb, bassHz, middleDb, middleHz, middleQ, trebleDb, trebleHz, gainDb, presenceDb, resonanceDb };
 
         static const std::vector<ParamSpec>& specs()
         {
@@ -40,7 +51,10 @@ namespace rig
                 { "middleHz", (float) middleMinHz, (float) middleMaxHz, (float) middleDefaultHz, steps::hzDecimals },
                 { "middleQ",  (float) middleQMin,  (float) middleQMax,  (float) middleQDefault,  steps::qDecimals },
                 { "trebleDb", (float) gainMinDb,   (float) gainMaxDb,   (float) gainDefaultDb,   steps::dbDecimals },
-                { "trebleHz", (float) trebleMinHz, (float) trebleMaxHz, (float) trebleDefaultHz, steps::hzDecimals } };
+                { "trebleHz", (float) trebleMinHz, (float) trebleMaxHz, (float) trebleDefaultHz, steps::hzDecimals },
+                { "gainDb",      (float) gainMinDb, (float) gainMaxDb, (float) gainDefaultDb, steps::dbDecimals },
+                { "presenceDb",  (float) gainMinDb, (float) gainMaxDb, (float) gainDefaultDb, steps::dbDecimals },
+                { "resonanceDb", (float) gainMinDb, (float) gainMaxDb, (float) gainDefaultDb, steps::dbDecimals } };
             return s;
         }
     };

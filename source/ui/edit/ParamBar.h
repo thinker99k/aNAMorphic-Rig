@@ -6,6 +6,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/ParamKnob.h"
 #include "ui/Widgets.h"
 
 #include <array>
@@ -14,7 +15,7 @@
 namespace rig
 {
     // 패치 맵 아래: 선택된 블록 / 합류 / IN·OUT 의 파라미터.
-    //   블록  : [ [Param Reset] 블록 종류별 파라미터 패널 (ParamPanel) ...                    (전원) ]   현재 씬의 값
+    //   블록  : [ [Param Reset] 블록 종류별 파라미터 패널 (ParamPanel) ...   | (Output) (전원) ]   현재 씬의 값. Output 은 모든 종류 공용
     //   합류  : [ [Level Reset] (빨간 전원) Upper  -3.0 dB   (빨간 전원) Lower  -3.0 dB        ]   현재 씬의 값
     //                   ━━━━━━●━━               ━━━━━━●━━
     //   IN    : [ Input channel  [1: ...    v] ]   장치 입력 채널 하나
@@ -68,6 +69,8 @@ namespace rig
         std::array<LeftClickOnly<juce::Slider>, 2> levelSlider;
         LeftClickOnly<juce::TextButton> levelResetButton { "Level\nReset" };
         LeftClickOnly<juce::TextButton> paramResetButton { "Param\nReset" };   // 블록 파라미터가 있는 종류만, 왼쪽 끝 (Level Reset 과 같은 자리)
+        static constexpr int outputCell = 12;   // 공용 Output 칸 (모든 블록 종류 고정, 앞에 구분선 |)
+        ParamKnob outputKnob { "Output", CommonParams::outputMinDb, CommonParams::outputMaxDb, CommonParams::outputDefaultDb, ParamKnob::ValueType::Db };
         std::unique_ptr<ParamPanel> panel;
         BlockType panelType = BlockType::None;   // 지금 패널의 블록 종류
 

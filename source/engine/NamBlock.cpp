@@ -1,5 +1,6 @@
 #include "NamBlock.h"
 #include "AppPaths.h"
+#include "engine/param/common/GainStage.h"
 #include "engine/param/nam/EqStage.h"
 
 #include <NAM/dsp.h>
@@ -41,7 +42,10 @@ namespace rig
             auto block = std::unique_ptr<NamBlock> (new NamBlock (std::move (model)));
 
             if (params != nullptr)
+            {
+                block->inputGain = std::make_unique<GainStage> (params, NamParams::gainDb);
                 block->setStage (std::make_unique<EqStage> (std::move (params)));
+            }
 
             return block;
         }
@@ -64,6 +68,11 @@ namespace rig
     {
         // Reset() 은 메모리를 할당하고 prewarm 까지 수행 -> 오디오 스레드에서 호출 금지
         model->Reset (sampleRate, maxBlockSize);
+        gained.assign ((size_t) maxBlockSize, 0.0f);
+
+        if (inputGain != nullptr)
+            inputGain->prepare (sampleRate, maxBlockSize);
+
         rememberPrepare (sampleRate, maxBlockSize);
     }
 
@@ -72,6 +81,15 @@ namespace rig
         // NAM API 는 [채널][샘플] 형태의 포인터 배열을 받는다
         float* inputs[1]  = { const_cast<float*> (in) };
         float* outputs[1] = { out };
+
+        // Gain: 입력을 복사해 곱한 뒤 모델에 넣는다 (prepare 의 maxBlockSize 를 넘는 구간은 오지 않는다)
+        if (inputGain != nullptr && numSamples <= (int) gained.size())
+        {
+            std::copy (in, in + numSamples, gained.data());
+            inputGain->process (gained.data(), numSamples);
+            inputs[0] = gained.data();
+        }
+
         model->process (inputs, outputs, numSamples);
     }
 

@@ -87,7 +87,7 @@ namespace rig
     //                                  "blocks": [ { "type": "nam", "file": "/path/lead.nam", "on": [ ... ] } ] } ] },
     //                { "type": "ir", "file": "/path/cab.wav", "on": [ false, true, true, true, true, true, true, true ],
     //                  "params": { "lowCutOn": [ false, ... 8개 ], "lowCutHz": [ 20, ... 8개 ], ... } } ]
-    //  블록의 "params" = 씬별 블록 파라미터 (NAM / IR 만). 이름은 각 종류의 specs. 없거나 이상한 값은 기본값, 숫자는 범위 안으로
+    //  블록의 "params" = 씬별 블록 파라미터 (NAM / IR 만). 이름은 각 종류의 specs + 공용 "outputDb". 없거나 이상한 값은 기본값, 숫자는 범위 안으로
     //  }
 
     juce::String RigModel::sanitizePatchName (const juce::var& value, const juce::String& fallback)
