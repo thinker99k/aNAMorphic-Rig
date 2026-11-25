@@ -6,18 +6,20 @@ namespace rig
 {
     namespace
     {
-        // 합류 레벨: 오디오 테이퍼. 위치 p 에서 dB = 10 * log2 (p) → 절반마다 -10 dB, -3 dB ≈ 81 %,
-        // p ≤ 2^-6 (= -60 dB) 는 -inf (mergeMinDb 에 붙임). 0.1 dB 단위
+        // 합류 레벨: 오디오 테이퍼. 위치 p 에서 dB = 12 * log2 (p) → 절반마다 -12 dB, -3 dB ≈ 84 %,
+        // p ≤ 2^-5 (= -60 dB) 는 -inf (mergeMinDb 에 붙임). 0.1 dB 단위
+        constexpr double levelDbPerHalf = 12.0;
+
         juce::NormalisableRange<double> levelRange()
         {
             return { RigModel::mergeMinDb, RigModel::mergeMaxDb,
                      [] (double start, double end, double p)        // 0..1 -> dB
                      {
-                         return p <= 0.0 ? start : juce::jlimit (start, end, 10.0 * std::log2 (p));
+                         return p <= 0.0 ? start : juce::jlimit (start, end, levelDbPerHalf * std::log2 (p));
                      },
                      [] (double start, double end, double db)       // dB -> 0..1
                      {
-                         return db <= start ? 0.0 : juce::jlimit (0.0, 1.0, std::pow (2.0, (db - end) / 10.0));
+                         return db <= start ? 0.0 : juce::jlimit (0.0, 1.0, std::pow (2.0, (db - end) / levelDbPerHalf));
                      },
                      [] (double start, double end, double db)       // 0.1 dB 단위
                      {

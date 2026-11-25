@@ -65,11 +65,11 @@ namespace rig
 
         static constexpr double crossfadeSeconds = transitionSeconds;   // 20 ms (Block.h)
 
-        // 입력/출력 볼륨 범위 (dB). 입력의 최솟값은 실제 -15 dB, 출력은 outputMinDb 이하가 -inf(무음)
-        static constexpr float inputMinDb  = -15.0f;
-        static constexpr float inputMaxDb  =  15.0f;
+        // 입력/출력 볼륨 범위 (dB). 입력의 최솟값은 실제 -12 dB, 출력은 outputMinDb 이하가 -inf(무음)
+        static constexpr float inputMinDb  = -12.0f;
+        static constexpr float inputMaxDb  =  12.0f;
         static constexpr float outputMinDb = -60.0f;
-        static constexpr float outputMaxDb =  10.0f;
+        static constexpr float outputMaxDb =  12.0f;
 
         AudioEngine() = default;
         ~AudioEngine() override;

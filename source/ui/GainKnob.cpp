@@ -23,7 +23,7 @@ namespace rig
             // 출력: 진폭 기준 오디오 테이퍼. gain(p) = Gmax * p^k, k = log2(Gmax) 이라 p = 0.5(12시) 에서 정확히 0 dB.
             //  dB(p) = max + 20k*log10(p).  p=0 -> -inf (min 이하로 붙임), p=1 -> max.
             //  체감 크기 ~ gain^0.6 이므로 돌린 만큼 거의 일정하게 커진다 (min 근처에서 튀지 않음)
-            const double k = (double) max / (20.0 * std::log10 (2.0));   // +10 dB 면 약 1.66
+            const double k = (double) max / (20.0 * std::log10 (2.0));   // +12 dB 면 약 1.99 (위치 절반마다 -12 dB)
             juce::NormalisableRange<double> range (
                 min, max,
                 [k] (double start, double end, double p)            // 0..1 -> dB

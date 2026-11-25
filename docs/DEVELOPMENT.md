@@ -180,7 +180,7 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 
     | 이름 | 범위 | 기본 |
     |---|---|---|
-    | `bassDb` / `middleDb` / `trebleDb` | -18 ~ 18 dB | 0 |
+    | `bassDb` / `middleDb` / `trebleDb` | -12 ~ 12 dB | 0 |
     | `bassHz` | 25 ~ 400 Hz | 100 |
     | `middleHz` | 400 ~ 2500 Hz | 1000 |
     | `middleQ` | 0.2 ~ 3.2 (Middle 폭, Bass / Treble 은 0.8 고정) | 0.8 |

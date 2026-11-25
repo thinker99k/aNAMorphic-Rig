@@ -11,7 +11,7 @@ namespace rig
     struct NamParams
     {
         // 범위·경계선·폭 상수는 여기에만 둔다 (UI 도 이 값을 쓴다)
-        static constexpr double gainMinDb = -18.0, gainMaxDb = 18.0, gainDefaultDb = 0.0;
+        static constexpr double gainMinDb = -12.0, gainMaxDb = 12.0, gainDefaultDb = 0.0;
 
         static constexpr double h1Hz = 400.0;    // Bass / Middle 경계
         static constexpr double h2Hz = 2500.0;   // Middle / Treble 경계
