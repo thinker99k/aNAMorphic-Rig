@@ -378,11 +378,11 @@ namespace rig
     {
         const auto area = getLocalBounds().reduced (gap);
 
-        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [Copy / Swap] [1] ~ [8] [Scene / Stomp] [ ] [Live]
+        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [Copy / Swap] [1] ~ [8] [ ] [Scene / Stomp] [Live]
         // 전체 리셋은 왼쪽 끝, Live 는 오른쪽 끝. 버튼은 모두 같은 한 칸 (바깥 여백·버튼 사이 6 px). Copy / Swap 은 한 칸을 위아래로 나눈다 (사이 6 px)
         sceneResetButton.setBounds (bottomBarCell (area, 0));
         liveButton.setBounds (bottomBarCell (area, bottomBarCells - 1));
-        modeSwitch.setBounds (bottomBarCell (area, 3 + RigModel::numScenes));
+        modeSwitch.setBounds (bottomBarCell (area, bottomBarCells - 2));
 
         for (int i = 0; i < RigModel::numScenes; ++i)
             sceneBounds[(size_t) i] = bottomBarCell (area, 3 + i);

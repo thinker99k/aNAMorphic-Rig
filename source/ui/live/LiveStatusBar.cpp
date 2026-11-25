@@ -8,8 +8,8 @@ namespace rig
     namespace
     {
         // 칸: 편집 화면 씬 바와 같은 14칸 격자 (bottomBarCell). Scene / Stomp, Live 는 씬 바와 같은 칸
-        //   [채널 0~5] [빈칸 6] [튜너 스위치 7] [간이 튜너 8~9] [빈칸 10] [Scene / Stomp 11] [빈칸 12] [Live 13]
-        constexpr int tunerCell = 7, stripCell = 8, stripCells = 2, modeCell = 11;
+        //   [채널 0~5] [빈칸 6] [튜너 스위치 7] [간이 튜너 8~10] [빈칸 11] [Scene / Stomp 12] [Live 13]
+        constexpr int tunerCell = 7, stripCell = 8, stripCells = 3, modeCell = 12;
 
         // 채널 두 줄 사이 (줄 모양은 파라미터 바 IN / OUT 과 같다: Widgets.h channelCells 등)
         constexpr int rowGap = 6;
