@@ -8,15 +8,20 @@ namespace rig
     using P = NamParams;
     using VT = ParamKnob::ValueType;
 
+    namespace
+    {
+        constexpr int firstCell = 3;   // 첫 노브(Bass)의 칸
+    }
+
     NamParamPanel::NamParamPanel (RigModel& m)
         : model (m),
-          bass       ("B",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
-          bassFreq   ("B. Freq",     P::bassMinHz,   P::bassMaxHz,   P::bassDefaultHz,   VT::HzLog),
-          middle     ("M",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
-          middleFreq ("M. Freq",     P::middleMinHz, P::middleMaxHz, P::middleDefaultHz, VT::HzLog),
-          middleQ    ("Q",           P::middleQMin,  P::middleQMax,  P::middleQDefault,  VT::QLog),
-          treble     ("T",           P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
-          trebleFreq ("T. Freq",     P::trebleMinHz, P::trebleMaxHz, P::trebleDefaultHz, VT::HzLog)
+          bass       ("Bass",    P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
+          bassFreq   ("B. Freq", P::bassMinHz,   P::bassMaxHz,   P::bassDefaultHz,   VT::HzLog),
+          middle     ("Mid",     P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
+          middleFreq ("M. Freq", P::middleMinHz, P::middleMaxHz, P::middleDefaultHz, VT::HzLog),
+          middleQ    ("Q",       P::middleQMin,  P::middleQMax,  P::middleQDefault,  VT::QLog),
+          treble     ("Treble",  P::gainMinDb,   P::gainMaxDb,   P::gainDefaultDb,   VT::Db),
+          trebleFreq ("T. Freq", P::trebleMinHz, P::trebleMaxHz, P::trebleDefaultHz, VT::HzLog)
     {
         // 노브 -> 선택된 블록의 현재 씬 값 (돌리는 동안은 알림·저장 없음), 드래그가 끝나면 저장
         auto connect = [this] (ParamKnob& knob, int index)
@@ -33,19 +38,8 @@ namespace rig
         connect (treble,     P::trebleDb);
         connect (trebleFreq, P::trebleHz);
 
-        // 영역 묶음: [세기][주파수]
-        auto group = [this] (ParamGroup& g, ParamKnob& gain, ParamKnob& freq)
-        {
-            g.addItem (gain, gain.getIdealWidth(), 0);
-            g.addItem (freq, freq.getIdealWidth(), ParamGroup::knobGap);
-            addAndMakeVisible (g);
-        };
-
-        group (bassGroup,   bass,   bassFreq);
-        group (middleGroup, middle, middleFreq);
-        middleQ.setDiameter (ParamKnob::smallKnobDiameter);   // Middle 만 있는 보조 노브: 조금 작게
-        middleGroup.addItem (middleQ, middleQ.getIdealWidth(), ParamGroup::knobGap);
-        group (trebleGroup, treble, trebleFreq);
+        for (auto* knob : { &bass, &bassFreq, &middle, &middleFreq, &middleQ, &treble, &trebleFreq })
+            addAndMakeVisible (knob);
 
         refresh();
     }
@@ -67,6 +61,10 @@ namespace rig
 
     void NamParamPanel::resized()
     {
-        layoutGroups ({ { &bassGroup, 2, 3 }, { &middleGroup, 5, 4 }, { &trebleGroup, 9, 3 } });   // 2 ~ 4, 5 ~ 8, 9 ~ 11 칸
+        // 3 ~ 9 칸에 하나씩, 칸 가운데 (노브 폭 = 칸 폭, ParamKnob 이 노브와 이름을 가운데에 놓는다)
+        int cell = firstCell;
+
+        for (auto* knob : { &bass, &bassFreq, &middle, &middleFreq, &middleQ, &treble, &trebleFreq })
+            knob->setBounds (bottomBarCell (getLocalBounds(), cell++));
     }
 }

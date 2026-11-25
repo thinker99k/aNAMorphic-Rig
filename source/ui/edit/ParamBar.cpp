@@ -258,7 +258,7 @@ namespace rig
         powerButton.setBounds (bottomBarCell (grid, bottomBarCells - 1).withSizeKeepingCentre (size, size));
 
         if (panel != nullptr)
-            panel->setBounds (grid);   // 패널이 격자 칸을 직접 고른다 (ParamPanel::layoutGroups)
+            panel->setBounds (grid);   // 패널이 격자 칸을 직접 고른다 (bottomBarCell)
 
         // IN / OUT 선택 시: 0 ~ 5 칸에 [이름표 channelLabelWidth] 8 [채널 목록 = 나머지], 높이 28 (Live 아래 줄 채널과 같다)
         auto row = bottomBarCell (grid, 0, channelCells);
