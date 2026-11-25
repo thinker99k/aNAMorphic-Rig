@@ -7,7 +7,7 @@ namespace rig
 {
     class RigModel;
 
-    // IR 블록 선택 시: 두 칸마다 왼쪽 끝에 [전원][노브] 한 쌍, L. Cut 3 ~ 4 칸, H. Cut 5 ~ 6 칸 (Low / High Cut)
+    // IR 블록 선택 시: 두 칸마다 왼쪽 끝에 [전원][노브] 한 쌍, L. Cut 2 ~ 3 칸, H. Cut 7 ~ 8 칸 (Low / High Cut)
     // 값은 선택된 블록의 현재 씬 값 (RigModel::getParam / setParam). 전원이 꺼진 쪽 노브는 흐리고 조작 안 됨
     class IrParamPanel final : public ParamPanel
     {

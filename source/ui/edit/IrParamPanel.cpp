@@ -66,7 +66,7 @@ namespace rig
 
     void IrParamPanel::resized()
     {
-        // [빨간 전원] 간격 [노브] 한 쌍을 두 칸의 왼쪽 끝에: L. Cut 3 ~ 4, H. Cut 5 ~ 6 칸
+        // [빨간 전원] 간격 [노브] 한 쌍을 두 칸의 왼쪽 끝에: L. Cut 2 ~ 3, H. Cut 7 ~ 8 칸 (전원이 합류 갈래 전원과 같은 칸)
         auto place = [this] (SubPowerButton& power, ParamKnob& knob, int first)
         {
             auto pair = bottomBarCell (getLocalBounds(), first, 2);
@@ -75,7 +75,7 @@ namespace rig
             knob.setBounds (pair.withWidth (knob.getIdealWidth()));
         };
 
-        place (lowCutPower,  lowCut,  3);
-        place (highCutPower, highCut, 5);
+        place (lowCutPower,  lowCut,  2);
+        place (highCutPower, highCut, 7);
     }
 }

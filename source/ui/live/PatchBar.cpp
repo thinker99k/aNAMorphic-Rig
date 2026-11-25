@@ -106,7 +106,7 @@ namespace rig
         g.drawText (juce::String (patch).paddedLeft ('0', 2), numberArea, juce::Justification::centred, false);
 
         g.setFont (live::boldFont (nameFontSize));
-        g.drawText (model.getPatchName(), nameArea.reduced (nameInset, 0), juce::Justification::centred, true);
+        g.drawText (model.getPatchName(), nameArea.reduced (nameInset, 0), juce::Justification::centredLeft, true);
     }
 
     void PatchBar::mouseDown (const juce::MouseEvent& e)
