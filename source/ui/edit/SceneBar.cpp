@@ -18,8 +18,9 @@ namespace rig
         constexpr int nameInset = 6;
     }
 
-    SceneBar::SceneBar (RigModel& m) : model (m)
+    SceneBar::SceneBar (RigModel& m) : model (m), modeSwitch (m)
     {
+        addAndMakeVisible (modeSwitch);
         setWantsKeyboardFocus (true);   // 모드 중 ESC 를 받는다
         shownPatch = model.getPatchNumber();
 
@@ -377,15 +378,16 @@ namespace rig
     {
         const auto area = getLocalBounds().reduced (gap);
 
-        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [1] ~ [8] [Copy / Swap] [ ] [ ] [Live]
+        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [Copy / Swap] [1] ~ [8] [Scene / Stomp] [ ] [Live]
         // 전체 리셋은 왼쪽 끝, Live 는 오른쪽 끝. 버튼은 모두 같은 한 칸 (바깥 여백·버튼 사이 6 px). Copy / Swap 은 한 칸을 위아래로 나눈다 (사이 6 px)
         sceneResetButton.setBounds (bottomBarCell (area, 0));
         liveButton.setBounds (bottomBarCell (area, bottomBarCells - 1));
+        modeSwitch.setBounds (bottomBarCell (area, 3 + RigModel::numScenes));
 
         for (int i = 0; i < RigModel::numScenes; ++i)
-            sceneBounds[(size_t) i] = bottomBarCell (area, 2 + i);
+            sceneBounds[(size_t) i] = bottomBarCell (area, 3 + i);
 
-        auto modeCell = bottomBarCell (area, 2 + RigModel::numScenes);
+        auto modeCell = bottomBarCell (area, 2);
         copyButton.setBounds (modeCell.removeFromTop ((modeCell.getHeight() - gap) / 2));
         modeCell.removeFromTop (gap);
         swapButton.setBounds (modeCell);

@@ -39,8 +39,10 @@ namespace rig
     {
         inline const juce::Colour amber     { 0xffffa500 };   // 튜너, Copy / Swap (앱 강조색 주황)
         inline const juce::Colour amberFill { 0xff3b2c12 };
-        inline const juce::Colour red       { 0xffd9534f };   // MUTE (Live Patch 빨강과 같은 색)
+        inline const juce::Colour red       { 0xffd9534f };   // MUTE, Scene 모드 (Scene / Stomp 스위치)
         inline const juce::Colour redFill   { 0xff3b1c1c };
+        inline const juce::Colour blue      { 0xff4a90d9 };   // Stomp 모드 (Scene / Stomp 스위치)
+        inline const juce::Colour blueFill  { 0xff1c2a3b };
         constexpr float corner = 5.0f;
 
         inline void drawBox (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour fill, juce::Colour outline)

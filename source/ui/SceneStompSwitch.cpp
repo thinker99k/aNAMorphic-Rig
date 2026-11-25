@@ -1,0 +1,58 @@
+#include "SceneStompSwitch.h"
+
+#include "ui/live/LiveStyle.h"
+
+namespace rig
+{
+    namespace
+    {
+        constexpr float dividerInset = 8.0f;   // 가운데 구분선 양 끝과 버튼 가장자리 사이
+        constexpr float dividerAlpha = 0.5f;
+        constexpr float textNudge = 1.0f;      // 두 글자를 구분선 쪽으로 (Scene 아래로, Stomp 위로)
+    }
+
+    SceneStompSwitch::SceneStompSwitch (RigModel& m)
+        : LeftClickOnly ("Scene / Stomp"), model (m)
+    {
+        setWantsKeyboardFocus (false);
+        setInterceptsMouseClicks (false, false);   // 반응 없음 (Stomp 모드가 생기면 켠다)
+        model.addChangeListener (this);
+    }
+
+    SceneStompSwitch::~SceneStompSwitch()
+    {
+        model.removeChangeListener (this);
+    }
+
+    void SceneStompSwitch::changeListenerCallback (juce::ChangeBroadcaster*)
+    {
+        repaint();   // 패치를 바꾸면 Scene
+    }
+
+    void SceneStompSwitch::paintButton (juce::Graphics& g, bool, bool)
+    {
+        const auto area = getLocalBounds().toFloat();
+        const bool scene = model.getPlayMode() == RigModel::PlayMode::scene;
+
+        indicator::drawBox (g, area, scene ? indicator::redFill : indicator::blueFill, scene ? indicator::red : indicator::blue);
+
+        const auto offColour = live::textMuted.withAlpha (0.5f);
+        const float fontSize = live::buttonFontSize (area.getHeight());   // 같은 줄 버튼 글자와 같은 크기 (16)
+
+        const auto drawMode = [&] (const char* name, juce::Rectangle<float> half, bool current, juce::Colour colour)
+        {
+            g.setColour (current ? colour : offColour);
+            g.setFont (juce::FontOptions (fontSize, current ? juce::Font::bold : juce::Font::plain));
+            g.drawText (name, half, juce::Justification::centred, false);
+        };
+
+        auto top = area;
+        const auto bottom = top.removeFromBottom (area.getHeight() * 0.5f);
+        drawMode ("Scene", top.translated (0.0f, textNudge), scene, indicator::red);
+        drawMode ("Stomp", bottom.translated (0.0f, -textNudge), ! scene, indicator::blue);
+
+        // 가운데 구분선: 지금 모드 색을 흐리게, 양옆은 테두리에서 띄운다
+        g.setColour ((scene ? indicator::red : indicator::blue).withAlpha (dividerAlpha));
+        g.drawHorizontalLine (juce::roundToInt (area.getCentreY()), area.getX() + dividerInset, area.getRight() - dividerInset);
+    }
+}

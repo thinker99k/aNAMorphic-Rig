@@ -158,6 +158,7 @@ namespace rig
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
         currentScene = 0;
+        playMode = PlayMode::scene;
         routing = {};
 
         const auto file = paths::patchFile (patchNumber);
@@ -260,6 +261,7 @@ namespace rig
         selectedSlotId = selectedParallelId = 0;
         selectedEndpoint = Endpoint::none;
         currentScene = 0;
+        playMode = PlayMode::scene;
         routing = {};
         patchName = paths::patchFile (patchNumber).getFileName();
 

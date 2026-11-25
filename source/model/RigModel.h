@@ -100,6 +100,10 @@ namespace rig
         void loadPatch (int number);
         void resetPatch();   // 지금 패치를 기본 패치로 (블록 없음, 기본 씬, 이름 = 파일명). 번호 유지, 저장, 크로스페이드
 
+        // 연주 모드 (Scene / Stomp, 항상 둘 중 하나): 저장하지 않고, 앱 시작·패치 전환·Patch Reset 때 Scene. 아직 바꾸는 방법은 없다 (Stomp 모드 미구현)
+        enum class PlayMode { scene, stomp };
+        PlayMode getPlayMode() const noexcept { return playMode; }
+
         // 패치 파일을 저장할 때마다 결과 (ok = 써짐). UI 가 쓰기 실패 경고를 띄운다
         std::function<void (bool ok, const juce::File& file)> onPatchSaved;
 
@@ -328,6 +332,7 @@ namespace rig
         AudioEngine::Routing routing;
         std::optional<AudioEngine::Routing> liveRouting;   // Live 전용 채널 (저장하지 않는다)
         int currentScene = 0;                   // 저장하지 않는다
+        PlayMode playMode = PlayMode::scene;    // 저장하지 않는다
         std::array<juce::String, numScenes> sceneNames;
         bool waitingForLoads = false;           // 로딩을 시작한 블록(패치 전환, 추가, 이동 등)이 다 준비될 때까지 옛 소리 유지
         juce::uint64 nextId = 1;                // 슬롯과 병렬의 id (0 = 없음)
