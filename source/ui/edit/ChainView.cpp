@@ -125,8 +125,8 @@ namespace rig
         {
         }
 
-        // 놓을 자리 위인지 (Strip 이 정한다, 화면 좌표)
-        std::function<bool (juce::Point<int>)> isOverDropZone;
+        // 놓을 자리 위인지 / 그 자리가 다른 블록(Swap)인지 (Strip 이 정한다, 화면 좌표)
+        std::function<bool (juce::Point<int>)> isOverDropZone, isOverSwap;
 
         // 선택은 끌지 않고 뗐을 때 (누를 때 고르면 패치맵이 다시 만들어져 끌기가 끊긴다).
         // 끌다 뗐을 때: 놓을 자리 위면 Strip 이 미리보기대로 처리하고 (우선), 자리 밖이면 삭제 범위(isDeleteAt)일 때만 삭제.
@@ -161,7 +161,7 @@ namespace rig
         }
 
         // 끌어서 다른 자리에 놓으면 이동
-        // 끄는 동안: 삭제 범위(isDeleteAt)에 들어가면 커서의 블록 그림을 삭제 그림으로 바꾼다 (떼면 삭제된다는 미리보기)
+        // 끄는 동안 커서의 블록 그림 표시: 삭제 범위(isDeleteAt) = X, 다른 블록 위(Swap) = ⇄, 그 밖 = 없음 (떼면 일어날 일의 미리보기)
         void mouseDrag (const juce::MouseEvent& e) override
         {
             if (! isLeftClick (e) || e.getDistanceFromDragStart() < dragStartDistance)
@@ -173,24 +173,26 @@ namespace rig
 
             if (container->isDragAndDropActive())
             {
-                const bool pending = isDeleteAt (e.getScreenPosition());
+                const auto screen = e.getScreenPosition();
+                const auto mark = isDeleteAt (screen) ? block::DragMark::remove
+                                : isOverSwap != nullptr && isOverSwap (screen) ? block::DragMark::swap
+                                                                               : block::DragMark::none;
 
-                if (pending != deletePending)
+                if (mark != shownMark)
                 {
-                    deletePending = pending;
-                    container->setCurrentDragImage (juce::ScaledImage (pending ? deleteImage : dragImage));
+                    shownMark = mark;
+                    container->setCurrentDragImage (juce::ScaledImage (block::createDragImage (snapshot, mark)));
                 }
 
                 return;
             }
 
-            const auto snapshot = createComponentSnapshot (getLocalBounds());
-            dragImage = block::createDragImage (snapshot, false);
-            deleteImage = block::createDragImage (snapshot, true);
-            deletePending = false;
+            snapshot = createComponentSnapshot (getLocalBounds());
+            shownMark = block::DragMark::none;
+            const auto dragImage = block::createDragImage (snapshot, shownMark);
 
-            // 커서 = 블록 가운데 (끄는 그림은 위에 X 원 여백이 있다)
-            const juce::Point<int> centre (-getWidth() / 2, -(dragImage.getHeight() - getHeight()) - getHeight() / 2);
+            // 커서 = 블록 가운데 = 끄는 그림 가운데 (표시 원 여백은 사방에 같다)
+            const juce::Point<int> centre (-dragImage.getWidth() / 2, -dragImage.getHeight() / 2);
             container->startDragging (block::mapDrag (slotId), this, juce::ScaledImage (dragImage), false, &centre);
         }
 
@@ -306,8 +308,8 @@ namespace rig
         const juce::uint64 slotId;
         const bool branchActive;            // 블록이 있는 갈래가 현재 씬에서 켜져 있는지 (본 줄은 항상 true)
         const juce::uint32& marqueeStart;   // ChainView 소유: 타일을 다시 만들어도 흘러가던 위치가 이어진다
-        juce::Image dragImage, deleteImage;  // 끄는 동안 커서에 붙는 그림 (보통 / 떼면 삭제)
-        bool deletePending = false;
+        juce::Image snapshot;                // 끄기 시작할 때 블록 그림 (표시를 바꿀 때 다시 쓴다)
+        block::DragMark shownMark = block::DragMark::none;
     };
 
     //==============================================================================
@@ -670,6 +672,7 @@ namespace rig
         void itemDragEnter (const SourceDetails& details) override
         {
             activeDrag = readDrag (details.description);   // 끄는 동안 놓을 수 있는 자리를 전부 희미하게
+            libraryMark = block::DragMark::add;
             itemDragMove (details);
             repaint();   // 처음 자리가 놓을 자리가 아니어도(자기 블록 위) 힌트는 바로 그린다
         }
@@ -683,10 +686,17 @@ namespace rig
             }
 
             setHover (zoneAt (details));
+
+            // 선택기 항목: 기존 블록 위(교체)면 되돌아오는 화살표, 그 밖은 + (끌기 시작부터)
+            if (activeDrag.has_value() && activeDrag->fromLibrary)
+                showLibraryMark (hover.has_value() && hover->kind == DropZone::replace ? block::DragMark::replace : block::DragMark::add);
         }
 
         void itemDragExit (const SourceDetails&) override
         {
+            if (activeDrag.has_value() && activeDrag->fromLibrary)
+                showLibraryMark (block::DragMark::add);
+
             activeDrag.reset();
             setHover (std::nullopt);
             repaint();
@@ -1047,15 +1057,15 @@ namespace rig
             return ! (sameList && (target == position || target == position + 1));
         }
 
-        // 패치맵 블록 id 를 화면 좌표 screen 에 놓으면 놓을 자리가 있는지 (패치맵에 보이는 영역 안에서만)
-        bool dropZoneAt (juce::uint64 id, juce::Point<int> screen) const
+        // 패치맵 블록 id 를 화면 좌표 screen 에 놓을 때의 놓을 자리 (패치맵에 보이는 영역 안에서만)
+        std::optional<DropZone> dropZoneAt (juce::uint64 id, juce::Point<int> screen) const
         {
             const auto* scroller = findParentComponentOfClass<juce::Viewport>();
 
             if (scroller == nullptr || ! scroller->getScreenBounds().contains (screen))
-                return false;
+                return std::nullopt;
 
-            return zoneAt ({ block::mapDrag (id), nullptr, getLocalPoint (nullptr, screen) }).has_value();
+            return zoneAt ({ block::mapDrag (id), nullptr, getLocalPoint (nullptr, screen) });
         }
 
         // 놓을 자리가 반응하는 범위: 그 자리(미리보기 위치)에서 세로로 넓힌다. 바깥쪽(본 줄 위 / 아래 줄 아래)은 dropMargin,
@@ -1079,6 +1089,19 @@ namespace rig
 
             hover = zone;
             repaint();
+        }
+
+        // 선택기 항목을 끄는 그림의 표시를 바꾼다 (같으면 그대로)
+        void showLibraryMark (block::DragMark mark)
+        {
+            if (mark == libraryMark || ! activeDrag.has_value())
+                return;
+
+            libraryMark = mark;
+
+            // 끌기가 끝나는 중(끄는 그림이 지워지며 itemDragExit 가 불린다)이면 바꿀 그림이 없다
+            if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this); container != nullptr && container->isDragAndDropActive())
+                container->setCurrentDragImage (juce::ScaledImage (block::createImage (activeDrag->type, activeDrag->file.getFileNameWithoutExtension(), mark)));
         }
 
         Tile* tileFor (juce::uint64 id) const
@@ -1118,7 +1141,8 @@ namespace rig
         Tile* addTile (juce::uint64 id, bool active)
         {
             auto* tile = tiles.add (new Tile (model, id, active, marqueeStart));
-            tile->isOverDropZone = [this, id] (juce::Point<int> screen) { return dropZoneAt (id, screen); };
+            tile->isOverDropZone = [this, id] (juce::Point<int> screen) { return dropZoneAt (id, screen).has_value(); };
+            tile->isOverSwap = [this, id] (juce::Point<int> screen) { const auto zone = dropZoneAt (id, screen); return zone.has_value() && zone->kind == DropZone::replace; };
             addAndMakeVisible (tile);
             return tile;
         }
@@ -1150,12 +1174,12 @@ namespace rig
         juce::Rectangle<int> inNode() const  { return { margin, rowY (0), endWidth, tileHeight }; }
         juce::Rectangle<int> outNode() const { return { idealWidth() - margin - endWidth, rowY (0), endWidth, tileHeight }; }
 
-        // 블록 양식 그대로: 머리띠 "IN" / "OUT", 본문 = 채널 번호 하나를 가로·세로 가운데에. 장치에 없는 채널 = 블록의 로딩 실패와 같은 오류 표시
+        // 블록 양식 그대로: 머리띠 "IN" / "OUT" (가운데), 본문 = 채널 번호 하나를 가로·세로 가운데에. 장치에 없는 채널 = 블록의 로딩 실패와 같은 오류 표시
         static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& title,
                                  const juce::String& channels, bool selected, bool failed)
         {
             drawBlockBackground (g, area, block::endpointFill);
-            drawBlockHeader (g, area, title, block::endpointBand);
+            drawBlockHeader (g, area, title, block::endpointBand, juce::Colours::white, juce::Justification::centred);
             g.setColour (juce::Colours::white);
             g.setFont (block::nameFont());
             g.drawText (channels, block::body (area), juce::Justification::centred, true);   // 넘치면 말줄임
@@ -1182,6 +1206,7 @@ namespace rig
         int mergeDragging = -1;                      // 끌고 있는 합류 버튼의 병렬 번호 (놓을 자리 전부 희미하게)
         juce::Point<int> mergeDragPos;               // 끄는 합류 버튼이 따라가는 커서 위치
         std::optional<DragItem> activeDrag;          // 패치맵 위로 끌고 있는 선택기 항목 / 블록 (놓을 자리 전부 희미하게)
+        block::DragMark libraryMark = block::DragMark::add;   // 선택기 항목을 끄는 그림의 지금 표시
     };
 
     //==============================================================================

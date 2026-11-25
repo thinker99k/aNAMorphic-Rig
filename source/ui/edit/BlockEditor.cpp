@@ -90,8 +90,8 @@ namespace rig
 
         // 사용자 데이터 폴더(nam/, ir/, patch/, settings.json 이 보이는 곳)를 OS 파일 관리자로 연다.
         // 폴더는 paths::root() 가 늘 만들어 둔다. 파일 관리자가 안 뜨면 그뿐, 경고는 띄우지 않는다
-        showFolderButton.onClick = [] { paths::root().startAsProcess(); };
-        addAndMakeVisible (showFolderButton);
+        openFolderButton.onClick = [] { paths::root().startAsProcess(); };
+        addAndMakeVisible (openFolderButton);
 
         // 더블클릭(왼쪽)해야 블록에 지정된다
         fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
@@ -247,7 +247,7 @@ namespace rig
         // 블록을 고르지 않아도 끌어올 라이브러리로 쓴다. IN / OUT 이나 합류 버튼을 고른 동안만 비활성
         const bool enabled = model.getSelectedEndpoint() == RigModel::Endpoint::none && model.getSelectedParallelId() == 0;
 
-        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox, &showFolderButton })
+        for (auto* c : std::initializer_list<juce::Component*> { &categoryList, &namList, &irList, &builtInList, &searchBox, &openFolderButton })
         {
             c->setEnabled (enabled);
             c->setAlpha (enabled ? 1.0f : 0.4f);
@@ -632,15 +632,15 @@ namespace rig
         //  - 위: 12 = 구분선 1 + 빈 공간 11
         //  - 왼쪽/오른쪽 끝: 10 + 창 테두리 1 px(배경과 같은 색) = 11
         //  - 탭-목록: 11
-        //  - 왼쪽 열 카테고리 / Show Folder / 검색 사이: 14 (1024 x 768 에서 카테고리 151 + 14 + 24 + 14 + 24 = 227)
+        //  - 왼쪽 열 카테고리 / Open Folder / 검색 사이: 14 (1024 x 768 에서 카테고리 151 + 14 + 24 + 14 + 24 = 227)
         constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12, leftColumnGap = 14;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
 
-        // 왼쪽 열: 아래부터 검색, Show Folder, 나머지는 카테고리
+        // 왼쪽 열: 아래부터 검색, Open Folder, 나머지는 카테고리
         auto leftColumn = area.removeFromLeft (categoryListWidth);
         searchBox.setBounds (leftColumn.removeFromBottom (rowHeight));
         leftColumn.removeFromBottom (leftColumnGap);
-        showFolderButton.setBounds (leftColumn.removeFromBottom (rowHeight));
+        openFolderButton.setBounds (leftColumn.removeFromBottom (rowHeight));
         leftColumn.removeFromBottom (leftColumnGap);
         categoryList.setBounds (leftColumn);
         categoryList.scrollToEnsureRowIsOnscreen (shownCategoryIndex);

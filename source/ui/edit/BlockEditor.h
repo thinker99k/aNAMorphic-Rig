@@ -25,7 +25,7 @@ namespace rig
     //       - NAM / IR 표를 따로 두어 열 폭과 정렬 상태를 각자 유지한다 (메모리에만, 다시 켜면 기본값)
     //   - 파일 없는 카테고리(Built-in 등) : 내장 블록 목록. 새 카테고리는 categories 에 탭 이름과 내장 블록 목록만 추가하면 된다
     //   - 선택된 블록이 없어도 끌어올 라이브러리로 활성 (둘러보던 탭과 강조 유지, 더블클릭은 무동작). IN / OUT 이나 합류 버튼을 고른 동안만 비활성
-    //   - 검색창 위 Show Folder: ~/Documents/aNAMorphic-Rig 를 OS 파일 관리자로 연다 (선택기와 같이 비활성)
+    //   - 검색창 위 Open Folder: ~/Documents/aNAMorphic-Rig 를 OS 파일 관리자로 연다 (선택기와 같이 비활성)
     class BlockEditor final : public juce::Component,
                               private juce::ChangeListener,
                               private juce::TableListBoxModel
@@ -156,7 +156,7 @@ namespace rig
         BuiltInListModel builtInListModel { *this };
         juce::TableListBox builtInList;
         LeftClickOnly<juce::TextEditor> searchBox;
-        LeftClickOnly<juce::TextButton> showFolderButton { "Show Folder" };   // 사용자 데이터 폴더를 파일 관리자로 연다
+        LeftClickOnly<juce::TextButton> openFolderButton { "Open Folder" };   // 사용자 데이터 폴더를 파일 관리자로 연다
 
         std::vector<Entry> namEntries, irEntries;   // refresh() 의 스캔 결과 (+ addFiles() 로 가져온 파일)
         Entry outsideEntry;                         // 폴더 밖의 현재 파일 (메타데이터를 매번 읽지 않도록 보관)
