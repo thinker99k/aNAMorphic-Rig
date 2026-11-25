@@ -127,7 +127,7 @@ namespace rig
         const auto* parallel = model.findParallel (model.getSelectedParallelId());
         const bool isMerge = parallel != nullptr;
 
-        powerButton.setVisible (! isEndpoint && ! isMerge);
+        powerButton.setVisible (! isEndpoint && ! isMerge && model.getSelectedSlot() != nullptr);   // 미선택이면 빈 바
         channelLabel.setVisible (isEndpoint);
         channelBox.setVisible (isEndpoint);
 
@@ -258,6 +258,36 @@ namespace rig
 
         if (outputKnob.isVisible())
             drawCellSeparator (g, getLocalBounds().reduced (bottomBarGap), outputCell - 1);   // 블록 종류별 파라미터 | 공용 Output
+    }
+
+    void ParamBar::paintOverChildren (juce::Graphics& g)
+    {
+        const auto alpha = highlightAlpha (model.getHighlightStart());
+        if (alpha <= 0.0f)
+            return;
+
+        const auto& touched = model.getHighlight();
+        const auto mark = [&] (const juce::Component* c)
+        {
+            if (c != nullptr && c->isShowing())
+                drawHighlight (g, getLocalArea (c, c->getLocalBounds()).toFloat(), alpha);
+        };
+
+        if (const auto* slot = model.getSelectedSlot())
+        {
+            for (const int index : touched.params)
+                mark (index == BlockParams::outputIndex (slot->type) ? &outputKnob
+                                                                      : panel != nullptr ? panel->componentForParam (index) : nullptr);
+
+            if (touched.power)
+                mark (&powerButton);
+        }
+
+        for (const int b : touched.branchPower)
+            mark (&branchPower[(size_t) b]);
+
+        for (const int b : touched.branchLevel)
+            mark (&levelSlider[(size_t) b]);
     }
 
     void ParamBar::resized()

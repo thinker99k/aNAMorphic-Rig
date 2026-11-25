@@ -40,6 +40,7 @@ namespace rig
         static const std::vector<ParamSpec>& specs (BlockType);   // 순서 = 번호 (종류 파라미터, 그 뒤 공용). 파라미터가 없는 종류는 빈 목록
         static std::vector<float> defaults (BlockType);
         static int outputIndex (BlockType);                       // 공용 Output 의 번호. 파라미터가 없는 종류는 -1
+        static int headlineIndex (BlockType);                     // 패치맵 블록에 보여줄 가장 중요한 값 (dB) 의 번호. 없으면 -1
 
         float get (int index) const noexcept { return values[(size_t) index].load (std::memory_order_relaxed); }
         bool isOn (int index) const noexcept { return get (index) >= 0.5f; }

@@ -88,6 +88,7 @@ namespace rig
         int nameTargetScene = -1;               // 입력칸 내용을 저장할 씬. 편집기가 닫힌 뒤에 저장 알림이 오므로 따로 둔다
 
         int shownPatch = 0;                     // 패치가 바뀌면 모드와 이름 편집을 취소한다
+        HighlightRepaint highlightRepaint { *this, [this] { return model.getHighlightStart(); } };   // Undo / Redo 강조가 사라지는 동안
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SceneBar)
     };

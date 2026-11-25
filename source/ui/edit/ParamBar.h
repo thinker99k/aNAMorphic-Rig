@@ -20,7 +20,7 @@ namespace rig
     //                   ━━━━━━●━━               ━━━━━━●━━
     //   IN    : [ Input channel  [1: ...    v] ]   장치 입력 채널 하나
     //   OUT   : [ Output channel [1+2: ...  v] ]   스테레오 쌍 먼저, 그다음 단일 채널
-    // 블록의 파라미터는 on 하나뿐: 오른쪽 끝 전원 버튼. 미지정 블록이나 선택된 블록이 없으면 비활성.
+    // 블록의 전원: 오른쪽 끝 버튼. 미지정 블록이면 비활성, 선택이 없으면(미선택) 바 전체가 비어 있다.
     // 오류(빨강)·샘플레이트 경고(노랑) 문구는 패치 맵 왼쪽 위 (ChainView).
     // 합류 레벨 슬라이더: -inf(-60) ~ 0 dB, 오디오 테이퍼(위치 절반마다 -12 dB), 상대 드래그(클릭한 곳으로 뛰지 않음),
     // 더블클릭 = -3 dB, 저장은 드래그 끝에.
@@ -35,6 +35,7 @@ namespace rig
         ~ParamBar() override;
 
         void paint (juce::Graphics&) override;
+        void paintOverChildren (juce::Graphics&) override;   // Undo / Redo 로 되돌아간 컨트롤 강조
         void resized() override;
 
     private:
@@ -72,6 +73,7 @@ namespace rig
         static constexpr int outputCell = 12;   // 공용 Output 칸 (모든 블록 종류 고정, 앞에 구분선 |)
         ParamKnob outputKnob { "Output", CommonParams::outputMinDb, CommonParams::outputMaxDb, CommonParams::outputDefaultDb, ParamKnob::ValueType::Db };
         std::unique_ptr<ParamPanel> panel;
+        HighlightRepaint highlightRepaint { *this, [this] { return model.getHighlightStart(); } };
         BlockType panelType = BlockType::None;   // 지금 패널의 블록 종류
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ParamBar)

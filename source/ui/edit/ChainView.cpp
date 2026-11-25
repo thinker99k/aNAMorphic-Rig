@@ -1,5 +1,6 @@
 #include "ChainView.h"
 
+#include "engine/param/common/BlockParams.h"
 #include "ui/Widgets.h"
 
 namespace rig
@@ -7,8 +8,8 @@ namespace rig
     namespace
     {
         // 블록 양식 (Widgets.h)
-        using block::corner, block::colourFor, block::labelFor, block::textInsetX, block::valueLine, block::valueFont,
-              block::drawBlockBackground, block::drawBlockHeader, block::drawBlockFrame;
+        using block::colourFor, block::labelFor, block::nameLine, block::nameFont,
+              block::drawBlockBackground, block::drawBlockHeader, block::drawBlockText, block::drawBlockFrame;
 
         constexpr int tileWidth = block::width;
         constexpr int tileHeight = block::height;
@@ -16,6 +17,7 @@ namespace rig
         constexpr int gap = 44;                  // 노드 사이 연결선 공간 (선 위에 놓으면 그 자리에 넣는다)
         constexpr int rowGap = 16;               // 병렬의 위 / 아래 갈래 줄 사이
         constexpr int dragStartDistance = 4;     // 블록을 이만큼 움직여야 끌기 (클릭과 구분)
+        constexpr float deleteScale = 1.25f;     // 놓을 자리 밖에서, 끄는 블록 가운데(= 커서)가 원래 블록을 이만큼 키운 사각형 밖이면 삭제 (가로·세로 모두)
         constexpr int dropMargin = 12;           // 놓을 자리 반응 범위를 블록 줄 위 / 아래 줄 아래로 넓히는 폭 (줄 사이는 간격의 절반씩)
         constexpr int autoScrollBorder = 40;     // 끄는 동안 패치맵 좌우 끝에서 이 폭 안에 들어가면 자동 스크롤
         constexpr int autoScrollSpeed = 12;      //                최대 px / 이벤트
@@ -61,8 +63,6 @@ namespace rig
         constexpr juce::uint32 marqueePauseMs = 1000;   // 처음과 끝에서 멈추는 시간
         constexpr int margin = 8;
 
-        // IN / OUT 노드 색: 고를 수 있는 노드라는 뜻으로 블록처럼 유채색 (무채색 = 미지정 / 꺼짐). NAM, IR, 전원(초록)과 겹치지 않게 보라
-        const juce::Colour endpointColour (0xff9b6bd9);
 
         // 끌고 있는 것 (Widgets.h block::libraryDrag / mapDrag 의 내용)
         struct DragItem
@@ -108,60 +108,96 @@ namespace rig
 
             return juce::jmin (overflow, (float) (t - marqueePauseMs) * marqueeSpeed / 1000.0f);
         }
-
-        // 블록 오른쪽 위 귀퉁이에 박힌 삭제 칸 (공용 CornerButton). 블록 테두리 선(1.5 px 안쪽)에 맞춰 붙고,
-        // 블록 테두리는 Tile::paintOverChildren 에서 이 위에 그린다
-        struct CornerDeleteButton final : public CornerButton
-        {
-            CornerDeleteButton() : CornerButton ("X", corner, 1.5f, juce::Colours::red) {}
-
-            void drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active) override
-            {
-                g.setColour (juce::Colours::white.withAlpha (active ? 1.0f : 0.8f));
-                g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-                g.drawText ("X", area.toNearestInt(), juce::Justification::centred);
-            }
-        };
-
     }
 
     //==============================================================================
-    // 블록 하나를 나타내는 타일: 윗줄 = 종류(NAM / IR) + 오른쪽 귀퉁이 삭제 칸, 아랫줄 = 파일명.
-    // 꺼진 블록(바이패스)과 꺼진 갈래(무음) 안의 블록은 같은 흐린 색
+    // 블록 하나를 나타내는 타일 (Widgets.h block:: 양식): 머리띠 = 종류(NAM / IR), 본문 = 파일명 + 가장 중요한 값 (NAM Gain, IR Output).
+    // 꺼진 블록(바이패스)과 꺼진 갈래(무음) 안의 블록은 같은 흐린 색, 꺼진 블록의 값 줄은 "off"
     class ChainView::Tile final : public juce::Component
     {
     public:
         Tile (RigModel& m, juce::uint64 id, bool inActiveBranch, const juce::uint32& startMs)
             : model (m), slotId (id), branchActive (inActiveBranch), marqueeStart (startMs)
         {
-            removeButton.onClick = [this] { model.removeBlock (slotId); };
-            addAndMakeVisible (removeButton);
         }
 
-        // 선택은 끌지 않고 뗐을 때 (누를 때 고르면 패치맵이 다시 만들어져 끌기가 끊긴다)
+        // 놓을 자리 위인지 (Strip 이 정한다, 화면 좌표)
+        std::function<bool (juce::Point<int>)> isOverDropZone;
+
+        // 선택은 끌지 않고 뗐을 때 (누를 때 고르면 패치맵이 다시 만들어져 끌기가 끊긴다).
+        // 끌다 뗐을 때: 놓을 자리 위면 Strip 이 미리보기대로 처리하고 (우선), 자리 밖이면 삭제 범위(isDeleteAt)일 때만 삭제.
+        // (블록의 mouseUp 이 끌기 그림보다 먼저 불린다. Esc 로 취소했으면 끌기가 이미 끝나 있다)
         void mouseUp (const juce::MouseEvent& e) override
         {
-            if (isLeftClick (e) && ! e.mouseWasDraggedSinceMouseDown())
+            if (! isLeftClick (e))
+                return;
+
+            if (! e.mouseWasDraggedSinceMouseDown())
+            {
                 model.selectSlot (slotId);
+                return;
+            }
+
+            auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this);
+            const auto screen = e.getScreenPosition();
+
+            if (container == nullptr || ! container->isDragAndDropActive() || ! isDeleteAt (screen))
+                return;
+
+            model.removeBlock (slotId);
         }
 
-        // 끌어서 다른 자리에 놓으면 이동 (삭제 칸에서 누른 것은 버튼이 받으므로 끌기가 시작되지 않는다)
+        // 더블클릭 = 켜고 끄기 (미지정 블록은 지정할 때까지 끌 수 없다).
+        // JUCE 는 세 번째 클릭부터도 mouseDoubleClick 을 부르므로 정확히 두 번째 클릭에서만
+        void mouseDoubleClick (const juce::MouseEvent& e) override
+        {
+            const auto* slot = model.findSlot (slotId);
+            if (isLeftClick (e) && e.getNumberOfClicks() == 2 && slot != nullptr && slot->type != BlockType::None)
+                model.setOn (slotId, ! model.isOn (*slot));
+        }
+
+        // 끌어서 다른 자리에 놓으면 이동
+        // 끄는 동안: 삭제 범위(isDeleteAt)에 들어가면 커서의 블록 그림을 삭제 그림으로 바꾼다 (떼면 삭제된다는 미리보기)
         void mouseDrag (const juce::MouseEvent& e) override
         {
             if (! isLeftClick (e) || e.getDistanceFromDragStart() < dragStartDistance)
                 return;
 
             auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this);
-            if (container == nullptr || container->isDragAndDropActive())
+            if (container == nullptr)
                 return;
 
-            auto image = createComponentSnapshot (getLocalBounds());
-            image.multiplyAllAlphas (block::dragImageAlpha);
-            const juce::Point<int> centre (-getWidth() / 2, -getHeight() / 2);
-            container->startDragging (block::mapDrag (slotId), this, juce::ScaledImage (image), false, &centre);
+            if (container->isDragAndDropActive())
+            {
+                const bool pending = isDeleteAt (e.getScreenPosition());
+
+                if (pending != deletePending)
+                {
+                    deletePending = pending;
+                    container->setCurrentDragImage (juce::ScaledImage (pending ? deleteImage : dragImage));
+                }
+
+                return;
+            }
+
+            const auto snapshot = createComponentSnapshot (getLocalBounds());
+            dragImage = block::createDragImage (snapshot, false);
+            deleteImage = block::createDragImage (snapshot, true);
+            deletePending = false;
+
+            // 커서 = 블록 가운데 (끄는 그림은 위에 X 원 여백이 있다)
+            const juce::Point<int> centre (-getWidth() / 2, -(dragImage.getHeight() - getHeight()) - getHeight() / 2);
+            container->startDragging (block::mapDrag (slotId), this, juce::ScaledImage (dragImage), false, &centre);
         }
 
         juce::uint64 getSlotId() const noexcept { return slotId; }
+
+        // 화면 좌표 screen 에서 떼면 삭제되는지: 놓을 자리가 없고 (미리보기 조작이 우선), 커서가 원래 블록의 deleteScale 배 사각형 밖
+        bool isDeleteAt (juce::Point<int> screen) const
+        {
+            const auto keep = getScreenBounds().toFloat().withSizeKeepingCentre ((float) getWidth() * deleteScale, (float) getHeight() * deleteScale);
+            return ! keep.contains (screen.toFloat()) && ! (isOverDropZone != nullptr && isOverDropZone (screen));
+        }
 
         void paint (juce::Graphics& g) override
         {
@@ -171,14 +207,27 @@ namespace rig
 
             const bool none = slot->type == BlockType::None;
 
-            // 블록 양식. 미지정 블록은 검은 바탕에 윗줄 없음
-            drawBlockBackground (g, getLocalBounds(), none ? juce::Colours::black : baseColour (*slot).darker (0.6f));
-            drawBlockHeader (g, getLocalBounds(), labelFor (slot->type), baseColour (*slot).brighter (0.4f), removeWidth - textInsetX);
+            // 블록 양식. 미지정 블록은 회색 머리띠 "EMPTY" + block::emptyFill 본문에 "Passthrough"
+            drawBlockBackground (g, getLocalBounds(), none ? block::emptyFill : baseColour (*slot).darker (0.75f));
+            drawBlockHeader (g, getLocalBounds(), labelFor (slot->type), baseColour (*slot),
+                             isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white);
+
+            if (none)
+            {
+                drawBlockText (g, getLocalBounds(), block::emptyText, {},
+                               isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white);
+                return;
+            }
+
+            const auto nameColour = isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white;
+            const auto name = slot->file.getFileNameWithoutExtension();
+
+            // 값 줄 (이름은 아래에서 따로: 선택된 긴 이름은 흘러간다)
+            drawBlockText (g, getLocalBounds(), {}, headline (*slot), nameColour);
 
             const auto text = nameArea();
-            g.setColour (none ? (isDimmed (*slot) ? juce::Colours::grey.darker (0.5f) : juce::Colours::grey) : juce::Colours::white);
-            g.setFont (valueFont());
-            const auto name = none ? juce::String ("Empty") : slot->file.getFileNameWithoutExtension();
+            g.setColour (nameColour);
+            g.setFont (nameFont());
             const auto overflow = nameOverflow();
 
             // 선택되지 않았거나 다 들어가면 앞부분만 (넘치면 말줄임). 선택된 긴 이름은 이름 칸 안에서 흘러간다
@@ -202,18 +251,17 @@ namespace rig
             if (slot == nullptr || slot->type == BlockType::None)
                 return 0.0f;
 
-            const auto width = juce::GlyphArrangement::getStringWidth (valueFont(),
+            const auto width = juce::GlyphArrangement::getStringWidth (nameFont(),
                                                                       slot->file.getFileNameWithoutExtension());
             return width - (float) nameArea().getWidth();
         }
 
-        // 파일명 줄 = 아랫줄
+        // 파일명 줄 = 본문 첫 줄
         juce::Rectangle<int> nameArea() const
         {
-            return valueLine (getLocalBounds());
+            return nameLine (getLocalBounds());
         }
 
-        // 테두리는 버튼(삭제 칸) 위에 그려야 귀퉁이 칸이 블록 테두리를 같이 쓰는 것처럼 보인다
         void paintOverChildren (juce::Graphics& g) override
         {
             const auto* slot = model.findSlot (slotId);
@@ -224,13 +272,20 @@ namespace rig
                             model.getSelectedSlotId() == slotId, slot->error.isNotEmpty());
         }
 
-        void resized() override
+    private:
+        // 값 줄: 지금 씬의 가장 중요한 값 (BlockParams::headlineIndex), 꺼진 블록은 "off", 미지정 블록은 없음
+        juce::String headline (const RigModel::Slot& slot) const
         {
-            // 삭제 칸은 블록 오른쪽 위 귀퉁이에 딱 붙인다
-            removeButton.setBounds (getWidth() - removeWidth, 0, removeWidth, removeHeight);
+            if (slot.type == BlockType::None)
+                return {};
+
+            if (! model.isOn (slot))
+                return "off";
+
+            const auto index = BlockParams::headlineIndex (slot.type);
+            return index >= 0 ? dbText (model.getParam (slot, index)) : juce::String();
         }
 
-    private:
         // 꺼진 블록(바이패스) 또는 꺼진 갈래(무음) 안
         bool isDimmed (const RigModel::Slot& slot) const
         {
@@ -247,21 +302,21 @@ namespace rig
         const juce::uint64 slotId;
         const bool branchActive;            // 블록이 있는 갈래가 현재 씬에서 켜져 있는지 (본 줄은 항상 true)
         const juce::uint32& marqueeStart;   // ChainView 소유: 타일을 다시 만들어도 흘러가던 위치가 이어진다
-        static constexpr int removeWidth = 36, removeHeight = 20;
-        CornerDeleteButton removeButton;
+        juce::Image dragImage, deleteImage;  // 끄는 동안 커서에 붙는 그림 (보통 / 떼면 삭제)
+        bool deletePending = false;
     };
 
     //==============================================================================
     // 병렬의 합류(Merge) 버튼. 클릭 영역(컴포넌트)은 mergeHitSize 정사각형.
     //  - 클릭(끌지 않고 뗌) = 합류 선택 (파라미터 바에 갈래 On/Off·레벨)
-    //  - 끌기 = 합류 지점 옮기기 (Strip 이 후보 자리를 보여주고 뗄 때 옮긴다)
+    //  - 끌기 = 합류 지점 옮기기 / 이어붙이기 (Strip 이 놓을 자리를 보여주고, 자리 위에서 뗄 때만 동작)
     //  - 마우스를 올리면 mergeHoverScale 까지 커진다 (화면 갱신마다 조금씩)
     class ChainView::MergeButton final : public juce::Component
     {
     public:
         MergeButton (RigModel& m, juce::uint64 id) : model (m), parallelId (id) {}
 
-        std::function<void (int stripX)> onDragMove, onDragEnd;   // Strip 좌표의 x
+        std::function<void (juce::Point<int>)> onDragMove, onDragEnd;   // Strip 좌표
 
         void paint (juce::Graphics& g) override
         {
@@ -280,7 +335,7 @@ namespace rig
 
             dragging = true;
             if (onDragMove != nullptr)
-                onDragMove (e.getEventRelativeTo (getParentComponent()).x);
+                onDragMove (e.getEventRelativeTo (getParentComponent()).getPosition());
         }
 
         void mouseUp (const juce::MouseEvent& e) override
@@ -291,7 +346,7 @@ namespace rig
             if (! dragging)
                 model.selectParallel (parallelId);
             else if (onDragEnd != nullptr)
-                onDragEnd (e.getEventRelativeTo (getParentComponent()).x);
+                onDragEnd (e.getEventRelativeTo (getParentComponent()).getPosition());
 
             dragging = false;
         }
@@ -327,9 +382,9 @@ namespace rig
     //
     // 끌어 놓기 (선택기 항목 또는 패치맵 블록). 놓을 자리를 희미하게 미리 보여준다
     //  - 연결선 위   : 그 자리에 넣기 (패치맵 블록이면 이동)
-    //  - 블록 위     : 그 블록의 파일 교체 (선택기 항목만)
+    //  - 블록 위     : 선택기 항목 = 그 블록의 파일 교체, 패치맵 블록 = 두 블록 자리 맞바꾸기 (Swap)
     //  - 본 줄 블록 바로 아래 : 그 블록과 병렬 (위 갈래 = 그 블록, 아래 갈래 = 놓은 것). 갈래 안 블록 아래는 놓을 자리 아님
-    //  - 그 밖 / Esc : 취소. 제자리에 놓으면 아무 일도 없다
+    //  - 그 밖 / Esc : 취소. 제자리에 놓으면 아무 일도 없다. 패치맵 블록을 자리 밖, 원래 블록 deleteScale 배 사각형 밖에서 떼면 삭제
     class ChainView::Strip final : public juce::Component,
                                    public juce::DragAndDropTarget
     {
@@ -352,19 +407,25 @@ namespace rig
 
                 const auto& parallel = std::get<RigModel::Parallel> (chain[(size_t) i]);
                 ParallelView view;
+                view.id = parallel.id;
                 const auto index = (int) parallels.size();
                 view.item = (int) items.size();
                 view.button = mergeButtons.add (new MergeButton (model, parallel.id));
-                view.button->onDragMove = [this, index] (int x) { setMergeTarget (index, x); };
-                view.button->onDragEnd  = [this, index, id = parallel.id] (int x)
+                view.button->onDragMove = [this, index] (juce::Point<int> p) { setMergeTarget (index, p); };
+                view.button->onDragEnd  = [this, index, id = parallel.id] (juce::Point<int> p)
                 {
-                    setMergeTarget (index, x);
-                    const auto delta = mergeTarget.has_value() ? mergeTarget->delta : 0;
+                    setMergeTarget (index, p);
+                    const auto target = mergeTarget;
                     mergeTarget.reset();
                     repaint();
 
-                    if (delta != 0)
-                        model.moveMerge (id, delta);
+                    if (! target.has_value())
+                        return;   // 놓을 자리 밖: 아무 일도 없다
+
+                    if (target->join)
+                        model.joinParallel (id);
+                    else
+                        model.moveMerge (id, target->delta);
                 };
                 addAndMakeVisible (view.button);
 
@@ -419,16 +480,59 @@ namespace rig
                 t->repaint (t->nameArea());
         }
 
-        // IN / OUT 노드 클릭 = 선택 (파라미터 바에 채널 선택이 나온다)
+        // IN / OUT 노드 클릭 = 선택 (파라미터 바에 채널 선택이 나온다). 빈 바탕 클릭 = 선택 해제 (mouseUp).
+        // 병렬 갈래의 블록→블록 화살표를 눌러 같은 병렬의 다른 줄 블록→블록 화살표로 끌어 놓으면 그 자리에서 병렬을 둘로 나눈다
         void mouseDown (const juce::MouseEvent& e) override
         {
             if (! isLeftClick (e))
                 return;
 
+            splitFrom = splitEdgeAt (e.getPosition());
+            splitTo.reset();
+
             if (inNode().contains (e.getPosition()))
                 model.selectEndpoint (RigModel::Endpoint::input);
             else if (outNode().contains (e.getPosition()))
                 model.selectEndpoint (RigModel::Endpoint::output);
+        }
+
+        void mouseDrag (const juce::MouseEvent& e) override
+        {
+            if (! splitFrom.has_value() || ! isLeftClick (e))
+                return;
+
+            splitCursor = e.getPosition();
+            const auto edge = splitEdgeAt (e.getPosition());
+            splitTo = edge.has_value() && edge->parallel == splitFrom->parallel && edge->branch != splitFrom->branch
+                    ? edge : std::nullopt;
+            repaint();
+        }
+
+        void mouseUp (const juce::MouseEvent& e) override
+        {
+            const auto from = splitFrom, to = splitTo;
+            splitFrom.reset();
+            splitTo.reset();
+            repaint();
+
+            if (! isLeftClick (e))
+                return;
+
+            // 빈 바탕 클릭 (연결선을 끌지 않고 뗀 것 포함) = 선택 해제. IN / OUT 은 누를 때 이미 골랐다
+            if (! e.mouseWasDraggedSinceMouseDown())
+            {
+                if (! inNode().contains (e.getPosition()) && ! outNode().contains (e.getPosition()))
+                    model.selectSlot (0);
+
+                return;
+            }
+
+            if (! from.has_value() || ! to.has_value())
+                return;   // 다른 줄 화살표 위가 아니면 아무 일도 없다
+
+            const auto& upper = from->branch == 0 ? *from : *to;
+            const auto& lower = from->branch == 0 ? *to : *from;
+            model.splitParallel (upper.parallelId, upper.count, lower.count);
         }
 
         void paint (juce::Graphics& g) override
@@ -536,6 +640,9 @@ namespace rig
 
             segment (x, 0, (float) (x + gap), true, true);
 
+            layoutMergeZones();
+            layoutSplitEdges();
+
             for (auto* tile : tiles)
                 dropZones.push_back ({ tile->getBounds(), DropZone::replace, {}, tile->getSlotId(), tile->getBounds() });
 
@@ -588,27 +695,92 @@ namespace rig
                 model.moveBlock (drag->slotId, zone->place);
             else if (zone->kind == DropZone::parallel)
                 model.moveBlockBelow (drag->slotId, zone->slotId);
+            else
+                model.swapBlocks (drag->slotId, zone->slotId);
         }
 
-        // 놓을 자리 / 옮길 합류 지점 미리보기 (블록 위에)
+        // 놓을 자리 / 옮길 합류 지점 미리보기 (블록 위에), Undo / Redo 로 되돌아간 블록·합류 버튼·IN / OUT 강조
         void paintOverChildren (juce::Graphics& g) override
         {
-            if (mergeTarget.has_value() && mergeTarget->delta != 0)
+            if (const auto alpha = highlightAlpha (model.getHighlightStart()); alpha > 0.0f)
             {
-                // 합류 버튼이 갈 자리: 희미한 버튼 + 아래 갈래가 올라올 세로선.
-                // 오른쪽으로 옮기면 아래 갈래 선이 지금 합류 자리에서 새 자리까지 늘어난다 (ㄱ 모서리는 선 두께 절반 겹침)
+                const auto& touched = model.getHighlight();
+                const auto has = [] (const auto& list, auto value) { return std::find (list.begin(), list.end(), value) != list.end(); };
+
+                for (auto* tile : tiles)
+                    if (has (touched.slots, tile->getSlotId()))
+                        drawHighlight (g, tile->getBounds().toFloat(), alpha);
+
+                for (const auto& view : parallels)
+                    if (has (touched.parallels, view.id))
+                        drawHighlight (g, juce::Rectangle<float> (mergeSize, mergeSize).withCentre (view.button->getBounds().toFloat().getCentre()), alpha, 6.0f);
+
+                if (touched.endpoint != RigModel::Endpoint::none)
+                    drawHighlight (g, (touched.endpoint == RigModel::Endpoint::input ? inNode() : outNode()).toFloat(), alpha);
+            }
+
+            if (mergeTarget.has_value())
+            {
                 const float row0 = (float) rowY (0) + (float) tileHeight * 0.5f, row1 = (float) rowY (1) + (float) tileHeight * 0.5f;
                 const float half = lineThickness * 0.5f;
-                const auto x = (float) mergeTarget->x;
-                const auto current = (float) parallels[(size_t) mergeTarget->parallel].mergeX;
                 g.beginTransparencyLayer (dropHighlight.getFloatAlpha());
                 g.setColour (activeLine);
 
-                if (x > current)
-                    g.drawLine (current, row1, x + half, row1, lineThickness);
+                if (mergeTarget->join)
+                {
+                    // 이어붙이기: 놓을 자리(아래 줄 빈 공간) + 이어질 선 (앞 병렬 갈래 끝 → 뒤 병렬 갈래 첫 블록)
+                    const auto& view = parallels[(size_t) mergeTarget->parallel];
+                    const auto& next = parallels[(size_t) mergeTarget->parallel + 1];
+                    g.drawRoundedRectangle (mergeTarget->area.toFloat().reduced (2.0f), block::corner, lineThickness);
 
-                g.drawLine (x, row0, x, row1 + half, lineThickness);
-                drawMergeButton (g, *this, { x, row0 }, mergeSize, false, false);
+                    for (size_t b = 0; b < 2; ++b)
+                    {
+                        const float y = b == 0 ? row0 : row1;
+                        g.drawArrow ({ (float) view.tiles[b].back()->getRight(), y, (float) next.tiles[b].front()->getX() - 2.0f, y },
+                                     lineThickness, 8.0f, 8.0f);
+                    }
+                }
+                else
+                {
+                    // 합류 버튼이 갈 자리: 희미한 버튼 + 아래 갈래가 올라올 세로선.
+                    // 오른쪽으로 옮기면 아래 갈래 선이 지금 합류 자리에서 새 자리까지 늘어난다 (ㄱ 모서리는 선 두께 절반 겹침)
+                    const auto x = (float) mergeTarget->x;
+                    const auto current = (float) parallels[(size_t) mergeTarget->parallel].mergeX;
+
+                    if (x > current)
+                        g.drawLine (current, row1, x + half, row1, lineThickness);
+
+                    g.drawLine (x, row0, x, row1 + half, lineThickness);
+                    drawMergeButton (g, *this, { x, row0 }, mergeSize, false, false);
+                }
+
+                g.endTransparencyLayer();
+            }
+
+            if (splitFrom.has_value())
+            {
+                // 병렬 나누기: 누른 화살표 강조 + 커서까지 선. 다른 줄 화살표 위면 두 화살표를 잇는 세로선 + 새 합류 버튼 자리
+                const float row0 = (float) rowY (0) + (float) tileHeight * 0.5f, row1 = (float) rowY (1) + (float) tileHeight * 0.5f;
+                g.beginTransparencyLayer (dropHighlight.getFloatAlpha());
+                g.setColour (activeLine);
+                g.drawRoundedRectangle (splitFrom->area.toFloat().reduced (2.0f), block::corner, lineThickness);
+
+                if (splitTo.has_value())
+                {
+                    g.drawRoundedRectangle (splitTo->area.toFloat().reduced (2.0f), block::corner, lineThickness);
+                    const auto& upper = splitFrom->branch == 0 ? *splitFrom : *splitTo;
+                    const auto& lower = splitFrom->branch == 0 ? *splitTo : *splitFrom;
+                    const float ux = (float) upper.area.getCentreX(), lx = (float) lower.area.getCentreX();
+                    g.drawLine (ux, row0, ux, row1, lineThickness);
+                    g.drawLine (juce::jmin (ux, lx), row1, juce::jmax (ux, lx), row1, lineThickness);
+                    drawMergeButton (g, *this, { ux, row0 }, mergeSize, false, false);
+                }
+                else
+                {
+                    g.drawLine (splitFrom->area.toFloat().getCentre().x, splitFrom->area.toFloat().getCentre().y,
+                                (float) splitCursor.x, (float) splitCursor.y, lineThickness);
+                }
+
                 g.endTransparencyLayer();
             }
 
@@ -619,7 +791,7 @@ namespace rig
 
             if (hover->kind == DropZone::insert)
             {
-                g.fillRoundedRectangle (hover->area.toFloat().reduced (2.0f), block::corner);
+                g.drawRoundedRectangle (hover->area.toFloat().reduced (2.0f), block::corner, lineThickness);   // 놓을 자리 = 테두리만 (합류 이어붙이기와 같다)
                 return;
             }
 
@@ -662,42 +834,102 @@ namespace rig
             std::array<std::vector<Tile*>, 2> tiles;
             std::array<bool, 2> active { true, true };
             MergeButton* button = nullptr;
+            juce::uint64 id = 0;    // 병렬 id
             int item = -1;          // items 안의 번호
             int mergeX = 0;         // 지금 합류 버튼 x (resized 에서)
         };
 
-        // 합류 버튼을 끄는 동안 고른 자리
+        // 합류 버튼을 놓을 자리 (resized 에서 계산). 이 자리 위에서만 미리보기가 뜨고 동작한다
+        //  - 위 갈래 안 연결선 (첫 블록 앞 제외) : 그 뒤 위 갈래 블록을 합류 뒤 본 줄로 (delta < 0)
+        //  - 병렬 뒤 본 줄 연결선 (다음 병렬 전까지) : 사이 본 줄 블록을 위 갈래 끝으로 (delta > 0)
+        //  - 아래 줄 빈 공간 (바로 뒤가 병렬일 때, 합류 세로선 ~ 다음 갈림 세로선 사이) : 이어붙이기
+        // 아래 갈래 안, 다음 병렬 안 / 너머는 자리가 아니다 (병렬끼리 겹치거나 품게 된다)
         struct MergeTarget
         {
-            int parallel = -1, delta = 0, x = 0;
+            juce::Rectangle<int> area;
+            int parallel = -1, delta = 0, x = 0;   // x = 옮길 합류 버튼 자리 (delta 일 때)
+            bool join = false;
         };
 
-        // 합류 지점 후보 (delta, x): 위 갈래를 1개까지 줄이는 자리들, 지금 자리, 병렬 바로 뒤 본 줄 블록을 넣는 자리들(다른 병렬 앞까지).
-        // x 는 지금 배치에서 그 블록 오른쪽 연결선 가운데
-        std::vector<std::pair<int, int>> mergeCandidates (int index) const
+        void layoutMergeZones()
         {
-            const auto& view = parallels[(size_t) index];
-            const auto& upper = view.tiles[0];
-            std::vector<std::pair<int, int>> candidates;
+            mergeZones.clear();
 
-            for (size_t k = 1; k < upper.size(); ++k)
-                candidates.push_back ({ (int) k - (int) upper.size(), upper[k - 1]->getRight() + gap / 2 });
+            for (int p = 0; p < (int) parallels.size(); ++p)
+            {
+                const auto& view = parallels[(size_t) p];
+                const auto& upper = view.tiles[0];
 
-            candidates.push_back ({ 0, view.mergeX });
+                for (size_t k = 1; k < upper.size(); ++k)
+                {
+                    const int left = upper[k - 1]->getRight();
+                    mergeZones.push_back ({ { left, rowY (0), gap, tileHeight }, p, (int) k - (int) upper.size(), left + gap / 2, false });
+                }
 
-            for (size_t j = (size_t) view.item + 1; j < items.size() && items[j].tile != nullptr; ++j)
-                candidates.push_back ({ (int) (j - (size_t) view.item), items[j].tile->getRight() + gap / 2 });
+                size_t j = (size_t) view.item + 1;
 
-            return candidates;
+                for (; j < items.size() && items[j].tile != nullptr; ++j)
+                {
+                    const int left = items[j].tile->getRight();
+                    mergeZones.push_back ({ { left, rowY (0), gap, tileHeight }, p, (int) (j - (size_t) view.item), left + gap / 2, false });
+                }
+
+                // 바로 뒤가 병렬: 아래 줄에서 이 합류의 세로선과 다음 병렬 갈림의 세로선 사이 빈 공간 (gap 폭)
+                if (j == (size_t) view.item + 1 && j < items.size())
+                    mergeZones.push_back ({ { view.mergeX, rowY (1), gap, tileHeight }, p, 0, 0, true });
+            }
         }
 
-        void setMergeTarget (int index, int x)
+        // 병렬 나누기에 쓰는 화살표: 갈래 안 블록→블록 연결선 (갈림 → 첫 블록, 마지막 블록 → 합류는 아니다). count = 그 화살표 앞 블록 수
+        struct SplitEdge
         {
-            const auto candidates = mergeCandidates (index);
-            const auto nearest = std::min_element (candidates.begin(), candidates.end(),
-                                                   [x] (const auto& a, const auto& b) { return std::abs (a.second - x) < std::abs (b.second - x); });
+            juce::Rectangle<int> area;
+            juce::uint64 parallelId = 0;
+            int parallel = -1, branch = 0, count = 0;
+        };
 
-            mergeTarget = MergeTarget { index, nearest->first, nearest->second };
+        void layoutSplitEdges()
+        {
+            splitEdges.clear();
+
+            for (int p = 0; p < (int) parallels.size(); ++p)
+            {
+                const auto& view = parallels[(size_t) p];
+
+                for (int b = 0; b < 2; ++b)
+                {
+                    const auto& row = view.tiles[(size_t) b];
+
+                    for (size_t k = 1; k < row.size(); ++k)
+                        splitEdges.push_back ({ { row[k - 1]->getRight(), rowY (b), gap, tileHeight }, view.id, p, b, (int) k });
+                }
+            }
+        }
+
+        std::optional<SplitEdge> splitEdgeAt (juce::Point<int> position) const
+        {
+            for (const auto& edge : splitEdges)
+                if (hitArea (edge.area).contains (position))
+                    return edge;
+
+            return std::nullopt;
+        }
+
+        void setMergeTarget (int index, juce::Point<int> position)
+        {
+            std::optional<MergeTarget> target;
+
+            for (const auto& zone : mergeZones)
+                if (zone.parallel == index && hitArea (zone.area).contains (position))
+                    target = zone;
+
+            const auto same = target.has_value() == mergeTarget.has_value()
+                           && (! target.has_value() || (target->area == mergeTarget->area && target->parallel == mergeTarget->parallel));
+
+            if (same)
+                return;
+
+            mergeTarget = target;
             repaint();
         }
 
@@ -733,10 +965,11 @@ namespace rig
                 if (drag->fromLibrary)
                     return zone;
 
-                if (! from.has_value() || zone.kind == DropZone::replace)   // 패치맵 안에서는 이동만
+                if (! from.has_value())
                     return std::nullopt;
 
-                if (zone.kind == DropZone::parallel)
+                // 패치맵 블록: 다른 블록 위 = Swap, 본 줄 블록 아래 = 병렬. 자기 자신은 자리 아님
+                if (zone.kind == DropZone::replace || zone.kind == DropZone::parallel)
                     return zone.slotId == drag->slotId ? std::nullopt : std::optional<DropZone> (zone);
 
                 // 같은 목록에서 바로 앞이나 바로 뒤 자리 = 제자리
@@ -749,6 +982,17 @@ namespace rig
             }
 
             return std::nullopt;
+        }
+
+        // 패치맵 블록 id 를 화면 좌표 screen 에 놓으면 놓을 자리가 있는지 (패치맵에 보이는 영역 안에서만)
+        bool dropZoneAt (juce::uint64 id, juce::Point<int> screen) const
+        {
+            const auto* scroller = findParentComponentOfClass<juce::Viewport>();
+
+            if (scroller == nullptr || ! scroller->getScreenBounds().contains (screen))
+                return false;
+
+            return zoneAt ({ block::mapDrag (id), nullptr, getLocalPoint (nullptr, screen) }).has_value();
         }
 
         // 놓을 자리가 반응하는 범위: 그 자리(미리보기 위치)에서 세로로 넓힌다. 바깥쪽(본 줄 위 / 아래 줄 아래)은 dropMargin,
@@ -777,6 +1021,7 @@ namespace rig
         Tile* addTile (juce::uint64 id, bool active)
         {
             auto* tile = tiles.add (new Tile (model, id, active, marqueeStart));
+            tile->isOverDropZone = [this, id] (juce::Point<int> screen) { return dropZoneAt (id, screen); };
             addAndMakeVisible (tile);
             return tile;
         }
@@ -808,16 +1053,16 @@ namespace rig
         juce::Rectangle<int> inNode() const  { return { margin, rowY (0), endWidth, tileHeight }; }
         juce::Rectangle<int> outNode() const { return { idealWidth() - margin - endWidth, rowY (0), endWidth, tileHeight }; }
 
-        // 블록 양식 그대로: 윗줄 "IN" / "OUT", 아랫줄 채널. 장치에 없는 채널 = 블록의 로딩 실패와 같은 오류 표시
-        static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& title, const juce::String& channels,
-                                 bool selected, bool failed)
+        // 블록 양식 그대로: 머리띠 "IN" / "OUT", 본문 = 채널 번호 하나를 가로·세로 가운데에. 장치에 없는 채널 = 블록의 로딩 실패와 같은 오류 표시
+        static void drawEndNode (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& title,
+                                 const juce::String& channels, bool selected, bool failed)
         {
-            drawBlockBackground (g, area, endpointColour.darker (0.6f));
-            drawBlockHeader (g, area, title, endpointColour.brighter (0.4f));
+            drawBlockBackground (g, area, block::endpointFill);
+            drawBlockHeader (g, area, title, block::endpointBand);
             g.setColour (juce::Colours::white);
-            g.setFont (valueFont());
-            g.drawText (channels, valueLine (area), juce::Justification::centredLeft, true);   // 넘치면 말줄임
-            drawBlockFrame (g, area, endpointColour, selected, failed);
+            g.setFont (block::nameFont());
+            g.drawText (channels, block::body (area), juce::Justification::centred, true);   // 넘치면 말줄임
+            drawBlockFrame (g, area, block::endpointBand, selected, failed);
         }
 
         RigModel& model;
@@ -832,7 +1077,11 @@ namespace rig
         std::vector<Line> lines;                     // resized 에서 계산
         std::vector<DropZone> dropZones;             // resized 에서 계산
         std::optional<DropZone> hover;               // 끄는 동안 놓을 자리
-        std::optional<MergeTarget> mergeTarget;      // 합류 버튼을 끄는 동안 옮길 자리
+        std::vector<MergeTarget> mergeZones;         // resized 에서 계산
+        std::vector<SplitEdge> splitEdges;           // resized 에서 계산
+        std::optional<SplitEdge> splitFrom, splitTo; // 병렬 나누기: 누른 화살표 / 지금 놓을 화살표 (다른 줄, 같은 병렬)
+        juce::Point<int> splitCursor;
+        std::optional<MergeTarget> mergeTarget;      // 합류 버튼을 끄는 동안 놓을 자리 (자리 밖이면 없음)
     };
 
     //==============================================================================
