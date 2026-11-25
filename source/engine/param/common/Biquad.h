@@ -29,6 +29,23 @@ namespace rig
                  1 + t.alpha / A, -2 * t.cosw, 1 - t.alpha / A);
         }
 
+        // shelf: hz = 경계(게인의 dB 절반이 되는 곳). q = 1/√2 이면 봉우리 없이 가장 가파르다
+        void setLowShelf (double sr, double hz, double q, double gainDb) noexcept
+        {
+            const Terms t (sr, hz, q);
+            const double A = std::pow (10.0, gainDb / 40.0), k = 2 * std::sqrt (A) * t.alpha;
+            set (A * ((A + 1) - (A - 1) * t.cosw + k), 2 * A * ((A - 1) - (A + 1) * t.cosw), A * ((A + 1) - (A - 1) * t.cosw - k),
+                 (A + 1) + (A - 1) * t.cosw + k, -2 * ((A - 1) + (A + 1) * t.cosw), (A + 1) + (A - 1) * t.cosw - k);
+        }
+
+        void setHighShelf (double sr, double hz, double q, double gainDb) noexcept
+        {
+            const Terms t (sr, hz, q);
+            const double A = std::pow (10.0, gainDb / 40.0), k = 2 * std::sqrt (A) * t.alpha;
+            set (A * ((A + 1) + (A - 1) * t.cosw + k), -2 * A * ((A - 1) + (A + 1) * t.cosw), A * ((A + 1) + (A - 1) * t.cosw - k),
+                 (A + 1) - (A - 1) * t.cosw + k, 2 * ((A - 1) - (A + 1) * t.cosw), (A + 1) - (A - 1) * t.cosw - k);
+        }
+
         void setHighPass (double sr, double hz, double q) noexcept
         {
             const Terms t (sr, hz, q);

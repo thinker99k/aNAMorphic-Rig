@@ -176,15 +176,18 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
 - `on` : 씬 1~8 에서 이 블록의 On/Off (Off = 바이패스)
 - `params` : NAM / IR 블록의 파라미터. 이름마다 씬 1~8 의 값. 스위치는 true / false, dB 는 소수 1자리, Hz 는 정수, Q 는 소수 2자리.
   없거나 이상한 값은 기본값, 범위 밖은 범위 안으로
-  - NAM (블록 뒤 3밴드 EQ, 세 밴드 모두 peak, 항상 켜짐)
+  - NAM (모델 앞 Gain, 모델 뒤 3밴드 EQ(세 밴드 모두 peak) + Presence / Resonance, 모두 항상 켜짐)
 
     | 이름 | 범위 | 기본 |
     |---|---|---|
+    | `gainDb` | -12 ~ 12 dB (모델 앞 입력 게인) | 0 |
     | `bassDb` / `middleDb` / `trebleDb` | -12 ~ 12 dB | 0 |
     | `bassHz` | 25 ~ 400 Hz | 100 |
     | `middleHz` | 400 ~ 2500 Hz | 1000 |
     | `middleQ` | 0.2 ~ 3.2 (Middle 폭, Bass / Treble 은 0.8 고정) | 0.8 |
     | `trebleHz` | 2500 ~ 10000 Hz | 5000 |
+    | `presenceDb` | -12 ~ 12 dB (high shelf 4 kHz) | 0 |
+    | `resonanceDb` | -12 ~ 12 dB (low shelf + peak 80 Hz) | 0 |
 
   - IR (블록 뒤 L. Cut / H. Cut, 24 dB/oct)
 
@@ -193,6 +196,12 @@ Windows `aNAMorphic-Rig.exe --spectrum`, macOS `open aNAMorphic-Rig.app --args -
     | `lowCutOn` / `highCutOn` | true / false | false |
     | `lowCutHz` | 25 ~ 400 Hz | 100 |
     | `highCutHz` | 1250 ~ 20000 Hz | 5000 |
+
+  - 공용 (모든 블록 종류, 블록 소리 맨 끝)
+
+    | 이름 | 범위 | 기본 |
+    |---|---|---|
+    | `outputDb` | -12 ~ 12 dB | 0 |
 
 - `branches` : 병렬의 위 / 아래 두 갈래. 갈래 안에는 블록만 (병렬은 한 단계). 두 갈래는 합류에서 다시 합쳐짐
   - `on` : 씬 1~8 에서 이 갈래의 On/Off (Off = 그 갈래 무음)

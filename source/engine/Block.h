@@ -88,7 +88,8 @@ namespace rig
         void processMixed (const float* in, float* out, int numSamples, int rampSamples) noexcept
         {
             process (in, out, numSamples);
-            if (stage != nullptr) stage->process (out, numSamples);   // 파라미터 단계는 wet 쪽에만
+            if (stage != nullptr) stage->process (out, numSamples);               // 파라미터 단계는 wet 쪽에만
+            if (outputStage != nullptr) outputStage->process (out, numSamples);   // 공용 Output 은 맨 끝 (꺼지면 dry 라 같이 빠진다)
 
             const bool on = onTarget.load (std::memory_order_relaxed);
 
@@ -118,13 +119,19 @@ namespace rig
         {
             lastSampleRate = sr; lastBlockSize = bs;
             if (stage != nullptr) stage->prepare (sr, bs);
+            if (outputStage != nullptr) outputStage->prepare (sr, bs);
         }
 
         // 블록이 만들어질 때 한 번만 호출 (오디오 스레드가 쓰기 전)
         void setStage (std::unique_ptr<ParamStage> s) noexcept { stage = std::move (s); }
 
+    public:
+        // 공용 Output 단계 (모든 종류, BlockFactory 가 붙인다). 블록이 만들어질 때 한 번만 호출 (오디오 스레드가 쓰기 전, prepare 전)
+        void setOutputStage (std::unique_ptr<ParamStage> s) noexcept { outputStage = std::move (s); }
+
     private:
-        std::unique_ptr<ParamStage> stage;   // 블록 소리 뒤에 적용하는 파라미터 처리 (없으면 nullptr)
+        std::unique_ptr<ParamStage> stage;         // 블록 소리 뒤에 적용하는 종류별 파라미터 처리 (없으면 nullptr)
+        std::unique_ptr<ParamStage> outputStage;   // 그 뒤 공용 Output (없으면 nullptr)
 
         std::atomic<bool> onTarget { true };
         float mix = 1.0f;   // 오디오 스레드 전용: 0 = dry, 1 = wet

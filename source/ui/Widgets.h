@@ -53,6 +53,17 @@ namespace rig
         return { left, area.getY(), right - left, area.getHeight() };
     }
 
+    // 파라미터 바의 묶음 구분선 |: cell 번 칸과 다음 칸 사이 틈 가운데, 위아래 cellSeparatorInset 만큼 띄운다
+    // (Live 패치 번호 | 이름 구분선과 같은 색·여백)
+    constexpr float cellSeparatorInset = 14.0f;
+
+    inline void drawCellSeparator (juce::Graphics& g, juce::Rectangle<int> area, int cell)
+    {
+        const int x = (bottomBarCell (area, cell).getRight() + bottomBarCell (area, cell + 1).getX()) / 2;
+        g.setColour (juce::Colour (0xff4c5860));
+        g.drawVerticalLine (x, (float) area.getY() + cellSeparatorInset, (float) area.getBottom() - cellSeparatorInset);
+    }
+
     // 채널 줄 (파라미터 바의 IN / OUT, Live 아래 줄): 14칸 격자 0 ~ 5 칸에 [이름표] 간격 [목록 = 나머지], 줄 높이 28
     constexpr int channelCells = 6, channelLabelWidth = 110, channelLabelGap = 8, channelRowHeight = 28;
 
