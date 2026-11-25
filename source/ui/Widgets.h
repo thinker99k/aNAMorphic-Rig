@@ -40,6 +40,22 @@ namespace rig
         return count == 2 ? juce::String (first + 1) + "+" + juce::String (first + 2) : juce::String (first + 1);
     }
 
+    // 아래 줄 14칸 격자 (편집 화면 씬 바, Live 아래 줄, 파라미터 바의 리셋 폭이 같이 쓴다): 칸 사이 bottomBarGap (= 바깥 여백),
+    // 칸 폭 = (area 폭 - 13 x 간격) / 14 (1024 창에서 약 66.7 px), 칸 높이 = area 높이. first 번 칸부터 count 칸을 덮는 사각형
+    constexpr int bottomBarCells = 14, bottomBarGap = 6;
+
+    inline juce::Rectangle<int> bottomBarCell (juce::Rectangle<int> area, int first, int count = 1)
+    {
+        const float cell = (float) (area.getWidth() - (bottomBarCells - 1) * bottomBarGap) / (float) bottomBarCells;
+        const auto edge = [&] (int i) { return area.getX() + juce::roundToInt ((float) i * (cell + (float) bottomBarGap)); };
+        const int left = edge (first);
+        const int right = edge (first + count) - bottomBarGap;
+        return { left, area.getY(), right - left, area.getHeight() };
+    }
+
+    // 채널 줄 (파라미터 바의 IN / OUT, Live 아래 줄): 14칸 격자 0 ~ 5 칸에 [이름표] 간격 [목록 = 나머지], 줄 높이 28
+    constexpr int channelCells = 6, channelLabelWidth = 110, channelLabelGap = 8, channelRowHeight = 28;
+
     // 입출력 채널 목록 (파라미터 바의 IN / OUT, Live 아래 줄이 같이 쓴다)
     //  - 항목 id: 단일 채널 = 1 + 채널(0부터), 출력 스테레오 쌍 = channelPairIdBase + 첫 채널(0부터)
     //  - 입력은 단일 채널만. 출력은 엔진이 모노 결과를 고른 채널에 복사하므로 스테레오 쌍 먼저, 그다음 단일 채널

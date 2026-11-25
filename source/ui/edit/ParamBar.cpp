@@ -240,48 +240,46 @@ namespace rig
 
     void ParamBar::resized()
     {
-        // 리셋(Param Reset / Level Reset)은 왼쪽 끝 (리셋은 왼쪽). 중간 리셋이라 높이 = 큰 리셋(씬 바 Scene Reset,
-        // 바깥 여백 6 px 로 바를 꽉 채운 정사각형)의 2/3, 세로 가운데. 폭은 큰 리셋과 같아 아래 Scene Reset 과 줄이 맞는다.
-        // 리셋 오른쪽부터 내용, 오른쪽 끝 = 블록 전원 버튼
-        constexpr int resetMargin = 6, contentGap = 12;
-        const int bigResetSize = getHeight() - 2 * resetMargin;
-        const auto resetArea = juce::Rectangle<int> (resetMargin, 0, bigResetSize, getHeight())
-                                   .withSizeKeepingCentre (bigResetSize, bigResetSize * 2 / 3);
+        // 14칸 격자 (bottomBarCell, 아래 씬 바와 같은 격자). 바깥 여백 6 px
+        //   블록 : [Param Reset 0] [ 1 ] [패널: 종류별 칸 2 ~ 12] [전원 13]
+        //   IN / OUT : [채널 0 ~ 5]
+        //   합류 : [Level Reset 0] [ 1 ] [위 갈래 2 ~ 5] [ 6 ] [아래 갈래 7 ~ 10] [ 11 ~ 13 ]
+        // 리셋은 왼쪽 끝 (리셋은 왼쪽). 중간 리셋이라 높이 = 큰 리셋(씬 바 Scene Reset, 같은 0번 칸)의 2/3, 세로 가운데
+        const auto grid = getLocalBounds().reduced (bottomBarGap);
+        const auto bigReset = bottomBarCell (grid, 0);
+        const auto resetArea = bigReset.withSizeKeepingCentre (bigReset.getWidth(), bigReset.getHeight() * 2 / 3);
         paramResetButton.setBounds (resetArea);
         levelResetButton.setBounds (resetArea);
 
-        auto area = getLocalBounds().reduced (12, 0).withLeft (resetArea.getRight() + contentGap);
-        const int size = juce::jmin (PowerButton::size, getHeight() - 8);   // 블록 전원 버튼
-        const int subSize = juce::jmin (SubPowerButton::size, getHeight() - 8);   // 합류 갈래 전원 버튼
-        powerButton.setBounds (area.removeFromRight (size).withSizeKeepingCentre (size, size));
+        // 블록 전원: 마지막 칸 가운데, 크기는 그대로
+        const int size = juce::jmin (PowerButton::size, getHeight() - 8);
+        powerButton.setBounds (bottomBarCell (grid, bottomBarCells - 1).withSizeKeepingCentre (size, size));
 
         if (panel != nullptr)
-        {
-            area.removeFromRight (contentGap);
-            panel->setBounds (area);
-        }
+            panel->setBounds (grid);   // 패널이 격자 칸을 직접 고른다 (ParamPanel::layoutGroups)
 
-        // IN / OUT 선택 시: 왼쪽부터 [이름표 110] [채널 목록 320], 높이 28 (설정창 줄과 같은 크기)
-        auto row = getLocalBounds().reduced (12, 0).withSizeKeepingCentre (getWidth() - 24, 28);
-        channelLabel.setBounds (row.removeFromLeft (110));
-        row.removeFromLeft (8);
-        channelBox.setBounds (row.removeFromLeft (320));
+        // IN / OUT 선택 시: 0 ~ 5 칸에 [이름표 channelLabelWidth] 8 [채널 목록 = 나머지], 높이 28 (Live 아래 줄 채널과 같다)
+        auto row = bottomBarCell (grid, 0, channelCells);
+        row = row.withSizeKeepingCentre (row.getWidth(), channelRowHeight);
+        channelLabel.setBounds (row.removeFromLeft (channelLabelWidth));
+        row.removeFromLeft (channelLabelGap);
+        channelBox.setBounds (row);
 
-        // 합류 선택 시: [Level Reset] 12 [빨간 전원 40] 8 [칸 260: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]  간격 64  [아래 갈래]
-        constexpr int columnWidth = 260, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight, branchGap = 64;
-        auto merge = getLocalBounds().reduced (12, 0).withLeft (resetArea.getRight() + contentGap);
+        // 합류 선택 시: 갈래마다 4칸 [빨간 전원 40] 8 [나머지: 윗줄 = 이름(왼쪽) + dB(오른쪽) 18, 아랫줄 = 슬라이더 24]
+        constexpr int branchCells = 4, textHeight = 18, sliderHeight = FaderLookAndFeel::capHeight;
+        const int subSize = juce::jmin (SubPowerButton::size, getHeight() - 8);
 
         for (size_t b = 0; b < 2; ++b)
         {
+            auto merge = bottomBarCell (grid, b == 0 ? 2 : 7, branchCells);
             branchPower[b].setBounds (merge.removeFromLeft (subSize).withSizeKeepingCentre (subSize, subSize));
             merge.removeFromLeft (8);
 
-            auto column = merge.removeFromLeft (columnWidth).withSizeKeepingCentre (columnWidth, textHeight + sliderHeight);
+            auto column = merge.withSizeKeepingCentre (merge.getWidth(), textHeight + sliderHeight);
             auto text = column.removeFromTop (textHeight).reduced (FaderLookAndFeel::capWidth / 2, 0);   // 홈 양 끝에 맞춘다
-            branchLabel[b].setBounds (text.removeFromLeft (columnWidth / 2));
+            branchLabel[b].setBounds (text.removeFromLeft (text.getWidth() / 2));
             levelValue[b].setBounds (text);
             levelSlider[b].setBounds (column);
-            merge.removeFromLeft (branchGap);
         }
     }
 }

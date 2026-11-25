@@ -9,7 +9,7 @@ namespace rig
     {
         // 실행 뒤 테두리: 자동차 할로겐 방향지시등처럼 부드럽게 두 번 깜빡인다 (한 번 = blinkMs, sin² 곡선)
         constexpr juce::uint32 blinkMs = 380, numBlinks = 2, flashMs = blinkMs * numBlinks;
-        constexpr int gap = 6;                  // 바깥 여백, 버튼 사이, Copy / Swap / Reset 사이 모두 같은 폭
+        constexpr int gap = bottomBarGap;       // 바깥 여백 (버튼 사이도 같은 값, 14칸 격자 bottomBarCell)
         constexpr int saveButtonSize = 24;      // 이름 입력칸 오른쪽 위 귀퉁이의 정사각형 체크 버튼
         constexpr float sceneCorner = 5.0f;     // 씬 버튼 둥근 모서리 반지름
         constexpr float nameFontSize = 13.0f;   // 씬 이름 (버튼 표시와 입력칸이 같은 크기와 위치)
@@ -364,26 +364,18 @@ namespace rig
 
     void SceneBar::resized()
     {
-        auto area = getLocalBounds().reduced (gap);
+        const auto area = getLocalBounds().reduced (gap);
 
-        // [Scene Reset] 는 왼쪽 끝 (전체 리셋은 왼쪽), [1] ~ [8] [Copy/Swap] 묶음은 가운데, [Live] 는 오른쪽 끝.
-        // 버튼 폭은 모두 같은 정사각형 한 칸 (= 높이). Copy / Swap 은 한 칸을 위아래로 나눈다. 사이는 모두 gap
-        const int size = area.getHeight();
-
-        sceneResetButton.setBounds (area.getX(), area.getY(), size, size);
-        liveButton.setBounds (area.getRight() - size, area.getY(), size, size);
-
-        constexpr int columns = RigModel::numScenes + 1;   // 씬 8개 + Copy / Swap
-        const int groupWidth = columns * size + (columns - 1) * gap;
-        const int groupLeft = getLocalBounds().getCentreX() - groupWidth / 2;
+        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [1] ~ [8] [Copy] [Swap] [ ] [Live]
+        // 전체 리셋은 왼쪽 끝, Live 는 오른쪽 끝. 버튼은 모두 같은 한 칸 (바깥 여백·버튼 사이 6 px)
+        sceneResetButton.setBounds (bottomBarCell (area, 0));
+        liveButton.setBounds (bottomBarCell (area, bottomBarCells - 1));
 
         for (int i = 0; i < RigModel::numScenes; ++i)
-            sceneBounds[(size_t) i] = { groupLeft + i * (size + gap), area.getY(), size, size };
+            sceneBounds[(size_t) i] = bottomBarCell (area, 2 + i);
 
-        auto modeArea = juce::Rectangle<int> (groupLeft + RigModel::numScenes * (size + gap), area.getY(), size, size);
-        copyButton.setBounds (modeArea.removeFromTop ((size - gap) / 2));
-        modeArea.removeFromTop (gap);
-        swapButton.setBounds (modeArea);
+        copyButton.setBounds (bottomBarCell (area, 2 + RigModel::numScenes));
+        swapButton.setBounds (bottomBarCell (area, 3 + RigModel::numScenes));
 
         if (renamingScene >= 0)
             layoutNameEditor();

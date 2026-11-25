@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/Block.h"
+#include "ui/Widgets.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -52,25 +53,32 @@ namespace rig
         std::vector<Item> items;
     };
 
-    // ParamBar 왼쪽에 들어가는, 블록 종류별 파라미터 화면
+    // ParamBar 에 들어가는, 블록 종류별 파라미터 화면. 패널 = 파라미터 바의 14칸 격자 영역 전체 (bottomBarCell, 씬 바와 같은 격자).
+    // 패널 자체는 클릭을 받지 않는다 (같은 줄의 리셋·전원 버튼 위에 겹쳐 있으므로), 노브만 받는다
     class ParamPanel : public juce::Component
     {
     public:
+        ParamPanel() { setInterceptsMouseClicks (false, true); }
+
         virtual void refresh() = 0;   // 모델 값(선택된 블록의 현재 씬) -> 화면
 
     protected:
-        static constexpr int groupMargin = 6;   // 묶음 위아래 여백 (파라미터 바 높이 83 이면 묶음 71)
-        static constexpr int groupGap = 40;     // 묶음 사이
+        // 묶음 하나가 맡는 칸 (0번부터, 0 = 리셋, 13 = 블록 전원)
+        struct Cells { ParamGroup* group; int first, count; };
 
-        // 묶음들을 왼쪽부터 놓는다
-        void layoutGroups (std::initializer_list<ParamGroup*> groups)
+        // 묶음은 맡은 칸들의 왼쪽 끝에 붙인다 (첫 항목이 그 칸 열에 맞는다).
+        // 하나라도 칸보다 넓으면 모두 맡은 칸들의 가운데에 (넓은 묶음은 양옆 틈으로 넘치고, 묶음 사이 간격이 고르게)
+        void layoutGroups (std::initializer_list<Cells> cells)
         {
-            auto area = getLocalBounds().reduced (0, groupMargin);
+            bool overflow = false;
+            for (const auto& c : cells)
+                overflow = overflow || c.group->getIdealWidth() > bottomBarCell (getLocalBounds(), c.first, c.count).getWidth();
 
-            for (auto* group : groups)
+            for (const auto& c : cells)
             {
-                group->setBounds (area.removeFromLeft (group->getIdealWidth()));
-                area.removeFromLeft (groupGap);
+                const auto area = bottomBarCell (getLocalBounds(), c.first, c.count);
+                const int width = c.group->getIdealWidth();
+                c.group->setBounds (overflow ? area.withSizeKeepingCentre (width, area.getHeight()) : area.withWidth (width));
             }
         }
     };
