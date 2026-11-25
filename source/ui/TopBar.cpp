@@ -166,6 +166,16 @@ namespace rig
         g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.3f));
     }
 
+    void TopBar::highlightPatchName (juce::uint32 start)
+    {
+        patchNameHighlight = start;
+    }
+
+    void TopBar::paintOverChildren (juce::Graphics& g)
+    {
+        drawHighlight (g, patchNameBox.getBounds().toFloat(), highlightAlpha (patchNameHighlight));
+    }
+
     void TopBar::resized()
     {
         auto area = getLocalBounds().reduced (8, 6);

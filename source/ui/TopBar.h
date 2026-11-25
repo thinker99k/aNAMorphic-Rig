@@ -32,8 +32,10 @@ namespace rig
         void setTunerActive (bool active) { tunerButton.setActive (active); }   // 튜너 대화상자가 열려 있는 동안 true
 
         void setUndoRedoEnabled (bool canUndo, bool canRedo);
+        void highlightPatchName (juce::uint32 start);   // Undo / Redo 로 패치 이름이 되돌아갔을 때 노란 강조 (RigModel::getHighlightStart)
 
         void paint (juce::Graphics&) override;
+        void paintOverChildren (juce::Graphics&) override;
         void resized() override;
         void mouseDown (const juce::MouseEvent&) override;   // 패치 이름의 오른쪽 클릭 (patchNameBox 의 마우스 이벤트를 받는다)
 
@@ -54,6 +56,8 @@ namespace rig
         LeftClickOnly<juce::DrawableButton> undoButton { "Undo", juce::DrawableButton::ImageOnButtonBackground };
         LeftClickOnly<juce::DrawableButton> redoButton { "Redo", juce::DrawableButton::ImageOnButtonBackground };
         TunerButton tunerButton;
+        juce::uint32 patchNameHighlight = 0;
+        HighlightRepaint highlightRepaint { *this, [this] { return patchNameHighlight; } };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TopBar)
     };

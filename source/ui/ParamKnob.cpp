@@ -107,12 +107,7 @@ namespace rig
     juce::String ParamKnob::toText (double value) const
     {
         if (type == ValueType::Db)
-        {
-            // 0.1 단위로 맞춘 뒤 판단해야 -0.04 같은 값이 "-0.0" 으로 보이지 않는다
-            const int tenths = juce::roundToInt (value * 10.0);
-            const auto text = juce::String (tenths / 10.0, 1) + " dB";
-            return tenths > 0 ? "+" + text : tenths == 0 ? juce::String ("0.0 dB") : text;
-        }
+            return dbText (value);
 
         if (type == ValueType::QLog)
             return juce::String (steps::roundTo (value, steps::qDecimals), steps::qDecimals);   // "0.80"

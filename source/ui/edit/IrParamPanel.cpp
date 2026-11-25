@@ -46,6 +46,18 @@ namespace rig
         refresh();
     }
 
+    juce::Component* IrParamPanel::componentForParam (int index)
+    {
+        switch (index)
+        {
+            case IrParams::lowCutOn:  return &lowCutPower;
+            case IrParams::lowCutHz:  return &lowCut;
+            case IrParams::highCutOn: return &highCutPower;
+            case IrParams::highCutHz: return &highCut;
+            default:                  return nullptr;
+        }
+    }
+
     void IrParamPanel::refresh()
     {
         const auto* slot = model.getSelectedSlot();
