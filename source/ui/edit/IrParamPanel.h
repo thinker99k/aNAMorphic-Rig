@@ -7,7 +7,7 @@ namespace rig
 {
     class RigModel;
 
-    // IR 블록 선택 시: 영역 묶음 2개 [L. Cut 전원][L. Cut 노브]  [H. Cut 전원][H. Cut 노브] (Low / High Cut, 왼쪽부터)
+    // IR 블록 선택 시: 두 칸마다 왼쪽 끝에 [전원][노브] 한 쌍, L. Cut 3 ~ 4 칸, H. Cut 5 ~ 6 칸 (Low / High Cut)
     // 값은 선택된 블록의 현재 씬 값 (RigModel::getParam / setParam). 전원이 꺼진 쪽 노브는 흐리고 조작 안 됨
     class IrParamPanel final : public ParamPanel
     {
@@ -22,7 +22,6 @@ namespace rig
 
         SubPowerButton lowCutPower, highCutPower;   // 빨간 전원 (초록은 블록 켜기 전용)
         ParamKnob lowCut, highCut;
-        ParamGroup lowCutGroup, highCutGroup;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IrParamPanel)
     };

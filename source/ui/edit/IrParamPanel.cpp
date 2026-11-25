@@ -5,6 +5,11 @@
 
 namespace rig
 {
+    namespace
+    {
+        constexpr int powerGap = 8;   // 전원 버튼과 노브 사이 (합류 화면과 같다)
+    }
+
     IrParamPanel::IrParamPanel (RigModel& m)
         : model (m),
           lowCut  ("L. Cut", IrParams::lowCutMinHz,  IrParams::lowCutMaxHz,  IrParams::lowCutDefaultHz,  ParamKnob::ValueType::HzLog),
@@ -33,16 +38,10 @@ namespace rig
         connectPower (lowCutPower,  IrParams::lowCutOn);
         connectPower (highCutPower, IrParams::highCutOn);
 
-        // 영역 묶음: [빨간 전원][노브]
-        auto group = [this] (ParamGroup& g, SubPowerButton& power, ParamKnob& knob)
-        {
-            g.addItem (power, SubPowerButton::size, 0, SubPowerButton::size);
-            g.addItem (knob, knob.getIdealWidth(), ParamGroup::powerGap);
-            addAndMakeVisible (g);
-        };
-
-        group (lowCutGroup,  lowCutPower,  lowCut);
-        group (highCutGroup, highCutPower, highCut);
+        addAndMakeVisible (lowCutPower);
+        addAndMakeVisible (lowCut);
+        addAndMakeVisible (highCutPower);
+        addAndMakeVisible (highCut);
 
         refresh();
     }
@@ -67,6 +66,16 @@ namespace rig
 
     void IrParamPanel::resized()
     {
-        layoutGroups ({ { &lowCutGroup, 2, 3 }, { &highCutGroup, 5, 3 } });   // 2 ~ 4, 5 ~ 7 칸
+        // [빨간 전원] 간격 [노브] 한 쌍을 두 칸의 왼쪽 끝에: L. Cut 3 ~ 4, H. Cut 5 ~ 6 칸
+        auto place = [this] (SubPowerButton& power, ParamKnob& knob, int first)
+        {
+            auto pair = bottomBarCell (getLocalBounds(), first, 2);
+            power.setBounds (pair.removeFromLeft (SubPowerButton::size).withSizeKeepingCentre (SubPowerButton::size, SubPowerButton::size));
+            pair.removeFromLeft (powerGap);
+            knob.setBounds (pair.withWidth (knob.getIdealWidth()));
+        };
+
+        place (lowCutPower,  lowCut,  3);
+        place (highCutPower, highCut, 5);
     }
 }

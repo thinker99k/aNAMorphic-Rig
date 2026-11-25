@@ -9,8 +9,10 @@ namespace rig
     namespace
     {
         constexpr float dimmedAlpha = 0.4f;    // 비활성일 때
-        constexpr float textSize = 13.0f;      // 이름(굵게) / 값 글자 (상태바 IN / OUT 과 같은 크기)
-        constexpr int lineHeight = 16;         // 이름 / 값 한 줄 (상태바 이름 줄과 같다)
+        constexpr float textSize = 13.0f;      // 이름(굵게) / 팝업 값 글자 (상태바 IN / OUT 과 같은 크기)
+        constexpr int lineHeight = 16;         // 이름 한 줄 (상태바 이름 줄과 같다)
+        constexpr int knobDrop = 6;            // 호의 아래쪽이 열려 있어(약 8 px) 이름과 멀어 보이므로 노브만 이만큼 내린다 (이름 자리는 그대로)
+        constexpr int popupHeight = 20, popupPadding = 6, popupGap = 2;   // 팝업 높이, 글자 양옆 여백, 노브 위 간격
     }
 
     ParamKnob::ParamKnob (const juce::String& name, double minValue, double maxValue, double defaultValue, ValueType valueType) : type (valueType)
@@ -44,19 +46,24 @@ namespace rig
 
         slider.onValueChange = [this]
         {
-            updateValueLabel();
+            updatePopup();
 
             if (onValueChanged)
                 onValueChanged (slider.getValue());
         };
         slider.onDragEnd = [this] { if (onDragEnded) onDragEnded(); };
+        slider.addMouseListener (this, false);   // 노브에 올리기 / 내리기 / 누르기 / 떼기 -> 팝업
 
         const juce::Font nameFont { juce::FontOptions (textSize, juce::Font::bold) }, valueFont { juce::FontOptions (textSize) };
         nameLabel.setText (name, juce::dontSendNotification);
         nameLabel.setFont (nameFont);
-        valueLabel.setFont (valueFont);
+        nameLabel.setJustificationType (juce::Justification::centred);
+        nameLabel.setBorderSize ({});
+        nameLabel.setInterceptsMouseClicks (false, false);
+        nameLabel.setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
+        addAndMakeVisible (nameLabel);
 
-        // 글자 칸 폭: 이름, 양 끝 값, 범위 안에서 가장 긴 모양의 값 (숫자 폭은 글꼴마다 같으므로 8 로 잰다)
+        // 팝업 폭: 양 끝 값, 범위 안에서 가장 긴 모양의 값 (숫자 폭은 글꼴마다 같으므로 8 로 잰다)
         juce::StringArray values { toText (minValue), toText (maxValue) };
 
         if (type == ValueType::HzLog)
@@ -70,23 +77,14 @@ namespace rig
             return (int) std::ceil (juce::GlyphArrangement::getStringWidth (font, text)) + 1;
         };
 
-        textWidth = widthOf (nameFont, name);
+        nameWidth = widthOf (nameFont, name);
 
         for (const auto& v : values)
-            textWidth = juce::jmax (textWidth, widthOf (valueFont, v));
-        valueLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-
-        for (auto* label : { &nameLabel, &valueLabel })
-        {
-            label->setJustificationType (juce::Justification::centredLeft);
-            label->setBorderSize ({});
-            label->setInterceptsMouseClicks (false, false);
-            label->setMinimumHorizontalScale (1.0f);   // 찌그러뜨리지 않고 말줄임
-            addAndMakeVisible (label);
-        }
+            popupWidth = juce::jmax (popupWidth, widthOf (valueFont, v));
+        popupWidth += popupPadding * 2;
 
         addAndMakeVisible (slider);
-        updateValueLabel();
+        updatePopup();
     }
 
     ParamKnob::~ParamKnob()
@@ -96,13 +94,14 @@ namespace rig
 
     void ParamKnob::setValue (double value)
     {
-        slider.setValue (value, juce::dontSendNotification);   // onValueChange 가 불리지 않으므로 글자만 직접 갱신
-        updateValueLabel();
+        slider.setValue (value, juce::dontSendNotification);   // onValueChange 가 불리지 않으므로 팝업 글자만 직접 갱신
+        updatePopup();
     }
 
     void ParamKnob::enablementChanged()
     {
         setAlpha (isEnabled() ? 1.0f : dimmedAlpha);   // 비활성이면 마우스는 JUCE 가 막는다
+        updatePopup();                                  // 비활성이면 팝업도 숨긴다
     }
 
     juce::String ParamKnob::toText (double value) const
@@ -130,21 +129,52 @@ namespace rig
         return khz + " kHz";
     }
 
-    void ParamKnob::updateValueLabel()
+    void ParamKnob::updatePopup()
     {
-        valueLabel.setText (toText (slider.getValue()), juce::dontSendNotification);
+        // 노브 위에 마우스가 있거나 끄는 중일 때만. 띄울 곳 = 창 맨 위 컴포넌트 (처음 보일 때 붙인다)
+        auto* top = getTopLevelComponent();
+        const bool show = isEnabled() && isShowing() && top != this && (slider.isMouseOver() || slider.isMouseButtonDown());
+
+        if (! show)
+        {
+            popup.setVisible (false);
+            return;
+        }
+
+        if (popup.getParentComponent() != top)
+            top->addChildComponent (popup);
+
+        // 노브 가운데 위, 노브와 popupGap 간격
+        const auto knob = top->getLocalArea (&slider, slider.getLocalBounds());
+        popup.setBounds (knob.getCentreX() - popupWidth / 2, knob.getY() - popupGap - popupHeight, popupWidth, popupHeight);
+
+        popup.text = toText (slider.getValue());
+        popup.repaint();
+        popup.setVisible (true);
+        popup.toFront (false);
+    }
+
+    void ParamKnob::ValuePopup::paint (juce::Graphics& g)
+    {
+        const auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+        g.setColour (juce::Colour (0xff1e1e1e));
+        g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (juce::Colours::grey.withAlpha (0.6f));   // 패치 맵 어두운 바탕 위에서도 경계가 보이게
+        g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::FontOptions (textSize));
+        g.drawText (text, getLocalBounds(), juce::Justification::centred, false);
     }
 
     void ParamKnob::resized()
     {
-        // [노브] [이름 / 값] : 노브와 두 줄 글자 모두 세로 가운데
-        auto area = getLocalBounds();
-        const int size = juce::jmin (diameter, getHeight());
-        slider.setBounds (area.removeFromLeft (size).withSizeKeepingCentre (size, size));
-        area.removeFromLeft (textGap);
+        // [노브] 아래 [이름]: 둘 다 가로 가운데, 묶음은 세로 가운데 (노브만 knobDrop 내림). 높이가 모자라면 노브만 줄인다
+        const int size = juce::jmax (0, juce::jmin (knobDiameter, getWidth(), getHeight() - nameGap - lineHeight));
+        auto area = getLocalBounds().withSizeKeepingCentre (getWidth(), size + nameGap + lineHeight);
 
-        auto text = area.withSizeKeepingCentre (area.getWidth(), lineHeight * 2);
-        nameLabel.setBounds (text.removeFromTop (lineHeight));
-        valueLabel.setBounds (text);
+        slider.setBounds (area.removeFromTop (size).withSizeKeepingCentre (size, size).translated (0, knobDrop));
+        area.removeFromTop (nameGap);
+        nameLabel.setBounds (area);
     }
 }
