@@ -40,6 +40,66 @@ namespace rig
         return count == 2 ? juce::String (first + 1) + "+" + juce::String (first + 2) : juce::String (first + 1);
     }
 
+    // 아래 줄 14칸 격자 (편집 화면 씬 바, Live 아래 줄, 파라미터 바의 리셋 폭이 같이 쓴다): 칸 사이 bottomBarGap (= 바깥 여백),
+    // 칸 폭 = (area 폭 - 13 x 간격) / 14 (1024 창에서 약 66.7 px), 칸 높이 = area 높이. first 번 칸부터 count 칸을 덮는 사각형
+    constexpr int bottomBarCells = 14, bottomBarGap = 6;
+
+    inline juce::Rectangle<int> bottomBarCell (juce::Rectangle<int> area, int first, int count = 1)
+    {
+        const float cell = (float) (area.getWidth() - (bottomBarCells - 1) * bottomBarGap) / (float) bottomBarCells;
+        const auto edge = [&] (int i) { return area.getX() + juce::roundToInt ((float) i * (cell + (float) bottomBarGap)); };
+        const int left = edge (first);
+        const int right = edge (first + count) - bottomBarGap;
+        return { left, area.getY(), right - left, area.getHeight() };
+    }
+
+    // 채널 줄 (파라미터 바의 IN / OUT, Live 아래 줄): 14칸 격자 0 ~ 5 칸에 [이름표] 간격 [목록 = 나머지], 줄 높이 28
+    constexpr int channelCells = 6, channelLabelWidth = 110, channelLabelGap = 8, channelRowHeight = 28;
+
+    // 입출력 채널 목록 (파라미터 바의 IN / OUT, Live 아래 줄이 같이 쓴다)
+    //  - 항목 id: 단일 채널 = 1 + 채널(0부터), 출력 스테레오 쌍 = channelPairIdBase + 첫 채널(0부터)
+    //  - 입력은 단일 채널만. 출력은 엔진이 모노 결과를 고른 채널에 복사하므로 스테레오 쌍 먼저, 그다음 단일 채널
+    //  - used 의 채널은 보이되 고를 수 없다. 장치에 없는 채널이면 아무것도 선택하지 않고 번호만 보인다
+    constexpr int channelPairIdBase = 1000;
+
+    inline void fillChannelList (juce::ComboBox& box, const juce::StringArray& names, bool isInput,
+                                 int first, bool stereo, const juce::BigInteger& used)
+    {
+        box.clear (juce::dontSendNotification);
+
+        if (! isInput)
+        {
+            for (int i = 0; i + 1 < names.size(); i += 2)
+            {
+                box.addItem (channelText (i, 2) + ": " + names[i] + " / " + names[i + 1], channelPairIdBase + i);
+                box.setItemEnabled (channelPairIdBase + i, ! used[i] && ! used[i + 1]);
+            }
+        }
+
+        for (int i = 0; i < names.size(); ++i)
+        {
+            box.addItem (channelText (i, 1) + ": " + names[i], i + 1);
+            box.setItemEnabled (i + 1, ! used[i]);
+        }
+
+        const bool pair = ! isInput && stereo;
+        const int selectedId = pair ? channelPairIdBase + first : first + 1;
+        box.setTextWhenNothingSelected (channelText (first, pair ? 2 : 1));
+        box.setSelectedId (box.indexOfItemId (selectedId) >= 0 ? selectedId : 0, juce::dontSendNotification);
+        box.setEnabled (! names.isEmpty());
+    }
+
+    // 고른 항목의 (첫 채널, 스테레오 쌍인지). 고른 것이 없으면 nullopt
+    inline std::optional<std::pair<int, bool>> chosenChannel (const juce::ComboBox& box)
+    {
+        const int id = box.getSelectedId();
+
+        if (id <= 0)
+            return std::nullopt;
+
+        return id >= channelPairIdBase ? std::pair { id - channelPairIdBase, true } : std::pair { id - 1, false };
+    }
+
     // 컨텍스트 메뉴는 오른쪽 클릭한 커서 위치에 띄운다: 메뉴의 왼쪽 위 = 클릭 지점, 화면 밖으로 나가면 위/왼쪽으로 붙인다.
     // 영역이 비어 있으면(withMousePosition) JUCE 가 화면 가운데 쪽으로 펼치므로 1 px 영역을 준다
     inline void showContextMenu (juce::PopupMenu& menu, const juce::MouseEvent& click, std::function<void (int)> onClosed = nullptr)
@@ -412,9 +472,12 @@ namespace rig
             const auto text = button.getButtonText().trim();
             const auto maxHeight = juce::LookAndFeel_V4::getTextButtonFont (button, button.getHeight()).getHeight();
 
+            // 모드 스위치 원칙: 토글이 켜져 있으면 (그 모드에 들어가 있으면, 예: Copy / Swap) 글자를 굵게
+            const int style = button.getToggleState() ? juce::Font::bold : juce::Font::plain;
+
             const auto bestFont = [&] (const juce::StringArray& lines)
             {
-                auto font = juce::Font (juce::FontOptions (juce::jmin (maxHeight, area.getHeight() / (float) lines.size())));
+                auto font = juce::Font (juce::FontOptions (juce::jmin (maxHeight, area.getHeight() / (float) lines.size()), style));
 
                 const auto fits = [&]
                 {

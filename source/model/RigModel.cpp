@@ -102,16 +102,6 @@ namespace rig
         return name.substring (0, maxPatchNameLength).trimEnd();
     }
 
-    juce::String RigModel::readPatchName (int number)
-    {
-        const auto file = paths::patchFile (juce::jlimit (1, numPatches, number));
-
-        if (! file.existsAsFile())
-            return file.getFileName();                      // 예: "config02"
-
-        return sanitizePatchName (juce::JSON::parse (file).getProperty ("name", {}), file.getFileName());
-    }
-
     juce::String RigModel::sanitizeSceneName (const juce::var& value, int scene)
     {
         const auto name = value.isString() ? value.toString().trim().substring (0, maxSceneNameLength).trimEnd()
@@ -504,6 +494,16 @@ namespace rig
         routing.output = firstChannel;
         routing.stereoOutput = stereo;
         changed();
+    }
+
+    void RigModel::setLiveRouting (std::optional<AudioEngine::Routing> newRouting)
+    {
+        if (newRouting == liveRouting)
+            return;
+
+        liveRouting = newRouting;
+        rebuildChain();   // 엔진이 옛/새 채널을 크로스페이드. 저장·Undo 없음
+        sendChangeMessage();
     }
 
     bool RigModel::isChannelMissing (Endpoint endpoint, const juce::AudioIODevice* device) const
@@ -1488,7 +1488,7 @@ namespace rig
             program.push_back (std::move (node));
         }
 
-        engine.setProgram (std::move (program), routing);
+        engine.setProgram (std::move (program), liveRouting.value_or (routing));
     }
 
     void RigModel::changed()

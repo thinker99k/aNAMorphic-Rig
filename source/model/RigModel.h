@@ -90,9 +90,6 @@ namespace rig
         // 패치 파일의 "name" 값 검증: 문자열이 아니거나 공백뿐이면 fallback, 길면 앞 32자만
         static juce::String sanitizePatchName (const juce::var& value, const juce::String& fallback);
 
-        // 패치를 불러오지 않고 파일의 이름만 읽는다 (loadPatch 와 같은 규칙: 파일이 없거나 이름이 이상하면 파일명)
-        static juce::String readPatchName (int number);
-
         explicit RigModel (AudioEngine& engine);
         ~RigModel() override;
 
@@ -164,6 +161,11 @@ namespace rig
         const AudioEngine::Routing& getRouting() const noexcept { return routing; }
         void setInputChannel (int channel);
         void setOutputChannel (int firstChannel, bool stereo);
+
+        // Live 전용 입출력 채널: 있으면 엔진은 패치의 채널 대신 이것을 쓴다. 패치 파일·Undo 와 무관하고 저장하지 않는다.
+        // Live 에 들어갈 때 패치의 채널로 시작하고 (setLiveRouting (getRouting())), 나갈 때 비운다 (nullopt = 패치의 채널로)
+        const std::optional<AudioEngine::Routing>& getLiveRouting() const noexcept { return liveRouting; }
+        void setLiveRouting (std::optional<AudioEngine::Routing>);
 
         // IN / OUT 의 채널이 지금 장치에 없는지 (장치는 모든 채널을 열어 둔다. 장치가 없으면 둘 다 없음)
         bool isChannelMissing (Endpoint, const juce::AudioIODevice* device) const;
@@ -288,6 +290,7 @@ namespace rig
         juce::uint64 selectedSlotId = 0, selectedParallelId = 0;   // 0 = 선택 없음
         Endpoint selectedEndpoint = Endpoint::none;
         AudioEngine::Routing routing;
+        std::optional<AudioEngine::Routing> liveRouting;   // Live 전용 채널 (저장하지 않는다)
         int currentScene = 0;                   // 저장하지 않는다
         std::array<juce::String, numScenes> sceneNames;
         bool waitingForLoads = false;           // 로딩을 시작한 블록(패치 전환, 추가, 이동 등)이 다 준비될 때까지 옛 소리 유지

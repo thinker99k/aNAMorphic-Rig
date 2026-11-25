@@ -1,15 +1,13 @@
 #pragma once
 
 #include "model/RigModel.h"
-#include "tuner/PitchDetector.h"
+#include "tuner/TunerAnalyzer.h"
 #include "tuner/TunerGauge.h"
 #include "ui/Widgets.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-#include <array>
 #include <functional>
-#include <vector>
 
 namespace rig
 {
@@ -47,15 +45,7 @@ namespace rig
         std::function<void()> onClosed;
         bool closed = false;
 
-        PitchDetector detector;
-        std::vector<float> samples;
-        double preparedRate = 0.0;
-
-        static constexpr int medianCount = 5;   // 중앙값에 쓰는 최근 값 개수
-        std::array<double, medianCount> recent {};
-        int recentCount = 0;
-        int failedFrames = 0;
-        TunerState state;
+        TunerAnalyzer analyzer;
 
         int dragStartHz = 0;   // 값 상자를 끌기 시작할 때의 기준음
 

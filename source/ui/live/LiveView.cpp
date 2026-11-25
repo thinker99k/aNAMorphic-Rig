@@ -2,23 +2,43 @@
 
 namespace rig
 {
-    LiveView::LiveView (RigModel& m)
-        : scenePads (m),
-          patchBar (m)
+    LiveView::LiveView (RigModel& m, AudioEngine& e, juce::AudioDeviceManager& dm)
+        : model (m),
+          patchBar (m),
+          scenePads (m),
+          statusBar (m, e, dm)
     {
-        patchBar.onLiveOff = [this] { if (onLiveOff) onLiveOff(); };
+        statusBar.onLiveOff = [this] { if (onLiveOff) onLiveOff(); };
         patchBar.onPatchStep = [this] (int delta) { if (onPatchStep) onPatchStep (delta); };
 
-        addAndMakeVisible (scenePads);
         addAndMakeVisible (patchBar);
+        addAndMakeVisible (scenePads);
+        addAndMakeVisible (statusBar);
+    }
+
+    void LiveView::setBarHeight (int height)
+    {
+        barHeight = height;
+        resized();
+    }
+
+    void LiveView::enter()
+    {
+        statusBar.setTunerOn (false);
+        model.setLiveRouting (model.getRouting());
+    }
+
+    void LiveView::leave()
+    {
+        statusBar.setTunerOn (false);
+        model.setLiveRouting (std::nullopt);
     }
 
     void LiveView::resized()
     {
         auto area = getLocalBounds();
-
-        // 하단 줄 높이는 편집 화면과 같은 식 (getHeight() / 8): 모드를 바꿔도 Live 버튼이 같은 자리
-        patchBar.setBounds (area.removeFromBottom (getHeight() / 8));
+        patchBar.setBounds (area.removeFromTop (barHeight));
+        statusBar.setBounds (area.removeFromBottom (barHeight));
         scenePads.setBounds (area);
     }
 }

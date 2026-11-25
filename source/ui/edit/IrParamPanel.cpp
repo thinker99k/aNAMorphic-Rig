@@ -67,6 +67,6 @@ namespace rig
 
     void IrParamPanel::resized()
     {
-        layoutGroups ({ &lowCutGroup, &highCutGroup });
+        layoutGroups ({ { &lowCutGroup, 2, 3 }, { &highCutGroup, 5, 3 } });   // 2 ~ 4, 5 ~ 7 칸
     }
 }

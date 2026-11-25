@@ -67,6 +67,6 @@ namespace rig
 
     void NamParamPanel::resized()
     {
-        layoutGroups ({ &bassGroup, &middleGroup, &trebleGroup });
+        layoutGroups ({ { &bassGroup, 2, 3 }, { &middleGroup, 5, 4 }, { &trebleGroup, 9, 3 } });   // 2 ~ 4, 5 ~ 8, 9 ~ 11 칸
     }
 }
