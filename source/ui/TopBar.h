@@ -9,12 +9,12 @@
 
 namespace rig
 {
-    // 상단 바: [Patch 콤보박스] [이전] [다음]     [Undo] [Redo] [패치 이름]     [Tuner] [Settings 버튼]
+    // 상단 바: [Patch 콤보박스] [이전] [다음]     [Undo] [Redo] [패치 이름 ✎] [Reset...]     [Tuner] [Settings 버튼]
     //  - Undo / Redo: 되돌릴 것이 없으면 비활성 (상태는 setUndoRedoEnabled 로 받는다)
-    //  - 패치 이름 오른쪽 클릭: Rename / 구분선 / Patch Reset... 메뉴 (씬 버튼과 같은 방식, 머리글 없음). 왼쪽 클릭과 더블클릭은 동작 없음
-    //      Rename : 그 자리에서 편집 (글자 위치는 평소 표시와 같다). 입력칸 오른쪽 끝에 정사각형 체크 버튼.
+    //  - 컨텍스트 메뉴 없음 (모바일 대비). 패치 이름 칸 자체는 클릭해도 동작 없음
+    //      연필 (이름 칸 오른쪽 끝 정사각형): 그 자리에서 편집 (글자 위치는 평소 표시와 같다). 편집 중에는 같은 자리에 체크 버튼.
     //               체크 버튼이나 Enter 로 저장, 바깥 클릭이나 Esc 는 취소. 패치를 바꾸면 편집 취소
-    //      Reset  : 경고창에서 Reset 을 누르면 onPatchReset (지금 패치를 기본 패치로. 블록 전체 + 씬 8개 = 큰 리셋)
+    //      Reset... (이름 칸 바로 오른쪽): 경고창에서 Reset 을 누르면 onPatchReset (지금 패치를 기본 패치로. 블록 전체 + 씬 8개 = 큰 리셋)
     class TopBar final : public juce::Component
     {
     public:
@@ -37,12 +37,10 @@ namespace rig
         void paint (juce::Graphics&) override;
         void paintOverChildren (juce::Graphics&) override;
         void resized() override;
-        void mouseDown (const juce::MouseEvent&) override;   // 패치 이름의 오른쪽 클릭 (patchNameBox 의 마우스 이벤트를 받는다)
 
         void selectAdjacentPatch (int delta);
 
     private:
-        void showPatchNameMenu (const juce::MouseEvent& click);
         void resetPatchWithWarning();
         void updateNavigationButtons();
 
@@ -52,6 +50,8 @@ namespace rig
         LeftClickOnly<juce::DrawableButton> nextPatchButton { "Next patch", juce::DrawableButton::ImageOnButtonBackground };
         PassThroughLabel patchNameBox;                                        // 이름 편집 (공용, Widgets.h)
         CheckCornerButton saveNameButton { "Save patch name", 0.0f, 0.0f };   // 입력칸 오른쪽 끝, 편집 중에만 보인다
+        PencilCornerButton editNameButton { "Rename patch", 0.0f, 0.0f };     // 같은 자리, 편집 중이 아닐 때
+        LeftClickOnly<juce::TextButton> resetPatchButton { "Reset..." };      // 큰 리셋: 말줄임표 (경고창이 뜬다)
         LeftClickOnly<juce::TextButton> settingsButton { "Settings..." };
         LeftClickOnly<juce::DrawableButton> undoButton { "Undo", juce::DrawableButton::ImageOnButtonBackground };
         LeftClickOnly<juce::DrawableButton> redoButton { "Redo", juce::DrawableButton::ImageOnButtonBackground };

@@ -160,6 +160,7 @@ target_sources(aNAMorphic-Rig PRIVATE
         source/ui/live/PatchBar.cpp
         source/ui/live/LiveStatusBar.cpp
         source/ui/StatusBar.cpp
+        source/ui/SceneStompSwitch.cpp
         source/ui/GainKnob.cpp
         source/ui/ParamKnob.cpp
         source/ui/SpectrumWindow.cpp   # [SPECTRUM] 테스트용

@@ -5,10 +5,13 @@ namespace rig
     namespace
     {
         constexpr int columns = 4, rows = 2;
-        constexpr int padMargin = 13;   // 바깥 여백 (위·아래·좌·우)
         constexpr int padGap = 10;      // 패드 사이 (가로·세로)
+        constexpr int padMargin = padGap;   // 바깥 여백 (위·아래·좌·우): 패드 사이와 같게
         constexpr int padInset = 8;     // 패드 안 여백 (번호·이름 모두 사방 같은 값)
         constexpr float padCorner = 6.0f;   // 둥근 모서리 반지름
+        constexpr float numberSize = 24.0f, nameSize = 40.0f;   // 이름이 주인공, 번호는 작게 (번호 = Stomp 패드 종류 글자와 같은 크기·자리)
+        constexpr float stompScale = 2.0f;  // Stomp 패드 = 블록 모양을 이만큼 키워서 (머리띠 40)
+        constexpr float stompHeaderSize = 24.0f, stompNameSize = 32.0f;   // Stomp 패드 종류 (굵게) / 파일명 (보통)
         static_assert (RigModel::numScenes == columns * rows);
 
         // 색 (시안)
@@ -49,7 +52,7 @@ namespace rig
 
     void ScenePads::changeListenerCallback (juce::ChangeBroadcaster*)
     {
-        repaint();   // 현재 씬 강조와 씬 이름
+        repaint();   // 현재 씬 / 켜진 Stomp 강조와 이름
     }
 
     void ScenePads::resized()
@@ -72,16 +75,36 @@ namespace rig
     void ScenePads::paint (juce::Graphics& g)
     {
         const int current = model.getCurrentScene();
+        const bool stomp = model.isStompMode();
 
         // 글꼴은 패드마다 만들지 않고 한 번만
-        // 이름이 주인공, 번호는 작게
-        const auto numberFont = boldFont (24.0f);
-        const auto nameFont = semiBoldFont (40.0f);
+        const auto numberFont = boldFont (numberSize);
+        const auto nameFont = semiBoldFont (nameSize);
 
         for (int i = 0; i < RigModel::numScenes; ++i)
         {
             const auto pad = padBounds[(size_t) i];
             const auto area = pad.toFloat();
+
+            // Stomp: 묶인 패드 = 블록 모양 (번호·중요 값 없음, 꺼지면 흐리게), 안 묶인 패드 = 빈 패드
+            if (stomp)
+            {
+                if (const auto* bound = model.getStompSlot (i))
+                {
+                    block::drawStomp (g, pad, bound->type, RigModel::shortName (*bound), ! model.isStompOn (i), stompScale,
+                                      boldFont (stompHeaderSize), juce::Font (juce::FontOptions (stompNameSize)));
+                }
+                else
+                {
+                    g.setColour (padFill);
+                    g.fillRoundedRectangle (area, padCorner);
+                    g.setColour (padBorder);
+                    g.drawRoundedRectangle (area.reduced (0.5f), padCorner, 1.0f);
+                }
+
+                continue;
+            }
+
             const bool active = i == current;
             const float thickness = active ? 2.0f : 1.0f;
 
@@ -91,12 +114,12 @@ namespace rig
             g.drawRoundedRectangle (area.reduced (thickness / 2.0f), padCorner, thickness);
 
             const auto inner = pad.reduced (padInset);
-            g.setColour (active ? textDark : textLight);
-            g.setFont (numberFont);
-            g.drawText (juce::String (i + 1), inner, juce::Justification::topLeft, false);
+            const auto textColour = active ? textDark : textLight;
+            g.setColour (textColour);
+            block::drawBandLabel (g, juce::String (i + 1), numberFont, pad, stompScale);   // Stomp 패드 종류 글자와 같은 자리
 
-            g.setFont (nameFont);
-            g.drawText (model.getSceneName (i), inner, juce::Justification::centred, true);
+            // 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
+            drawWrappedText (g, model.getSceneName (i), inner.reduced (0, juce::roundToInt (numberFont.getHeight())).toFloat(), nameFont);
         }
     }
 
@@ -109,7 +132,9 @@ namespace rig
         {
             if (padBounds[(size_t) i].contains (e.getPosition()))
             {
-                if (i != model.getCurrentScene())
+                if (model.isStompMode())
+                    model.toggleStomp (i);
+                else if (i != model.getCurrentScene())
                     model.selectScene (i);
                 return;
             }

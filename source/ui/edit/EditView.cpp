@@ -10,6 +10,16 @@ namespace rig
     {
         sceneBar.onLiveClicked = [this] { if (onLiveClicked) onLiveClicked(); };
 
+        // Edit Stomp 모드: 패치맵 블록을 선택기부터 아래로 끌면 ssbar 로 가는 것 (Stomp 칸 모양 그림, 떼도 블록은 지우지 않는다)
+        chainView.stompDrag.markAt = [this, &m] (juce::Point<int> screen) -> std::optional<block::DragMark>
+        {
+            if (! m.isStompMode() || screen.y < blockEditor.getScreenY())
+                return std::nullopt;
+
+            return sceneBar.mapDropMark (screen);
+        };
+        chainView.stompDrag.image = [this] (juce::uint64 slotId, block::DragMark mark) { return sceneBar.stompDragImage (slotId, mark); };
+
         addAndMakeVisible (chainView);
         addAndMakeVisible (paramBar);
         addAndMakeVisible (blockEditor);
@@ -26,6 +36,16 @@ namespace rig
         paramBar.setBounds (area.removeFromTop (unit));
         sceneBar.setBounds (area.removeFromBottom (unit));
         blockEditor.setBounds (area);
+    }
+
+    void EditView::dragOperationStarted (const juce::DragAndDropTarget::SourceDetails& details)
+    {
+        sceneBar.dragStarted (details.description);
+    }
+
+    void EditView::dragOperationEnded (const juce::DragAndDropTarget::SourceDetails&)
+    {
+        sceneBar.dragEnded();
     }
 
     // 자식에게는 visibilityChanged 가 오지 않으므로 (setVisible 은 EditView 에 불린다) 여기서 넘겨준다.

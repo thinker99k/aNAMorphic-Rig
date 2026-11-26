@@ -30,6 +30,17 @@ namespace rig
         // [SPECTRUM] 오른쪽 위 고정 [Spectrum] 버튼을 보이고 누르면 onClick (실행 인자 --spectrum 일 때만 부른다)
         void showSpectrumButton (std::function<void()> onClick);   // [SPECTRUM]
 
+        // Edit Stomp 모드에서 패치맵 블록을 선택기·ssbar 쪽으로 끌면 ssbar 로 가는 것 (EditView 가 SceneBar 와 이어 준다). 화면 좌표.
+        //  markAt: 그쪽이면 떼면 일어날 일 (추가 + / 대체 ↔ / none = 아무 일 없음), 아니면 nullopt (패치맵 규칙 그대로).
+        //          그쪽에서 떼면 블록은 지워지지 않고 ssbar 가 받는다
+        //  image : Stomp 칸 모양 끄는 그림
+        struct StompDrag
+        {
+            std::function<std::optional<block::DragMark> (juce::Point<int>)> markAt;
+            std::function<juce::Image (juce::uint64 slotId, block::DragMark)> image;
+        };
+        StompDrag stompDrag;
+
         void paint (juce::Graphics&) override;
         void resized() override;
 

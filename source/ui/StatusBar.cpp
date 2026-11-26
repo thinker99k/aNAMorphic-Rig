@@ -76,7 +76,8 @@ namespace rig
 
         addAndMakeVisible (inputKnob);
         addAndMakeVisible (outputKnob);
-        indicator::setColours (muteButton, indicator::redFill, indicator::red);   // 음소거 중 = 켜짐 표시 (빨강)
+        indicator::setColours (muteButton, indicator::amberFill, indicator::amber);   // 음소거 중 = 켜짐 표시 (튜너와 같은 주황)
+        disableHoverHighlight (muteButton);   // Live 에서도 쓰는 버튼
         addAndMakeVisible (muteButton);
     }
 

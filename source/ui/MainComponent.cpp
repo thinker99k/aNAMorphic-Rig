@@ -80,8 +80,8 @@ namespace rig
         };
 
         // 화면 전환: Live 의 이전 / 다음은 TopBar ◀▶ 와 같은 경로 (onPatchChanged, TopBar 는 숨겨져 있어도 동작)
-        editView.onLiveClicked = [this] { setViewMode (ViewMode::live); };
-        liveView.onLiveOff     = [this] { setViewMode (ViewMode::edit); };
+        editView.onLiveClicked = [this] { model.setView (RigModel::View::live); };
+        liveView.onLiveOff     = [this] { model.setView (RigModel::View::edit); };
         liveView.onPatchStep   = [this] (int delta) { topBar.selectAdjacentPatch (delta); };
 
         addAndMakeVisible (topBar);
@@ -111,6 +111,7 @@ namespace rig
     void MainComponent::changeListenerCallback (juce::ChangeBroadcaster*)
     {
         updateUndoButtons();
+        showView (model.getMode().view);
     }
 
     void MainComponent::updateUndoButtons()
@@ -161,13 +162,13 @@ namespace rig
     // Edit 모드에서만 받는다. 받은 항목은 모두 처리하고 결과를 알린다 (폴더, 다른 파일도 실패로 보여 준다)
     bool MainComponent::isInterestedInFileDrag (const juce::StringArray&)
     {
-        return viewMode == ViewMode::edit;
+        return ! model.isLive();
     }
 
     void MainComponent::filesDropped (const juce::StringArray& files, int x, int y)
     {
         // MainComponent 만 파일 드롭 대상이다. 제목 표시줄은 부모 DocumentWindow 영역.
-        if (viewMode != ViewMode::edit || ! getLocalBounds().contains (x, y) || isCurrentlyBlockedByAnotherModalComponent())
+        if (model.isLive() || ! getLocalBounds().contains (x, y) || isCurrentlyBlockedByAnotherModalComponent())
             return;
 
         const auto namDirectory = paths::namDir();
@@ -213,7 +214,7 @@ namespace rig
 
     void MainComponent::updateMuteButton()
     {
-        // 상태의 주인은 RigModel. 버튼 토글 상태는 보여주기만 한다 (켜짐 표시 빨강, 색은 StatusBar)
+        // 상태의 주인은 RigModel. 버튼 토글 상태는 보여주기만 한다 (켜짐 표시 주황, 색은 StatusBar)
         statusBar.muteButton.setToggleState (model.isOutputMuted(), juce::dontSendNotification);
     }
 
@@ -245,13 +246,13 @@ namespace rig
         liveView.setBarHeight (area.getHeight() / 8);   // 편집 화면 씬 바와 같은 높이 (EditView::resized)
     }
 
-    void MainComponent::setViewMode (ViewMode mode)
+    void MainComponent::showView (RigModel::View view)
     {
-        if (mode == viewMode)
+        if (view == shownView)
             return;
 
-        viewMode = mode;
-        const bool live = (mode == ViewMode::live);
+        shownView = view;
+        const bool live = (view == RigModel::View::live);
 
         if (live)
         {

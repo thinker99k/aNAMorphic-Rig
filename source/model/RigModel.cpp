@@ -65,7 +65,8 @@ namespace rig
     //==============================================================================
     // 패치 저장/불러오기 : ~/Documents/aNAMorphic-Rig/patch/config<NN>  (JSON)
     //  "blocks" : 본 줄. 블록 또는 병렬. 기본 패치는 블록 없음
-    //    블록   : "type" nam / ir / none (미지정 = 통과, "file" 은 ""), "on" = 씬별 On/Off 8개 (없거나 bool 이 아닌 값은 On)
+    //    블록   : "type" nam / ir / none (미지정 = 통과, "file" 은 ""), "on" = 씬별 On/Off 8개 (없거나 bool 이 아닌 값은 On),
+    //             "stomp" = Stomp 칸 8개에 묶였는지 (없거나 bool 이 아닌 값은 안 묶임)
     //    병렬   : "type" "parallel", "branches" = 위 / 아래 두 갈래. 갈래마다 "on" (씬별 갈래 On/Off, 이상하면 On),
     //             "level" (씬별 dB, 숫자가 아니면 -3, -60 ~ 0 으로 자름), "blocks" (블록만. 갈래 안 병렬은 버린다).
     //             갈래가 두 개가 아니면 병렬을 버리고, 블록이 없는 갈래가 있으면 남은 갈래 블록을 본 줄에 그대로 둔다
@@ -231,6 +232,8 @@ namespace rig
             }
         }
 
+        syncStompStates();   // Stomp 모드면 묶인 블록은 씬 1 값으로 시작 (로딩 전에: 새 DSP 가 isOn 을 읽는다)
+
         forEachSlot ([this] (Slot& slot)
         {
             applyParams (slot);   // 로딩 전에: 새 DSP 가 준비할 때 이 값에서 시작한다
@@ -310,6 +313,12 @@ namespace rig
         for (int i = 0; i < numScenes; ++i)
             slot.on[(size_t) i] = on == nullptr || ! (*on)[i].isBool() || (bool) (*on)[i];
 
+        // Stomp 칸: 없거나 bool 이 아닌 값은 안 묶임
+        const auto* stomps = json.getProperty ("stomp", {}).getArray();
+
+        for (int i = 0; i < numStomps; ++i)
+            slot.stomps[(size_t) i] = stomps != nullptr && (*stomps)[i].isBool() && (bool) (*stomps)[i];
+
         // 파일이 필요한 종류인데 파일이 없으면 미지정 블록으로 (None / 파일 지정된 NAM·IR 만 존재)
         const auto path = json.getProperty ("file", {}).toString();
         if (usesFile (slot.type) && path.isNotEmpty())
@@ -349,6 +358,12 @@ namespace rig
             on.add (b);
 
         obj->setProperty ("on", on);
+
+        juce::Array<juce::var> stomps;
+        for (const bool b : slot.stomps)
+            stomps.add (b);
+
+        obj->setProperty ("stomp", stomps);
 
         if (const auto& specs = BlockParams::specs (slot.type); ! specs.empty())
         {
@@ -760,7 +775,7 @@ namespace rig
     {
         const auto sameSlot = [] (const Slot& a, const Slot& b)
         {
-            return a.type == b.type && a.file == b.file && a.on == b.on && a.paramValues == b.paramValues;
+            return a.type == b.type && a.file == b.file && a.on == b.on && a.paramValues == b.paramValues && a.stomps == b.stomps;
         };
 
         const auto sameSlots = [&] (const std::vector<Slot>& a, const std::vector<Slot>& b)
@@ -1189,16 +1204,25 @@ namespace rig
         if (slot == nullptr)
             return;
 
-        remember();
-        touch ({ .slots = { slotId }, .power = true });
+        // Stomp 모드의 묶인 블록: 씬 값이 아니라 Stomp 상태 (편집 아님, 저장·Undo 없음). 같은 블록이 묶인 칸은 같이
+        if (isStompMode() && std::find (slot->stomps.begin(), slot->stomps.end(), true) != slot->stomps.end())
+        {
+            for (size_t k = 0; k < (size_t) numStomps; ++k)
+                if (slot->stomps[k])
+                    stompOn[k] = shouldBeOn;
+        }
+        else
+        {
+            remember();
+            touch ({ .slots = { slotId }, .power = true });
+            slot->on[(size_t) currentScene] = shouldBeOn;
+            saveEdit();
+        }
 
         // 프로그램은 그대로 두고 블록의 wet/dry 목표만 바꾼다 (오디오 스레드가 크로스페이드)
-        slot->on[(size_t) currentScene] = shouldBeOn;
-
         if (slot->dsp != nullptr)
             slot->dsp->setOn (shouldBeOn);
 
-        saveEdit();
         sendChangeMessage();
     }
 
@@ -1375,6 +1399,147 @@ namespace rig
         sendChangeMessage();
     }
 
+    //==============================================================================
+    bool RigModel::isOn (const Slot& slot) const noexcept
+    {
+        if (isStompMode())
+            for (size_t k = 0; k < (size_t) numStomps; ++k)
+                if (slot.stomps[k])
+                    return stompOn[k];   // 같은 블록이 묶인 칸은 늘 같은 값 (setOn, toggleStomp)
+
+        return slot.on[(size_t) currentScene];
+    }
+
+    void RigModel::setView (View view)
+    {
+        if (mode.view == view)
+            return;
+
+        mode.view = view;
+        sendChangeMessage();
+    }
+
+    void RigModel::setPlayMode (PlayMode play)
+    {
+        if (mode.play == play)
+            return;
+
+        mode.play = play;
+        syncStompStates();
+        applyCurrentScene();
+        sendChangeMessage();
+    }
+
+    void RigModel::syncStompStates()
+    {
+        for (int k = 0; k < numStomps; ++k)
+            if (const auto* slot = getStompSlot (k))
+                stompOn[(size_t) k] = slot->on[(size_t) currentScene];
+    }
+
+    RigModel::Slot* RigModel::editStompSlot (int stomp)
+    {
+        Slot* found = nullptr;
+
+        if (juce::isPositiveAndBelow (stomp, numStomps))
+            forEachSlot ([&] (Slot& slot) { if (found == nullptr && slot.stomps[(size_t) stomp]) found = &slot; });
+
+        return found;
+    }
+
+    const RigModel::Slot* RigModel::getStompSlot (int stomp) const
+    {
+        return const_cast<RigModel*> (this)->editStompSlot (stomp);
+    }
+
+    bool RigModel::isStompOn (int stomp) const
+    {
+        const auto* slot = getStompSlot (stomp);
+        return slot != nullptr && isOn (*slot);
+    }
+
+    void RigModel::toggleStomp (int stomp)
+    {
+        if (const auto* slot = getStompSlot (stomp); slot != nullptr && isStompMode())
+            setOn (slot->id, ! isOn (*slot));
+    }
+
+    void RigModel::bindStomp (int stomp, juce::uint64 slotId)
+    {
+        auto* slot = editSlot (slotId);
+        if (slot == nullptr || ! juce::isPositiveAndBelow (stomp, numStomps))
+            return;
+
+        const auto k = (size_t) stomp;
+        const bool wasOn = isOn (*slot);   // 묶기 전 지금 소리 그대로 시작
+
+        remember();
+        touch ({ .slots = { slotId }, .stomps = { stomp } });
+        forEachSlot ([&] (Slot& s) { s.stomps[k] = false; });
+        slot->stomps[k] = true;
+        stompOn[k] = wasOn;
+        stompEdited();
+    }
+
+    void RigModel::unbindStomp (int stomp)
+    {
+        if (getStompSlot (stomp) == nullptr)
+            return;
+
+        remember();
+        touch ({ .stomps = { stomp } });
+        forEachSlot ([&] (Slot& s) { s.stomps[(size_t) stomp] = false; });
+        stompEdited();
+    }
+
+    void RigModel::copyStomp (int source, int destination)
+    {
+        if (! juce::isPositiveAndBelow (source, numStomps) || ! juce::isPositiveAndBelow (destination, numStomps)
+            || source == destination)
+            return;
+
+        remember();
+        touch ({ .stomps = { destination } });
+        const auto s = (size_t) source, d = (size_t) destination;
+        forEachSlot ([&] (Slot& slot) { slot.stomps[d] = slot.stomps[s]; });
+        stompOn[d] = stompOn[s];
+        stompEdited();
+    }
+
+    void RigModel::swapStomp (int source, int destination)
+    {
+        if (! juce::isPositiveAndBelow (source, numStomps) || ! juce::isPositiveAndBelow (destination, numStomps)
+            || source == destination)
+            return;
+
+        remember();
+        touch ({ .stomps = { source, destination } });
+        const auto s = (size_t) source, d = (size_t) destination;
+        forEachSlot ([&] (Slot& slot) { std::swap (slot.stomps[s], slot.stomps[d]); });
+        std::swap (stompOn[s], stompOn[d]);
+        stompEdited();
+    }
+
+    void RigModel::resetStomps()
+    {
+        remember();
+        Touched all;
+        for (int i = 0; i < numStomps; ++i)
+            all.stomps.push_back (i);
+        touch (all);
+
+        forEachSlot ([] (Slot& slot) { slot.stomps.fill (false); });
+        stompEdited();
+    }
+
+    void RigModel::stompEdited()
+    {
+        applyCurrentScene();   // Stomp 모드면 묶이거나 풀린 블록의 소리가 바뀐다
+        saveEdit();
+        sendChangeMessage();
+    }
+
+    //==============================================================================
     void RigModel::resetSceneValues (Slot& slot, size_t scene)
     {
         slot.on[scene] = true;

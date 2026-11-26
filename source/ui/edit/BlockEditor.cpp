@@ -96,8 +96,9 @@ namespace rig
         // 더블클릭(왼쪽)해야 블록에 지정된다
         fileRowMouse.onDoubleClick = [this] (int row) { assignFile (row); };
 
-        // 행 컨텍스트 메뉴는 파일 표(NAM / IR)만 지원한다. 지금은 임시 항목 (동작 없음)
-        fileRowMouse.fillMenu = [] (juce::PopupMenu& menu, int) { menu.addItem ("Temporary item", [] {}); };
+        // 오른쪽 버튼 줄 (행 컨텍스트 메뉴 대신, 모바일 대비). 지금은 임시 버튼 (동작 없음)
+        temporaryButton.setWantsKeyboardFocus (false);
+        addAndMakeVisible (temporaryButton);
         // 끌어서 패치맵에 놓으면 추가 / 교체 / 병렬 (패치맵이 판단). 커서에는 패치맵 블록과 같은 모양
         fileRowMouse.dragDescription = [this] (int row)
         {
@@ -442,11 +443,11 @@ namespace rig
 
     void BlockEditor::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
     {
-        drawRowBackground (g, row, width, height, selected, fileRowMouse.isMenuRow (row));
+        drawRowBackground (g, row, width, height, selected);
     }
 
     // 선택 = 강조색, 홀수 행은 살짝 밝게, 아래 구분선. 행 메뉴가 열린 행은 선택을 바꾸지 않고 테두리만 두른다
-    void BlockEditor::drawRowBackground (juce::Graphics& g, int row, int width, int height, bool selected, bool menuTarget) const
+    void BlockEditor::drawRowBackground (juce::Graphics& g, int row, int width, int height, bool selected) const
     {
         if (selected)
             g.fillAll (findColour (juce::TextEditor::highlightColourId));
@@ -455,12 +456,6 @@ namespace rig
 
         g.setColour (juce::Colours::grey.withAlpha (0.25f));
         g.drawHorizontalLine (height - 1, 0.0f, (float) width);
-
-        if (menuTarget)
-        {
-            g.setColour (juce::Colours::white);
-            g.drawRect (0, 0, width, height, 1);
-        }
     }
 
     int BlockEditor::BuiltInListModel::getNumRows()
@@ -475,7 +470,7 @@ namespace rig
 
     void BlockEditor::CategoryListModel::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
     {
-        owner.drawRowBackground (g, row, width, height, selected, owner.categoryRowMouse.isMenuRow (row));
+        owner.drawRowBackground (g, row, width, height, selected);
     }
 
     void BlockEditor::CategoryListModel::paintCell (juce::Graphics& g, int row, int, int width, int height, bool selected)
@@ -503,7 +498,7 @@ namespace rig
 
     void BlockEditor::BuiltInListModel::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool selected)
     {
-        owner.drawRowBackground (g, row, width, height, selected, owner.builtInRowMouse.isMenuRow (row));
+        owner.drawRowBackground (g, row, width, height, selected);
     }
 
     void BlockEditor::BuiltInListModel::paintCell (juce::Graphics& g, int row, int, int width, int height, bool selected)
@@ -635,6 +630,11 @@ namespace rig
         //  - 왼쪽 열 카테고리 / Open Folder / 검색 사이: 14 (1024 x 768 에서 카테고리 151 + 14 + 24 + 14 + 24 = 227)
         constexpr int topGap = 12, edgeGap = 10, middleGap = 11, bottomGap = 12, leftColumnGap = 14;
         auto area = getLocalBounds().withTrimmedTop (topGap).withTrimmedBottom (bottomGap).reduced (edgeGap, 0);
+
+        // 오른쪽 버튼 줄: 아래 ssbar 의 Live 칸 (14칸 격자 13번)과 같은 가로 자리. 버튼은 위에서부터 검색창과 같은 높이
+        const auto buttonColumn = bottomBarCell (getLocalBounds().reduced (bottomBarGap, 0), bottomBarCells - 1);
+        temporaryButton.setBounds (buttonColumn.getX(), area.getY(), buttonColumn.getWidth(), rowHeight);
+        area.setRight (buttonColumn.getX() - middleGap);
 
         // 왼쪽 열: 아래부터 검색, Open Folder, 나머지는 카테고리
         auto leftColumn = area.removeFromLeft (categoryListWidth);

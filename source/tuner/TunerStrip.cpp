@@ -8,17 +8,17 @@ namespace rig
 {
     namespace
     {
-        constexpr int numBars = 3;                              // 한쪽 | 개수
-        constexpr double barCents[numBars - 1] { 10.0, 20.0 };  // 안쪽 | 들이 맡는 오차의 끝 (마지막 | 는 그 너머 전부)
+        constexpr int numBars = 5;                                          // 한쪽 | 개수 (10 cents 씩, ±50 = 이웃 음까지의 절반 전부)
+        constexpr double barCents[numBars - 1] { 10.0, 20.0, 30.0, 40.0 };  // 안쪽 | 들이 맡는 오차의 끝 (마지막 | 는 그 너머 ~ 50)
 
-        // 가로 폭 합 = noteWidth + 2 x (barSpacing x numBars + arrowGap + arrowSize) = 124 (칸 2개 = 148 안)
+        // 가로 폭 합 = noteWidth + 2 x (barSpacing x numBars + arrowGap + arrowSize) = 170 (칸 3개 약 212 안, 양옆 약 21)
         constexpr float noteWidth = 32.0f;      // 음 이름 칸
-        constexpr float barSpacing = 9.0f;      // | 사이 (음 이름 칸 끝에서 첫 | 까지도 같은 값)
+        constexpr float barSpacing = 10.0f;     // | 사이 (음 이름 칸 끝에서 첫 | 까지도 같은 값)
         constexpr float barWidth = 3.0f, barHeight = 22.0f;
         constexpr float arrowGap = 7.0f;        // 바깥 | 와 화살표 사이
         constexpr float arrowSize = 12.0f;
         constexpr float topShare = 0.62f;       // 윗줄이 차지하는 높이 비율
-        constexpr float noteFontSize = 30.0f, centsFontSize = 14.0f;
+        constexpr float noteFontSize = 30.0f, centsFontSize = 16.0f;
 
         const juce::Colour unlit { 0xff4c5860 };   // 꺼진 | 와 화살표
 
