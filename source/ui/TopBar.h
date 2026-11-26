@@ -49,8 +49,8 @@ namespace rig
         LeftClickOnly<juce::DrawableButton> previousPatchButton { "Previous patch", juce::DrawableButton::ImageOnButtonBackground };
         LeftClickOnly<juce::DrawableButton> nextPatchButton { "Next patch", juce::DrawableButton::ImageOnButtonBackground };
         PassThroughLabel patchNameBox;                                        // 이름 편집 (공용, Widgets.h)
-        CheckCornerButton saveNameButton { "Save patch name", 0.0f, 0.0f };   // 입력칸 오른쪽 끝, 편집 중에만 보인다
-        PencilCornerButton editNameButton { "Rename patch", 0.0f, 0.0f };     // 같은 자리, 편집 중이 아닐 때
+        CheckCornerButton saveNameButton { "Save patch name", 0.0f };   // 입력칸 오른쪽 끝, 편집 중에만 보인다
+        PencilCornerButton editNameButton { "Rename patch", 0.0f };     // 같은 자리, 편집 중이 아닐 때
         LeftClickOnly<juce::TextButton> resetPatchButton { "Reset..." };      // 큰 리셋: 말줄임표 (경고창이 뜬다)
         LeftClickOnly<juce::TextButton> settingsButton { "Settings..." };
         LeftClickOnly<juce::DrawableButton> undoButton { "Undo", juce::DrawableButton::ImageOnButtonBackground };

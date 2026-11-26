@@ -8,10 +8,9 @@ namespace rig
         constexpr int padGap = 10;      // 패드 사이 (가로·세로)
         constexpr int padMargin = padGap;   // 바깥 여백 (위·아래·좌·우): 패드 사이와 같게
         constexpr int padInset = 8;     // 패드 안 여백 (번호·이름 모두 사방 같은 값)
-        constexpr float padCorner = 6.0f;   // 둥근 모서리 반지름
-        constexpr float numberSize = 24.0f, nameSize = 40.0f;   // 이름이 주인공, 번호는 작게 (번호 = Stomp 패드 종류 글자와 같은 크기·자리)
+        constexpr float numberSize = 24.0f, nameSize = 32.0f;   // 이름이 주인공, 번호는 작게 (번호 = Stomp 패드 종류 글자, 이름 = Stomp 파일명과 같은 크기)
         constexpr float stompScale = 2.0f;  // Stomp 패드 = 블록 모양을 이만큼 키워서 (머리띠 40)
-        constexpr float stompHeaderSize = 24.0f, stompNameSize = 32.0f;   // Stomp 패드 종류 (굵게) / 파일명 (보통)
+        constexpr float stompHeaderSize = 24.0f;   // Stomp 패드 종류 (굵게). 파일명은 씬 이름과 같은 글꼴 (nameSize, 보통)
         static_assert (RigModel::numScenes == columns * rows);
 
         // 색 (시안)
@@ -23,21 +22,6 @@ namespace rig
         const juce::Colour textLight    { 0xfff2f4f5 };
 
         juce::Font boldFont (float size) { return juce::Font (juce::FontOptions (size, juce::Font::bold)); }
-
-        // 앱 기본 글꼴에 SemiBold 가 있으면 쓰고, 없으면 보통 굵기
-        juce::Font semiBoldFont (float size)
-        {
-            static const juce::String style = []
-            {
-                const auto family = juce::Font (juce::FontOptions()).getTypefacePtr()->getName();
-                for (const auto& s : juce::Font::findAllTypefaceStyles (family))
-                    if (s.removeCharacters (" -").equalsIgnoreCase ("SemiBold"))
-                        return s;
-                return juce::String ("Regular");
-            }();
-
-            return juce::Font (juce::FontOptions (size).withStyle (style));
-        }
     }
 
     ScenePads::ScenePads (RigModel& m) : model (m)
@@ -79,7 +63,7 @@ namespace rig
 
         // 글꼴은 패드마다 만들지 않고 한 번만
         const auto numberFont = boldFont (numberSize);
-        const auto nameFont = semiBoldFont (nameSize);
+        const auto nameFont = juce::Font (juce::FontOptions (nameSize));   // 씬 이름·Stomp 파일명 모두 보통 굵기
 
         for (int i = 0; i < RigModel::numScenes; ++i)
         {
@@ -92,14 +76,14 @@ namespace rig
                 if (const auto* bound = model.getStompSlot (i))
                 {
                     block::drawStomp (g, pad, bound->type, RigModel::shortName (*bound), ! model.isStompOn (i), stompScale,
-                                      boldFont (stompHeaderSize), juce::Font (juce::FontOptions (stompNameSize)));
+                                      boldFont (stompHeaderSize), nameFont);
                 }
                 else
                 {
                     g.setColour (padFill);
-                    g.fillRoundedRectangle (area, padCorner);
+                    g.fillRect (area);
                     g.setColour (padBorder);
-                    g.drawRoundedRectangle (area.reduced (0.5f), padCorner, 1.0f);
+                    strokeRect (g, area.reduced (0.5f), 1.0f);
                 }
 
                 continue;
@@ -109,9 +93,9 @@ namespace rig
             const float thickness = active ? 2.0f : 1.0f;
 
             g.setColour (active ? activeFill : padFill);
-            g.fillRoundedRectangle (area, padCorner);
+            g.fillRect (area);
             g.setColour (active ? activeBorder : padBorder);
-            g.drawRoundedRectangle (area.reduced (thickness / 2.0f), padCorner, thickness);
+            strokeRect (g, area.reduced (thickness / 2.0f), thickness);
 
             const auto inner = pad.reduced (padInset);
             const auto textColour = active ? textDark : textLight;

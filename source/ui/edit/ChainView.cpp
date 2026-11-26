@@ -30,7 +30,7 @@ namespace rig
         constexpr double mergeAnimSeconds = 0.12;  //               커지고 작아지는 데 걸리는 시간
         constexpr int mergeHitSize = 38;         // Merge 버튼 클릭 영역 (정사각형, 커진 크기보다 조금 크게. 이웃 블록과는 gap 44 의 절반 안)
 
-        // Merge 버튼 그림: [+] 버튼과 같은 둥근 사각 바탕 + 페이더 2개 아이콘 (위 / 아래 갈래 레벨을 섞는 곳). 선택 = 흰 테두리.
+        // Merge 버튼 그림: 버튼과 같은 사각 바탕 + 페이더 2개 아이콘 (위 / 아래 갈래 레벨을 섞는 곳). 선택 = 흰 테두리.
         // 바탕은 LookAndFeel_V4::drawButtonBackground 와 같은 모양
         void drawMergeButton (juce::Graphics& g, const juce::Component& c, juce::Point<float> centre, float size,
                               bool highlighted, bool selected)
@@ -41,9 +41,9 @@ namespace rig
                 colour = colour.contrasting (0.05f);
 
             g.setColour (colour);
-            g.fillRoundedRectangle (button.reduced (0.5f), 6.0f);
+            g.fillRect (button.reduced (0.5f));
             g.setColour (selected ? juce::Colours::white : c.findColour (juce::ComboBox::outlineColourId));
-            g.drawRoundedRectangle (button.reduced (selected ? 1.25f : 0.5f), 6.0f, selected ? 2.5f : 1.0f);
+            strokeRect (g, button.reduced (selected ? 1.25f : 0.5f), selected ? 2.5f : 1.0f);
 
             // 페이더 2개: 세로 홈 + 높이가 다른 손잡이 (콘솔 채널 페이더). 아이콘 크기는 버튼의 60 %
             const auto icon = button.reduced (size * 0.2f);
@@ -55,7 +55,7 @@ namespace rig
             {
                 const float x = icon.getX() + icon.getWidth() * fx;
                 g.drawLine (x, icon.getY(), x, icon.getBottom(), juce::jmax (1.0f, size * 0.06f));
-                g.fillRoundedRectangle (juce::Rectangle<float> (capW, capH).withCentre ({ x, icon.getY() + icon.getHeight() * fy }), capH * 0.3f);
+                g.fillRect (juce::Rectangle<float> (capW, capH).withCentre ({ x, icon.getY() + icon.getHeight() * fy }));
             }
         }
         constexpr float lineThickness = 2.0f;
@@ -763,7 +763,7 @@ namespace rig
 
                 for (const auto& view : parallels)
                     if (has (touched.parallels, view.id))
-                        drawHighlight (g, juce::Rectangle<float> (mergeSize, mergeSize).withCentre (view.button->getBounds().toFloat().getCentre()), alpha, 6.0f);
+                        drawHighlight (g, juce::Rectangle<float> (mergeSize, mergeSize).withCentre (view.button->getBounds().toFloat().getCentre()), alpha);
 
                 if (touched.endpoint != RigModel::Endpoint::none)
                     drawHighlight (g, (touched.endpoint == RigModel::Endpoint::input ? inNode() : outNode()).toFloat(), alpha);
@@ -808,7 +808,7 @@ namespace rig
                 g.endTransparencyLayer();
 
                 g.setColour (dropHover);   // 커서가 올라간 놓을 자리
-                g.drawRoundedRectangle (mergeTarget->area.toFloat().reduced (2.0f), block::corner, hoverThickness);
+                strokeRect (g, mergeTarget->area.toFloat().reduced (2.0f), hoverThickness);
             }
 
             if (splitFrom.has_value())
@@ -817,7 +817,7 @@ namespace rig
                 const float row0 = (float) rowY (0) + (float) tileHeight * 0.5f, row1 = (float) rowY (1) + (float) tileHeight * 0.5f;
                 g.beginTransparencyLayer (dropHighlight.getFloatAlpha());
                 g.setColour (activeLine);
-                g.drawRoundedRectangle (splitFrom->area.toFloat().reduced (2.0f), block::corner, lineThickness);
+                strokeRect (g, splitFrom->area.toFloat().reduced (2.0f), lineThickness);
 
                 if (splitTo.has_value())
                 {
@@ -839,7 +839,7 @@ namespace rig
                 if (splitTo.has_value())
                 {
                     g.setColour (dropHover);   // 커서가 올라간 놓을 자리
-                    g.drawRoundedRectangle (splitTo->area.toFloat().reduced (2.0f), block::corner, hoverThickness);
+                    strokeRect (g, splitTo->area.toFloat().reduced (2.0f), hoverThickness);
                 }
             }
 
@@ -858,13 +858,13 @@ namespace rig
 
             if (hover->kind == DropZone::insert)
             {
-                g.drawRoundedRectangle (hover->area.toFloat().reduced (2.0f), block::corner, hoverThickness);
+                strokeRect (g, hover->area.toFloat().reduced (2.0f), hoverThickness);
                 return;
             }
 
             if (hover->kind == DropZone::replace)
             {
-                g.drawRoundedRectangle (hover->area.toFloat().expanded (2.0f), block::corner, hoverThickness);
+                strokeRect (g, hover->area.toFloat().expanded (2.0f), hoverThickness);
 
                 // Swap (패치맵 블록): 원래 자리에도 대상 블록이 들어올 모습을 반투명하게
                 if (activeDrag.has_value() && ! activeDrag->fromLibrary)
@@ -880,7 +880,7 @@ namespace rig
                         g.setOpacity (block::dragImageAlpha);
                         g.drawImageAt (target->createComponentSnapshot (target->getLocalBounds()), source->getX(), source->getY());
                         g.setColour (dropHighlight);
-                        g.drawRoundedRectangle (source->getBounds().toFloat().expanded (2.0f), block::corner, 3.0f);
+                        strokeRect (g, source->getBounds().toFloat().expanded (2.0f), 3.0f);
                     }
                 }
 
@@ -903,7 +903,7 @@ namespace rig
             g.strokePath (path, juce::PathStrokeType (lineThickness));
 
             g.setColour (dropHover);
-            g.drawRoundedRectangle (lower.reduced (1.5f), block::corner, hoverThickness);
+            strokeRect (g, lower.reduced (1.5f), hoverThickness);
 
             g.beginTransparencyLayer (dropHighlight.getFloatAlpha());
             drawMergeButton (g, *this, { merge, target.getCentreY() }, mergeSize, false, false);
@@ -1136,7 +1136,7 @@ namespace rig
         void paintDropHints (juce::Graphics& g) const
         {
             g.setColour (dropHint);
-            const auto outline = [&] (juce::Rectangle<int> area) { g.drawRoundedRectangle (area.toFloat().reduced (2.0f), block::corner, lineThickness); };
+            const auto outline = [&] (juce::Rectangle<int> area) { strokeRect (g, area.toFloat().reduced (2.0f), lineThickness); };
 
             if (activeDrag.has_value())
                 for (const auto& zone : dropZones)

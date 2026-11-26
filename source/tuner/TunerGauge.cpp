@@ -80,7 +80,7 @@ namespace rig
 
         const auto background = getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId);
         g.setColour (background.darker (0.3f));
-        g.fillRoundedRectangle (0.0f, 0.0f, panelWidth, panelHeight, 6.0f);
+        g.fillRect (juce::Rectangle<float> (panelWidth, panelHeight));
 
         const bool inTune = state.hasSignal && std::abs (state.cents) <= inTuneCents;
         const auto colour = ! state.hasSignal ? idleColour : (inTune ? inTuneColour : offColour);

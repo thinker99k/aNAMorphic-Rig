@@ -55,12 +55,12 @@ namespace rig
         g.drawText (valueText, captionArea, juce::Justification::bottomRight);
 
         g.setColour (juce::Colours::black.withAlpha (0.5f));
-        g.fillRoundedRectangle (bar, 3.0f);
+        g.fillRect (bar);
 
         // 끝부분(위험 구간)은 빨간색
         const auto c = fraction > 0.9f ? juce::Colours::red : colour;
         g.setColour (c);
-        g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * fraction), 3.0f);
+        g.fillRect (bar.withWidth (bar.getWidth() * fraction));
     }
 
     //==============================================================================

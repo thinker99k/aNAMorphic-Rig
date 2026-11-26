@@ -13,7 +13,6 @@ namespace rig
         constexpr int animationHz = 60;         // 놓은 뒤 깜빡임 다시 그리기
         constexpr int gap = bottomBarGap;       // 바깥 여백 (버튼 사이도 같은 값, 14칸 격자 bottomBarCell)
         constexpr int saveButtonSize = 24;      // 이름 입력칸 오른쪽 위 귀퉁이의 정사각형 체크 버튼
-        constexpr float sceneCorner = 5.0f;     // 칸 버튼 둥근 모서리 반지름
         constexpr float nameFontSize = 12.0f;   // 씬 이름 (입력칸도 같은 크기)
         constexpr float numberFontSize = 14.0f; // 씬 번호 (왼쪽 위, 굵게. Stomp 칸 머리띠 글자와 같은 크기·자리)
         constexpr int nameInset = 6;            // 이름 칸 좌우 여백
@@ -93,7 +92,7 @@ namespace rig
         };
 
         // 이름 편집 (평소에는 숨김)
-        // 입력칸 자체는 투명: 둥근 바탕과 테두리는 paint() 가 씬 버튼 모양대로 그린다 (귀퉁이 체크 버튼과 모양이 맞도록)
+        // 입력칸 자체는 투명: 바탕과 테두리는 paint() 가 씬 버튼 모양대로 그린다 (귀퉁이 체크 버튼과 모양이 맞도록)
         nameEditor.setJustificationType (juce::Justification::centred);
         nameEditor.setFont (juce::FontOptions (nameFontSize));
         for (const auto id : { juce::Label::backgroundColourId, juce::Label::outlineColourId,
@@ -529,9 +528,9 @@ namespace rig
                     fill = juce::Colours::black.withAlpha (0.4f).overlaidWith (juce::Colour (0xff1e2328));   // 입력칸 바탕
 
                 g.setColour (fill);
-                g.fillRoundedRectangle (bounds, sceneCorner);
+                g.fillRect (bounds);
                 g.setColour (i == renamingScene ? juce::Colours::grey : juce::Colours::grey.withAlpha (0.6f));
-                g.drawRoundedRectangle (bounds.reduced (0.5f), sceneCorner, 1.0f);
+                strokeRect (g, bounds.reduced (0.5f), 1.0f);
 
                 if (! s)
                 {
@@ -555,12 +554,12 @@ namespace rig
                 const float sine = std::sin (juce::MathConstants<float>::pi * (float) (now - start) / (float) blinkMs);
                 const float alpha = sine * sine;
                 g.setColour (juce::Colours::orange.brighter (0.5f * alpha).withAlpha (alpha));
-                g.drawRoundedRectangle (bounds.reduced (1.5f), sceneCorner, 3.0f);
+                strokeRect (g, bounds.reduced (1.5f), 3.0f);
             }
 
             // Undo / Redo 로 되돌아간 칸
             if (std::find (touched.begin(), touched.end(), i) != touched.end())
-                drawHighlight (g, bounds.reduced (2.0f), highlightAlpha (model.getHighlightStart()), sceneCorner);
+                drawHighlight (g, bounds.reduced (2.0f), highlightAlpha (model.getHighlightStart()));
         }
 
         paintDropHints (g);
@@ -580,7 +579,7 @@ namespace rig
                 continue;   // 자기 칸
 
             g.setColour (dropHint);
-            g.fillRoundedRectangle (cell.toFloat(), sceneCorner);
+            g.fillRect (cell.toFloat());
             g.setColour (dropHighlight);
 
             if (! upper->split)
@@ -603,7 +602,7 @@ namespace rig
             const auto cell = cellBounds[(size_t) hoverDrop->cell];
             const auto area = hoverDrop->split ? halfOf (cell, hoverDrop->upper) : cell;
             g.setColour (dropHover);
-            g.drawRoundedRectangle (area.toFloat().reduced (hoverThickness * 0.5f), sceneCorner, hoverThickness);
+            strokeRect (g, area.toFloat().reduced (hoverThickness * 0.5f), hoverThickness);
         }
     }
 

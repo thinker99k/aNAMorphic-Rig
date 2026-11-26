@@ -47,7 +47,7 @@ namespace rig
         void mouseUp (const juce::MouseEvent&) override     { updatePopup(); }
 
     private:
-        // 값 팝업: 어두운 둥근 사각형 + 흰 값 글자. 클릭을 받지 않는다 (호버가 끊기지 않게)
+        // 값 팝업: 어두운 사각형 + 흰 값 글자. 클릭을 받지 않는다 (호버가 끊기지 않게)
         struct ValuePopup final : public juce::Component
         {
             ValuePopup() { setInterceptsMouseClicks (false, false); }

@@ -153,9 +153,9 @@ namespace rig
     {
         const auto bounds = getLocalBounds().toFloat().reduced (0.5f);
         g.setColour (juce::Colour (0xff1e1e1e));
-        g.fillRoundedRectangle (bounds, 4.0f);
+        g.fillRect (bounds);
         g.setColour (juce::Colours::grey.withAlpha (0.6f));   // 패치 맵 어두운 바탕 위에서도 경계가 보이게
-        g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+        strokeRect (g, bounds, 1.0f);
 
         g.setColour (juce::Colours::white);
         g.setFont (juce::FontOptions (textSize));

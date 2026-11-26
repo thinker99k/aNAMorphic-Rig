@@ -22,6 +22,14 @@ namespace rig
         return buttons == juce::ModifierKeys::leftButtonModifier && ! e.mods.isPopupMenu();   // macOS 의 Ctrl+클릭 = 오른쪽 클릭
     }
 
+    // 사각 테두리 (모서리 둥글림 없음, 앱 전체 원칙): 선 가운데가 area 가장자리에 온다 (Graphics::drawRect 는 선이 안쪽에 그려진다)
+    inline void strokeRect (juce::Graphics& g, juce::Rectangle<float> area, float thickness)
+    {
+        juce::Path outline;
+        outline.addRectangle (area);
+        g.strokePath (outline, juce::PathStrokeType (thickness));   // 기본 이음 = 각진 모서리
+    }
+
     // Base 의 마우스 동작을 왼쪽 클릭일 때만 부른다 (예: LeftClickOnly<juce::TextButton>)
     template <typename Base>
     struct LeftClickOnly : public Base
@@ -43,14 +51,13 @@ namespace rig
         inline const juce::Colour redFill   { 0xff3b1c1c };
         inline const juce::Colour blue      { 0xff4a90d9 };   // Stomp 모드 (Scene / Stomp 스위치)
         inline const juce::Colour blueFill  { 0xff1c2a3b };
-        constexpr float corner = 5.0f;
 
         inline void drawBox (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour fill, juce::Colour outline)
         {
             g.setColour (fill);
-            g.fillRoundedRectangle (area, corner);
+            g.fillRect (area);
             g.setColour (outline);
-            g.drawRoundedRectangle (area.reduced (1.0f), corner, 2.0f);
+            strokeRect (g, area.reduced (1.0f), 2.0f);
         }
 
         // TextButton 을 켜짐 표시로: 토글 상태가 켜지면 AppLookAndFeel 이 이 색으로 그린다
@@ -231,26 +238,21 @@ namespace rig
         }
     };
 
-    // 둥근 버튼(블록, 씬 버튼 등)의 오른쪽 위 귀퉁이에 딱 붙는 작은 칸.
-    // 오른쪽 위 모서리만 바깥 버튼과 같은 반지름으로 둥글게 깎고, 왼쪽/아래에만 구분선을 긋는다.
+    // 버튼(씬 버튼, 패치 이름 칸 등)의 오른쪽 위 귀퉁이에 딱 붙는 작은 칸. 왼쪽/아래에만 구분선을 긋는다.
     // edgeInset = 바깥 버튼 테두리 선이 가장자리에서 들어온 만큼 (그 선에 맞춰 붙는다). 안쪽 그림은 drawContent
     struct CornerButton : public LeftClickOnly<juce::Button>
     {
-        CornerButton (const juce::String& name, float cornerSize, float edgeInset, juce::Colour hoverColour)
-            : LeftClickOnly (name), cornerRadius (cornerSize), borderInset (edgeInset), activeColour (hoverColour) {}
+        CornerButton (const juce::String& name, float edgeInset, juce::Colour hoverColour)
+            : LeftClickOnly (name), borderInset (edgeInset), activeColour (hoverColour) {}
 
         void paintButton (juce::Graphics& g, bool highlighted, bool down) override
         {
             const auto area = getLocalBounds().toFloat().withTrimmedTop (borderInset).withTrimmedRight (borderInset);
 
-            juce::Path shape;
-            shape.addRoundedRectangle (area.getX(), area.getY(), area.getWidth(), area.getHeight(),
-                                       cornerRadius, cornerRadius, false, true, false, false);
-
             g.setColour (down        ? activeColour.darker (0.3f)
                        : highlighted ? activeColour.darker (0.1f)
                                      : juce::Colours::black.withAlpha (0.35f));
-            g.fillPath (shape);
+            g.fillRect (area);
 
             g.setColour (juce::Colours::grey.withAlpha (0.7f));
             g.drawVerticalLine (0, area.getY(), area.getBottom());
@@ -262,15 +264,15 @@ namespace rig
         virtual void drawContent (juce::Graphics&, juce::Rectangle<float> area, bool active) = 0;
 
     private:
-        const float cornerRadius, borderInset;
+        const float borderInset;
         const juce::Colour activeColour;
     };
 
     // 저장 체크 버튼: 이름 입력칸 오른쪽 위 귀퉁이에 딱 붙는 정사각형 (CornerButton). 누르면 초록
     struct CheckCornerButton final : public CornerButton
     {
-        CheckCornerButton (const juce::String& name, float cornerSize, float edgeInset)
-            : CornerButton (name, cornerSize, edgeInset, juce::Colours::limegreen) {}
+        CheckCornerButton (const juce::String& name, float edgeInset)
+            : CornerButton (name, edgeInset, juce::Colours::limegreen) {}
 
         void drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active) override
         {
@@ -289,8 +291,8 @@ namespace rig
     // 이름 편집 시작 연필 버튼: 이름 칸 오른쪽 끝 (CheckCornerButton 과 같은 자리·모양, 편집 중에는 체크 버튼이 대신 보인다)
     struct PencilCornerButton final : public CornerButton
     {
-        PencilCornerButton (const juce::String& name, float cornerSize, float edgeInset)
-            : CornerButton (name, cornerSize, edgeInset, juce::Colours::grey) {}
+        PencilCornerButton (const juce::String& name, float edgeInset)
+            : CornerButton (name, edgeInset, juce::Colours::grey) {}
 
         void drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active) override
         {
@@ -341,9 +343,9 @@ namespace rig
                 colour = colour.brighter (0.3f);
 
             g.setColour (juce::Colours::black.withAlpha (on && isEnabled() ? 0.35f : 0.2f));
-            g.fillRoundedRectangle (bounds, 6.0f);
+            g.fillRect (bounds);
             g.setColour (colour.withAlpha (0.6f));
-            g.drawRoundedRectangle (bounds, 6.0f, 1.0f);
+            strokeRect (g, bounds, 1.0f);
 
             // 전원 기호: 위가 열린 원 + 세로선
             const auto icon = bounds.reduced (bounds.getHeight() * 0.25f);
@@ -621,6 +623,13 @@ namespace rig
     // 앱 기본 LookAndFeel (V4 그대로). TextButton 글자는 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 맞춘다 (drawShrunkText)
     struct AppLookAndFeel : public juce::LookAndFeel_V4
     {
+        // 모서리는 모두 각지게 (앱 전체 원칙): JUCE V4 가 둥글게 그리는 것(버튼, 콤보박스, 스크롤바, 경고창, 툴팁)은 여기서 사각으로.
+        // 경고창 테두리는 V4 가 둥글게 그리므로 색을 투명으로 두고 drawAlertBox 에서 사각으로 직접 그린다
+        AppLookAndFeel()
+        {
+            setColour (juce::AlertWindow::outlineColourId, juce::Colours::transparentBlack);
+        }
+
         // 창 제목 표시줄의 X 도 왼쪽 클릭만 (마우스 규칙). 모양은 LookAndFeel_V4 의 X 그대로 (V4 버튼 클래스는 JUCE 안에 숨어 있어 상속할 수 없다)
         struct WindowCloseButton final : public LeftClickOnly<juce::Button>
         {
@@ -670,7 +679,21 @@ namespace rig
                 highlighted = down = false;
 
             if (! button.getToggleState())
-                return juce::LookAndFeel_V4::drawButtonBackground (g, button, background, highlighted, down);
+            {
+                // V4 와 같은 색·테두리, 모서리만 각지게
+                const auto bounds = button.getLocalBounds().toFloat().reduced (0.5f, 0.5f);
+                auto base = background.withMultipliedSaturation (button.hasKeyboardFocus (true) ? 1.3f : 0.9f)
+                                      .withMultipliedAlpha (button.isEnabled() ? 1.0f : 0.5f);
+
+                if (down || highlighted)
+                    base = base.contrasting (down ? 0.2f : 0.05f);
+
+                g.setColour (base);
+                g.fillRect (bounds);
+                g.setColour (button.findColour (juce::ComboBox::outlineColourId));
+                strokeRect (g, bounds, 1.0f);
+                return;
+            }
 
             auto fill = background;
             if (down)
@@ -679,6 +702,53 @@ namespace rig
                 fill = fill.brighter (0.1f);
 
             indicator::drawBox (g, button.getLocalBounds().toFloat(), fill, button.findColour (juce::TextButton::textColourOnId));
+        }
+
+        // V4 와 같은 모양, 모서리만 각지게
+        void drawComboBox (juce::Graphics& g, int width, int height, bool, int, int, int, int, juce::ComboBox& box) override
+        {
+            const juce::Rectangle<float> bounds (0.0f, 0.0f, (float) width, (float) height);
+            g.setColour (box.findColour (juce::ComboBox::backgroundColourId));
+            g.fillRect (bounds);
+            g.setColour (box.findColour (juce::ComboBox::outlineColourId));
+            strokeRect (g, bounds.reduced (0.5f), 1.0f);
+
+            const juce::Rectangle<int> arrowZone (width - 30, 0, 20, height);
+            juce::Path arrow;
+            arrow.startNewSubPath ((float) arrowZone.getX() + 3.0f, (float) arrowZone.getCentreY() - 2.0f);
+            arrow.lineTo ((float) arrowZone.getCentreX(), (float) arrowZone.getCentreY() + 3.0f);
+            arrow.lineTo ((float) arrowZone.getRight() - 3.0f, (float) arrowZone.getCentreY() - 2.0f);
+            g.setColour (box.findColour (juce::ComboBox::arrowColourId).withAlpha (box.isEnabled() ? 0.9f : 0.2f));
+            g.strokePath (arrow, juce::PathStrokeType (2.0f));
+        }
+
+        void drawScrollbar (juce::Graphics& g, juce::ScrollBar& scrollbar, int x, int y, int width, int height,
+                            bool isScrollbarVertical, int thumbStartPosition, int thumbSize, bool isMouseOver, bool) override
+        {
+            const auto thumb = isScrollbarVertical ? juce::Rectangle<int> (x, thumbStartPosition, width, thumbSize)
+                                                   : juce::Rectangle<int> (thumbStartPosition, y, thumbSize, height);
+            const auto colour = scrollbar.findColour (juce::ScrollBar::thumbColourId);
+            g.setColour (isMouseOver ? colour.brighter (0.25f) : colour);
+            g.fillRect (thumb.reduced (1));
+        }
+
+        // V4 는 둥글게 그리므로: 사각 바탕과 사각 테두리를 먼저 그리고 V4 를 그 위에 (V4 테두리는 투명, 바탕은 둥근 안쪽만 덮는다)
+        void drawAlertBox (juce::Graphics& g, juce::AlertWindow& alert, const juce::Rectangle<int>& textArea, juce::TextLayout& textLayout) override
+        {
+            const auto bounds = alert.getLocalBounds().toFloat();
+            g.setColour (alert.findColour (juce::AlertWindow::backgroundColourId));
+            g.fillRect (bounds);
+            g.setColour (getCurrentColourScheme().getUIColour (juce::LookAndFeel_V4::ColourScheme::UIColour::outline));
+            strokeRect (g, bounds, 2.0f);
+            juce::LookAndFeel_V4::drawAlertBox (g, alert, textArea, textLayout);
+        }
+
+        // 툴팁: 사각 바탕을 먼저 깔아 V4 의 둥근 바탕 모서리를 채운다 (V4 툴팁 테두리는 원래 투명)
+        void drawTooltip (juce::Graphics& g, const juce::String& text, int width, int height) override
+        {
+            g.setColour (findColour (juce::TooltipWindow::backgroundColourId));
+            g.fillRect (0, 0, width, height);
+            juce::LookAndFeel_V4::drawTooltip (g, text, width, height);
         }
 
         void drawButtonText (juce::Graphics& g, juce::TextButton& button, bool, bool) override
@@ -881,13 +951,13 @@ namespace rig
         return elapsed >= (juce::uint32) highlightMs ? 0.0f : 1.0f - (float) elapsed / (float) highlightMs;
     }
 
-    inline void drawHighlight (juce::Graphics& g, juce::Rectangle<float> area, float alpha, float corner = 3.0f)
+    inline void drawHighlight (juce::Graphics& g, juce::Rectangle<float> area, float alpha)
     {
         if (alpha <= 0.0f)
             return;
 
         g.setColour (juce::Colours::yellow.withAlpha (alpha));
-        g.drawRoundedRectangle (area.expanded (2.0f), corner, 3.0f);
+        strokeRect (g, area.expanded (2.0f), 3.0f);
     }
 
     // 강조가 사라지는 동안 화면 갱신마다 component 를 다시 그린다 (끝난 뒤 한 번 더 그려 지운다)
@@ -928,7 +998,6 @@ namespace rig
         //   - 본문: 글자 칸 하나 (칸 높이 = 글꼴 높이)를 본문 세로 가운데에, 왼쪽 정렬
         constexpr int width = 130;           // 블록 폭
         constexpr int height = 44;
-        constexpr float corner = 3.0f;       // 모서리 (예전 8, 날카롭게)
 
         constexpr int bandHeight = 20;
         constexpr float frameInset = 1.5f, frameThickness = 1.5f;   // 테두리: 블록 가장자리에서 1.5 안쪽에 1.5 px 선 (선택은 selectedThickness)
@@ -1026,7 +1095,7 @@ namespace rig
         {
             juce::Graphics::ScopedSaveState save (g);
             juce::Path clip;
-            clip.addRoundedRectangle (bounds, corner);
+            clip.addRectangle (bounds);
             g.reduceClipRegion (clip);
 
             g.setColour (juce::Colours::red);
@@ -1036,7 +1105,7 @@ namespace rig
         inline void drawBlockBackground (juce::Graphics& g, juce::Rectangle<int> area, juce::Colour fill)
         {
             g.setColour (fill);
-            g.fillRoundedRectangle (area.toFloat().reduced (frameInset), corner);
+            g.fillRect (area.toFloat().reduced (frameInset));
         }
 
         // 꺼진 블록(바이패스)·꺼진 갈래 안 블록의 색 (패치맵, Stomp 칸)
@@ -1055,7 +1124,7 @@ namespace rig
                           justification);
         }
 
-        // 머리띠: 종류 색으로 채운 윗줄 (위 두 모서리만 둥글게) + 흰 종류 글자 (굵게), value 가 있으면 오른쪽 끝에 (굵게)
+        // 머리띠: 종류 색으로 채운 윗줄 + 흰 종류 글자 (굵게), value 가 있으면 오른쪽 끝에 (굵게)
         // textColour: 꺼진 블록은 흐린 흰색. justification: 블록은 왼쪽, IN / OUT 은 가운데
         inline void drawBlockHeader (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, juce::Colour colour,
                                      juce::Colour textColour = juce::Colours::white,
@@ -1063,10 +1132,8 @@ namespace rig
                                      const juce::String& value = {})
         {
             const auto strip = band (area).toFloat().reduced (frameInset, 0).withTrimmedTop (frameInset);
-            juce::Path path;
-            path.addRoundedRectangle (strip.getX(), strip.getY(), strip.getWidth(), strip.getHeight(), corner, corner, true, true, false, false);
             g.setColour (colour);
-            g.fillPath (path);
+            g.fillRect (strip);
 
             g.setColour (textColour);
             drawBandLabel (g, value, headerFont(), area, 1.0f, juce::Justification::right);
@@ -1094,30 +1161,30 @@ namespace rig
                 const auto inner = selected || stompBound ? bounds.reduced (selectedThickness) : bounds;
                 drawErrorSlash (g, inner);
                 g.setColour (juce::Colours::red);
-                g.drawRoundedRectangle (inner.reduced (errorThickness * 0.5f - 0.75f), corner, errorThickness);
+                strokeRect (g, inner.reduced (errorThickness * 0.5f - 0.75f), errorThickness);
             }
 
             if (stompBound)
             {
                 g.setColour (indicator::blue);
-                g.drawRoundedRectangle (bounds, corner, selectedThickness);
+                strokeRect (g, bounds, selectedThickness);
             }
             else if (! failed)
             {
                 g.setColour (border);
-                g.drawRoundedRectangle (bounds, corner, frameThickness);
+                strokeRect (g, bounds, frameThickness);
             }
 
             if (selected)
             {
                 g.setColour (juce::Colours::white.withAlpha (selectedAlpha));
-                g.drawRoundedRectangle (bounds, corner, selectedThickness);
+                strokeRect (g, bounds, selectedThickness);
             }
         }
 
         // Stomp 칸 (Edit ssbar, Live 패드, ssbar 에서 끄는 그림): 블록 모양을 칸 크기로. 머리띠 = 종류 (왼쪽, 블록과 같게), 본문 = 파일명
         // (가운데, 고정 글꼴로 줄마다 채우고 넘치면 말줄임, drawWrappedText). 중요 값·칸 번호 없음. 꺼진 블록은 패치맵처럼 흐리게.
-        // scale = 머리띠 높이·여백·테두리·모서리 배율 (ssbar 1, Live 패드는 크게), header / nameFont = 종류 / 파일명 글꼴
+        // scale = 머리띠 높이·여백·테두리 배율 (ssbar 1, Live 패드는 크게), header / nameFont = 종류 / 파일명 글꼴
         inline void drawStomp (juce::Graphics& g, juce::Rectangle<int> area, BlockType type, const juce::String& name, bool off,
                                float scale, const juce::Font& header, const juce::Font& nameFont)
         {
@@ -1125,15 +1192,13 @@ namespace rig
             const auto colour = off ? dimmed (colourFor (type)) : colourFor (type);
             const auto textColour = off ? dimmedText() : juce::Colours::white;
             const auto bounds = area.toFloat().reduced (frameInset * scale);
-            const float r = corner * scale, band = (float) bandHeight * scale;
+            const float band = (float) bandHeight * scale;
 
             g.setColour (none ? emptyFill : colour.darker (0.75f));
-            g.fillRoundedRectangle (bounds, r);
+            g.fillRect (bounds);
 
-            juce::Path strip;
-            strip.addRoundedRectangle (bounds.getX(), bounds.getY(), bounds.getWidth(), band - frameInset * scale, r, r, true, true, false, false);
             g.setColour (colour);
-            g.fillPath (strip);
+            g.fillRect (bounds.withHeight (band - frameInset * scale));
 
             // 머리띠 글자: 대문자 높이를 머리띠의 보이는 부분 가운데에 (drawBlockHeader 와 같은 방법)
             g.setColour (textColour);
@@ -1143,7 +1208,7 @@ namespace rig
             drawWrappedText (g, none ? emptyText : name, body, nameFont);
 
             g.setColour (none ? juce::Colours::grey.darker() : colour);
-            g.drawRoundedRectangle (bounds, r, frameThickness * scale);
+            strokeRect (g, bounds, frameThickness * scale);
         }
 
         // 끌어 놓기 내용 (DragAndDropContainer 의 sourceDescription).

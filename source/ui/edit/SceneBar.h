@@ -122,7 +122,7 @@ namespace rig
         std::array<juce::uint32, RigModel::numScenes> flashStart {};   // 놓은 뒤 테두리 강조 시작 시각 (0 = 없음)
 
         PassThroughLabel nameEditor;                       // 이름 편집 (공용, Widgets.h)
-        CheckCornerButton saveNameButton { "Save scene name", 5.0f, 0.5f };   // 씬 버튼 오른쪽 위 귀퉁이 (반지름 5 = sceneCorner)
+        CheckCornerButton saveNameButton { "Save scene name", 0.5f };   // 씬 버튼 오른쪽 위 귀퉁이
         int renamingScene = -1;                 // 입력칸이 덮고 있는 씬 (-1 = 편집 중 아님)
         int nameTargetScene = -1;               // 입력칸 내용을 저장할 씬. 편집기가 닫힌 뒤에 저장 알림이 오므로 따로 둔다
 

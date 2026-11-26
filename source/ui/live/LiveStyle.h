@@ -22,40 +22,25 @@ namespace rig::live
 
     inline juce::Font boldFont (float size) { return juce::Font (juce::FontOptions (size, juce::Font::bold)); }
 
-    // 앱 기본 글꼴에 SemiBold 가 있으면 쓰고, 없으면 보통 굵기
-    inline juce::Font semiBoldFont (float size)
-    {
-        static const juce::String style = []
-        {
-            const auto family = juce::Font (juce::FontOptions()).getTypefacePtr()->getName();
-            for (const auto& s : juce::Font::findAllTypefaceStyles (family))
-                if (s.removeCharacters (" -").equalsIgnoreCase ("SemiBold"))
-                    return s;
-            return juce::String ("Regular");
-        }();
-
-        return juce::Font (juce::FontOptions (size).withStyle (style));
-    }
-
     // 버튼 글자 크기: 편집 화면 Live 버튼과 같은 값 (JUCE 버튼 글꼴 = min (16, 높이 x 0.6))
     inline float buttonFontSize (float height) { return juce::jmin (16.0f, height * 0.6f); }
 
-    // 칸 모양 버튼 바탕 (둥근 사각 + 1 px 테두리)
+    // 칸 모양 버튼 바탕 (사각 + 1 px 테두리)
     inline void drawButtonBox (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour outline)
     {
         g.setColour (stepFill);
-        g.fillRoundedRectangle (area, 6.0f);
+        g.fillRect (area);
         g.setColour (outline);
-        g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.0f);
+        strokeRect (g, area.reduced (0.5f), 1.0f);
     }
 
     // 표시 칸 (패치 이름, 간이 튜너): 어두운 바탕 + 1 px 테두리
     inline void drawDisplayBox (juce::Graphics& g, juce::Rectangle<float> area)
     {
         g.setColour (boxFill);
-        g.fillRoundedRectangle (area, 6.0f);
+        g.fillRect (area);
         g.setColour (border);
-        g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.0f);
+        strokeRect (g, area.reduced (0.5f), 1.0f);
     }
 
     // 켜짐 표시 버튼 (Live, 튜너 스위치): 바탕 + 2 px 테두리

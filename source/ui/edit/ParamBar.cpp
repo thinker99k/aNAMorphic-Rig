@@ -238,14 +238,14 @@ namespace rig
         constexpr float grooveHeight = 4.0f;
 
         g.setColour (juce::Colours::black.withAlpha (0.55f));
-        g.fillRoundedRectangle ({ (float) x, cy - grooveHeight * 0.5f, (float) width, grooveHeight }, grooveHeight * 0.5f);
+        g.fillRect (juce::Rectangle<float> ((float) x, cy - grooveHeight * 0.5f, (float) width, grooveHeight));
 
         // 손잡이: 짙은 회색 사각 + 밝은 테두리 + 가운데 흰 선 (움직이는 방향에 수직)
         const auto cap = juce::Rectangle<float> ((float) capWidth, (float) juce::jmin (capHeight, height)).withCentre ({ sliderPos, cy });
         g.setColour (juce::Colour (0xff3c3c3c));
-        g.fillRoundedRectangle (cap, 2.0f);
+        g.fillRect (cap);
         g.setColour (juce::Colours::grey);
-        g.drawRoundedRectangle (cap.reduced (0.5f), 2.0f, 1.0f);
+        strokeRect (g, cap.reduced (0.5f), 1.0f);
         g.setColour (juce::Colours::white);
         g.drawLine (sliderPos, cap.getY() + 3.0f, sliderPos, cap.getBottom() - 3.0f, 2.0f);
     }
