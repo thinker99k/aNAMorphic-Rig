@@ -67,7 +67,7 @@ namespace rig
         FaderLookAndFeel faderLnf;
         std::array<SubPowerButton, 2> branchPower;
         std::array<juce::Label, 2> branchLabel, levelValue;
-        std::array<LeftClickOnly<juce::Slider>, 2> levelSlider;
+        std::array<EditSlider, 2> levelSlider;
         LeftClickOnly<juce::TextButton> levelResetButton { "Level\nReset" };
         LeftClickOnly<juce::TextButton> paramResetButton { "Param\nReset" };   // 블록 파라미터가 있는 종류만, 왼쪽 끝 (Level Reset 과 같은 자리)
         static constexpr int outputCell = 12;   // 공용 Output 칸 (모든 블록 종류 고정, 앞에 구분선 |)

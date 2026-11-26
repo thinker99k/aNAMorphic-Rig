@@ -389,6 +389,63 @@ namespace rig
             editor->setPopupMenuEnabled (false);
             juce::Label::editorShown (editor);
         }
+
+        // 저장 (체크 버튼·Enter) = 이름을 바꾸는 조작: 글자가 그대로여도 onCommit 을 부른다 (조작했으면 Undo).
+        // Esc·바깥 클릭은 취소라 부르지 않는다. (Label 의 onTextChange 는 글자가 바뀌었을 때만 와서 쓰지 않는다)
+        std::function<void (const juce::String&)> onCommit;
+
+        void commit()
+        {
+            if (auto* editor = getCurrentTextEditor())
+            {
+                const auto text = editor->getText();
+                hideEditor (false);
+
+                if (onCommit)
+                    onCommit (text);
+            }
+        }
+
+        void textEditorReturnKeyPressed (juce::TextEditor&) override { commit(); }
+    };
+
+    // 편집 슬라이더 (파라미터 노브, 합류 레벨): 값을 바꾸려는 조작(끌기 또는 더블클릭)이 끝났을 때만 onEditEnd.
+    // 누르고 떼기만 하면 부르지 않는다 (조작이 아니라 Undo 도 없다). JUCE 의 onDragEnd 는 누르고 떼기만 해도 와서 직접 쓰지 않는다.
+    // 더블클릭은 JUCE 가 그 안에서 드래그 시작·끝을 보내므로 거기서 한 번, 이어지는 뗌은 조작이 아니다
+    struct EditSlider : public LeftClickOnly<juce::Slider>
+    {
+        std::function<void()> onEditEnd;
+
+        EditSlider()
+        {
+            onDragEnd = [this]
+            {
+                if (std::exchange (operated, false) && onEditEnd)
+                    onEditEnd();
+            };
+        }
+
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            operated = false;
+            LeftClickOnly::mouseDown (e);
+        }
+
+        // JUCE 는 커서가 움직였을 때만 mouseDrag 를 보낸다 (값이 바뀔 수 있는 건 이때뿐)
+        void mouseDrag (const juce::MouseEvent& e) override
+        {
+            operated = operated || isLeftClick (e);
+            LeftClickOnly::mouseDrag (e);
+        }
+
+        void mouseDoubleClick (const juce::MouseEvent& e) override
+        {
+            operated = operated || isLeftClick (e);
+            LeftClickOnly::mouseDoubleClick (e);
+        }
+
+    private:
+        bool operated = false;
     };
 
     // 노브 공용 외형 (상태바 볼륨 노브, 파라미터 노브): 노브 몸통 + 호(맨 왼쪽 ~ 현재 값) + 지시선

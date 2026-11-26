@@ -51,7 +51,7 @@ namespace rig
             if (onValueChanged)
                 onValueChanged (slider.getValue());
         };
-        slider.onDragEnd = [this] { if (onDragEnded) onDragEnded(); };
+        slider.onEditEnd = [this] { if (onDragEnded) onDragEnded(); };   // 끌었거나 더블클릭했을 때만 (누르고 떼기는 조작 아님)
         slider.addMouseListener (this, false);   // 노브에 올리기 / 내리기 / 누르기 / 떼기 -> 팝업
 
         const juce::Font nameFont { juce::FontOptions (textSize, juce::Font::bold) }, valueFont { juce::FontOptions (textSize) };

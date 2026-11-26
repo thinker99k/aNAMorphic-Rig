@@ -324,17 +324,17 @@ namespace rig
         };
 
         Snapshot snapshot (int scene) const;
-        // 되돌리기 원칙: 실제로 바뀐 편집만 이력에 남긴다 (아무것도 안 바뀐 조작은 Undo / Redo 를 건드리지 않는다)
+        // 되돌리기 원칙: 값을 바꾸려는 조작을 했으면 값이 그대로여도 이력에 한 칸 (값을 비교하지 않는다).
+        //  조작이 아닌 것(노브를 누르고 떼기만, 이름 편집 취소, 끌어서 자기 자리에 놓기 = src == dst)은 UI 가 편집 함수를 부르지 않는다
         //  - remember()   : 편집 함수가 바꾸기 직전에 부른다. 직전 상태를 잡아 두기만 한다 (이미 잡혀 있으면 = 드래그 중이면 그대로)
-        //  - saveEdit()   : 편집이 끝나 저장할 때. 잡아 둔 상태와 지금이 다르면 그때 Undo 에 넣고 Redo 를 비운 뒤 저장
-        //  - 슬라이더·노브 드래그는 첫 값에서 잡고 끝(save)에서 닫으므로 한 번 끌기 = 한 단계, 제자리로 돌아오면 남지 않는다
+        //  - saveEdit()   : 편집이 끝나 저장할 때. 잡아 둔 상태를 Undo 에 넣고 Redo 를 비운 뒤 저장
+        //  - 슬라이더·노브 드래그는 첫 값에서 잡고 끝(save)에서 닫으므로 한 번 끌기 = 한 단계 (제자리로 돌아와도 한 단계)
         void remember();
         void touch (Touched before, Touched after);                 // 편집 함수가 바꾼 대상 (편집 직전 상태 / 직후 상태의 id)
         void touch (const Touched& both) { touch (both, both); }
-        void forgetEdit();                                           // 잡아 둔 편집을 버린다 (아무것도 안 바뀐 경우)
+        void forgetEdit();                                           // 잡아 둔 편집을 버린다 (편집 함수가 조작을 할 수 없었던 경우)
         void saveEdit();
         Selection currentSelection() const { return { selectedSlotId, selectedParallelId, selectedEndpoint }; }
-        bool sameContent (const Snapshot&) const;   // 편집 내용(체인 값, 채널, 씬 이름, 패치 이름)이 같은지. 선택·DSP 는 보지 않는다
         void step (std::vector<Snapshot>& from, std::vector<Snapshot>& to);
 
         void startLoading (Slot& slot);

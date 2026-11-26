@@ -118,11 +118,11 @@ namespace rig
             saveNameButton.setVisible (false);
             repaint();
         };
-        nameEditor.onTextChange = [this]
+        // 체크 버튼·Enter 로 저장하면 이름이 그대로여도 저장한다 (조작했으면 Undo). 편집기를 닫은 뒤(onEditorHide 다음)에 온다
+        nameEditor.onCommit = [this] (const juce::String& name)
         {
-            // Label 은 편집기를 닫은 뒤(onEditorHide 다음)에 이 알림을 보낸다
             if (nameTargetScene >= 0)
-                model.renameScene (nameTargetScene, nameEditor.getText());
+                model.renameScene (nameTargetScene, name);
         };
         nameEditor.allowWhileEditing = [this] (const juce::Component* target) { return target == &saveNameButton; };
         addChildComponent (nameEditor);
@@ -131,7 +131,7 @@ namespace rig
         saveNameButton.setTooltip ("Save scene name (Enter to save, Escape to cancel)");
         saveNameButton.setWantsKeyboardFocus (false);
         saveNameButton.setMouseClickGrabsKeyboardFocus (false);
-        saveNameButton.onClick = [this] { nameEditor.hideEditor (false); };
+        saveNameButton.onClick = [this] { nameEditor.commit(); };
         addChildComponent (saveNameButton);
 
         model.addChangeListener (this);
