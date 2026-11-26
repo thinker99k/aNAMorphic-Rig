@@ -14,10 +14,10 @@ namespace rig
         constexpr int gap = bottomBarGap;       // 바깥 여백 (버튼 사이도 같은 값, 14칸 격자 bottomBarCell)
         constexpr int saveButtonSize = 24;      // 이름 입력칸 오른쪽 위 귀퉁이의 정사각형 체크 버튼
         constexpr float sceneCorner = 5.0f;     // 칸 버튼 둥근 모서리 반지름
-        constexpr float nameFontSize = 13.0f;   // 씬 이름 최대 크기 (넘치면 글꼴만 줄인다. 입력칸도 같은 크기)
+        constexpr float nameFontSize = 13.0f;   // 씬 이름 (입력칸도 같은 크기)
         constexpr int nameInset = 6;            // 이름 칸 좌우 여백
         constexpr int numberRowHeight = 20;     // 씬 번호 줄 (왼쪽 위). 이름 칸은 위아래를 이만큼 똑같이 비워 가운데에 둔다
-        constexpr float stompNameSize = block::fontSize;   // Stomp 칸 파일명 최대 크기 (블록과 같게)
+        constexpr float stompNameSize = block::fontSize;   // Stomp 칸 파일명 (블록과 같게)
         constexpr int dragStartDistance = 4;    // 칸을 이만큼 움직여야 끌기 (클릭과 구분, 패치맵과 같다)
         constexpr int keepMargin = 22;          // 끌던 Stomp 칸의 둘레 = 원래 칸 + 사방 이만큼 (패치맵 keepMargin 과 같은 값). 밖에서 떼면 삭제
         constexpr float markArm = 6.0f;         // 놓을 자리 힌트의 표시 기호 크기 (가운데에서 팔 끝까지)
@@ -534,7 +534,7 @@ namespace rig
 
                 if (! s)
                 {
-                    // 번호: 왼쪽 위 / 이름: 가운데 (자르지 않고 글꼴만 줄인다. 번호 줄만큼 위아래를 똑같이 비운다)
+                    // 번호: 왼쪽 위 / 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
                     const auto textColour = lit ? juce::Colours::black : juce::Colours::white;
                     g.setColour (textColour.withAlpha (0.7f));
                     g.setFont (juce::FontOptions (16.0f, juce::Font::bold));
@@ -543,7 +543,7 @@ namespace rig
                     if (i != renamingScene)   // 이름 자리는 입력칸이 같은 위치에 쓴다
                     {
                         g.setColour (textColour);
-                        drawShrunkText (g, model.getSceneName (i), cell.reduced (nameInset, numberRowHeight).toFloat(),
+                        drawWrappedText (g, model.getSceneName (i), cell.reduced (nameInset, numberRowHeight).toFloat(),
                                         juce::Font (juce::FontOptions (nameFontSize)));
                     }
                 }

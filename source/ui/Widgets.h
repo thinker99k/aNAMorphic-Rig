@@ -446,7 +446,7 @@ namespace rig
         }
     };
 
-    // 글자를 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 area 가운데에 그린다 (버튼 글자, 씬·Stomp 칸 이름).
+    // 글자를 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 area 가운데에 그린다 (버튼 글자).
     // 한 줄과 "단어마다 한 줄" 중 글꼴을 더 크게 쓸 수 있는 쪽. 글자에 \n 이 있으면 그 줄바꿈 그대로.
     // font = 가장 큰 크기와 굵기 (줄 수만큼 area 높이에 들어가도록 먼저 줄인다). 색은 미리 g 에
     inline void drawShrunkText (juce::Graphics& g, const juce::String& rawText, juce::Rectangle<float> area, const juce::Font& font)
@@ -492,6 +492,71 @@ namespace rig
         for (const auto& line : lines)
         {
             g.drawText (line, juce::Rectangle<float> (area.getX(), y, area.getWidth(), lineHeight), juce::Justification::centred, false);
+            y += lineHeight;
+        }
+    }
+
+    // 고정 글꼴로 area 가운데에 여러 줄 (씬·Stomp 칸 이름): 한 줄에 들어가는 만큼 단어를 채우고 다음 줄로 (한 단어가 한 줄보다 길면
+    // 글자 단위로 끊는다). 줄이 area 높이를 넘치면 마지막 줄 끝을 말줄임. 글꼴 크기는 줄이지 않는다. 색은 미리 g 에
+    inline void drawWrappedText (juce::Graphics& g, const juce::String& text, juce::Rectangle<float> area, const juce::Font& font)
+    {
+        const auto widthOf = [&font] (const juce::String& s) { return juce::GlyphArrangement::getStringWidth (font, s); };
+        const float maxWidth = area.getWidth();
+        juce::StringArray lines;
+        juce::String line;
+
+        for (auto word : juce::StringArray::fromTokens (text.trim(), " ", {}))
+        {
+            if (word.isEmpty())
+                continue;
+
+            if (line.isNotEmpty() && widthOf (line + " " + word) <= maxWidth)
+            {
+                line << " " << word;
+                continue;
+            }
+
+            if (line.isNotEmpty())
+                lines.add (std::exchange (line, {}));
+
+            // 한 줄보다 긴 단어: 들어가는 만큼씩 끊는다 (적어도 한 글자)
+            while (widthOf (word) > maxWidth && word.length() > 1)
+            {
+                int n = 1;
+                while (n < word.length() && widthOf (word.substring (0, n + 1)) <= maxWidth)
+                    ++n;
+
+                lines.add (word.substring (0, n));
+                word = word.substring (n);
+            }
+
+            line = word;
+        }
+
+        if (line.isNotEmpty())
+            lines.add (line);
+
+        const float lineHeight = font.getHeight();
+        const int maxLines = juce::jmax (1, (int) (area.getHeight() / lineHeight));
+
+        if (lines.size() > maxLines)
+        {
+            lines.removeRange (maxLines, lines.size());
+            auto last = lines[maxLines - 1].trimEnd();
+            const juce::String ellipsis (juce::CharPointer_UTF8 ("\xe2\x80\xa6"));
+
+            while (last.isNotEmpty() && widthOf (last + ellipsis) > maxWidth)
+                last = last.dropLastCharacters (1).trimEnd();
+
+            lines.set (maxLines - 1, last + ellipsis);
+        }
+
+        g.setFont (font);
+        auto y = area.getCentreY() - lineHeight * (float) lines.size() / 2.0f;
+
+        for (const auto& l : lines)
+        {
+            g.drawText (l, juce::Rectangle<float> (area.getX(), y, area.getWidth(), lineHeight), juce::Justification::centred, false);
             y += lineHeight;
         }
     }
@@ -853,28 +918,37 @@ namespace rig
         inline juce::Font headerFont() { return juce::Font (juce::FontOptions (fontSize, juce::Font::bold)); }
         inline juce::Font nameFont()   { return juce::Font (juce::FontOptions (fontSize)); }
 
-        // 글꼴의 대문자 높이 (실제 그린 "H" 의 높이). 글꼴은 OS 마다 다르므로 처음 쓸 때 한 번 잰다
+        // 글꼴의 대문자 높이 (실제 그린 "H" 윤곽의 높이). 글꼴은 OS 마다 다르므로 잰다.
+        // (GlyphArrangement::getBoundingBox 는 글자 칸 = ascent + descent 를 돌려줘 대문자 높이가 아니다)
         inline float capHeight (const juce::Font& font)
         {
             juce::GlyphArrangement glyphs;
             glyphs.addLineOfText (font, "H", 0.0f, 0.0f);
-            return glyphs.getBoundingBox (0, -1, true).getHeight();
+            juce::Path outline;
+            glyphs.createPath (outline);
+            return outline.getBounds().getHeight();
         }
 
-        // baseline 에 글자가 앉도록 그릴 칸 (drawText 는 글꼴 높이를 칸 세로 가운데에 놓으므로 칸 높이 = 글꼴 높이면 baseline = 위 + ascent)
-        inline juce::Rectangle<int> lineAt (juce::Rectangle<int> area, const juce::Font& font, float baseline)
-        {
-            return juce::Rectangle<float> ((float) area.getX() + (float) textInsetX, baseline - font.getAscent(),
-                                           (float) (area.getWidth() - 2 * textInsetX), font.getHeight()).getSmallestIntegerContainer();
-        }
+        // 머리띠의 보이는 부분 (scale 1 기준, 블록 위 끝에서): 테두리가 머리띠와 같은 색이라 위 테두리 선의 바깥 끝
+        // (frameInset - frameThickness / 2) 부터 bandHeight 까지가 한 색으로 보인다
+        constexpr float bandVisibleTop = frameInset - frameThickness * 0.5f;
 
-        // 머리띠의 보이는 부분 = 위 테두리 선의 안쪽 끝 (frameInset + frameThickness / 2) ~ bandHeight
-        constexpr float bandVisibleTop = frameInset + frameThickness * 0.5f;
-
-        inline juce::Rectangle<int> headerLine (juce::Rectangle<int> area)
+        // 머리띠 글자 한 줄: 대문자 ("H") 윤곽이 보이는 머리띠 [top, bottom] 의 세로 가운데에 오도록 baseline 을 정해,
+        // 글자 칸 반올림 없이 그 baseline 에 그린다. 가로는 [left, right] 안에서 왼쪽 / 가운데 / 오른쪽
+        inline void drawBandText (juce::Graphics& g, const juce::String& text, const juce::Font& font,
+                                  float left, float right, float top, float bottom, juce::Justification justification)
         {
-            static const float cap = capHeight (headerFont());
-            return lineAt (area, headerFont(), (float) area.getY() + (bandVisibleTop + (float) bandHeight) * 0.5f + cap * 0.5f);
+            if (text.isEmpty())
+                return;
+
+            const float baseline = (top + bottom) * 0.5f + capHeight (font) * 0.5f;
+            const float textWidth = juce::GlyphArrangement::getStringWidth (font, text);
+            const float x = justification.testFlags (juce::Justification::right) ? right - textWidth
+                          : justification.testFlags (juce::Justification::horizontallyCentred) ? (left + right - textWidth) * 0.5f
+                                                                                                : left;
+            juce::GlyphArrangement glyphs;
+            glyphs.addLineOfText (font, text, x, baseline);
+            glyphs.draw (g);
         }
 
         inline juce::Rectangle<int> body (juce::Rectangle<int> area) { return area.withTrimmedTop (bandHeight); }
@@ -911,6 +985,18 @@ namespace rig
         inline juce::Colour dimmed (juce::Colour c) { return c.withSaturation (0.1f).darker (0.5f); }
         inline juce::Colour dimmedText() { return juce::Colours::white.darker (0.5f); }
 
+        // 머리띠 글자 자리 하나로 그린다 (같은 역할의 글자는 화면·모드가 달라도 이 함수로: 위치를 따로 계산하지 않는다).
+        //  쓰는 곳: 패치맵 블록·IN / OUT 머리띠 (종류, 중요 값), Stomp 칸 머리띠 (ssbar, Live 패드).
+        //  area 위쪽 bandHeight x scale 줄, 좌우 textInsetX x scale 안쪽, 세로 = 보이는 머리띠 가운데 (drawBandText)
+        inline void drawBandLabel (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Rectangle<int> area,
+                                   float scale = 1.0f, juce::Justification justification = juce::Justification::left)
+        {
+            const float inset = (float) textInsetX * scale;
+            drawBandText (g, text, font, (float) area.getX() + inset, (float) area.getRight() - inset,
+                          (float) area.getY() + bandVisibleTop * scale, (float) area.getY() + (float) bandHeight * scale,
+                          justification);
+        }
+
         // 머리띠: 종류 색으로 채운 윗줄 (위 두 모서리만 둥글게) + 흰 종류 글자 (굵게), value 가 있으면 오른쪽 끝에 (굵게)
         // textColour: 꺼진 블록은 흐린 흰색. justification: 블록은 왼쪽, IN / OUT 은 가운데
         inline void drawBlockHeader (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, juce::Colour colour,
@@ -925,9 +1011,8 @@ namespace rig
             g.fillPath (path);
 
             g.setColour (textColour);
-            g.setFont (headerFont());
-            g.drawText (value, headerLine (area), juce::Justification::centredRight, true);
-            g.drawText (text, headerLine (area), justification, true);
+            drawBandLabel (g, value, headerFont(), area, 1.0f, juce::Justification::right);
+            drawBandLabel (g, text, headerFont(), area, 1.0f, justification);
         }
 
         // 본문 한 줄: 이름 (보통 흰색). 넘치면 말줄임
@@ -972,11 +1057,11 @@ namespace rig
             }
         }
 
-        // Stomp 칸 (Edit ssbar, Live 패드, ssbar 에서 끄는 그림): 블록 모양을 칸 크기로. 머리띠 = 종류 (가운데), 본문 = 파일명
-        // (가운데, 자르지 않고 글꼴만 줄인다). 중요 값·칸 번호 없음. 꺼진 블록은 패치맵처럼 흐리게.
-        // scale = 머리띠 높이·종류 글자·테두리·모서리 배율 (ssbar 1, Live 패드는 크게), nameSize = 파일명 최대 크기
+        // Stomp 칸 (Edit ssbar, Live 패드, ssbar 에서 끄는 그림): 블록 모양을 칸 크기로. 머리띠 = 종류 (왼쪽, 블록과 같게), 본문 = 파일명
+        // (가운데, 고정 글꼴로 줄마다 채우고 넘치면 말줄임, drawWrappedText). 중요 값·칸 번호 없음. 꺼진 블록은 패치맵처럼 흐리게.
+        // scale = 머리띠 높이·종류 글자·여백·테두리·모서리 배율 (ssbar 1, Live 패드는 크게), nameFont = 파일명 글꼴
         inline void drawStomp (juce::Graphics& g, juce::Rectangle<int> area, BlockType type, const juce::String& name, bool off,
-                               float scale, const juce::Font& nameFontMax)
+                               float scale, const juce::Font& nameFont)
         {
             const bool none = type == BlockType::None;
             const auto colour = off ? dimmed (colourFor (type)) : colourFor (type);
@@ -992,17 +1077,12 @@ namespace rig
             g.setColour (colour);
             g.fillPath (strip);
 
-            // 머리띠 글자: 대문자 높이를 머리띠의 보이는 부분 가운데에 (headerLine 과 같은 방법)
-            const auto header = headerFont().withHeight (fontSize * scale);
-            const float visibleTop = (float) area.getY() + bandVisibleTop * scale;
-            const float baseline = (visibleTop + (float) area.getY() + band) * 0.5f + capHeight (header) * 0.5f;
+            // 머리띠 글자: 대문자 높이를 머리띠의 보이는 부분 가운데에 (drawBlockHeader 와 같은 방법)
             g.setColour (textColour);
-            g.setFont (header);
-            g.drawText (labelFor (type), juce::Rectangle<float> (bounds.getX(), baseline - header.getAscent(), bounds.getWidth(), header.getHeight()),
-                        juce::Justification::centred, false);
+            drawBandLabel (g, labelFor (type), headerFont().withHeight (fontSize * scale), area, scale);
 
-            const auto body = area.toFloat().withTrimmedTop (band).reduced ((float) textInsetX * scale, 4.0f * scale);
-            drawShrunkText (g, none ? emptyText : name, body, nameFontMax);
+            const auto body = area.toFloat().withTrimmedTop (band).reduced ((float) textInsetX * scale, 2.0f * scale);
+            drawWrappedText (g, none ? emptyText : name, body, nameFont);
 
             g.setColour (none ? juce::Colours::grey.darker() : colour);
             g.drawRoundedRectangle (bounds, r, frameThickness * scale);
