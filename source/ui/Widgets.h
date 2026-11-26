@@ -801,13 +801,15 @@ namespace rig
     {
         // 블록 = 박스 안 박스 2줄: [머리띠: 종류 (왼쪽) | 중요 값 (오른쪽), 종류 색으로 채움, 흰 굵은 글자] / 본문 [이름 한 줄]
         //   높이 44 = 머리띠 20 + 본문 24. 글자는 모두 같은 글꼴·크기 (fontSize), 머리띠만 굵게
-        //   - 머리띠: 실제 글꼴의 대문자 높이를 머리띠 가운데에 (대문자에는 아래 획이 없어 줄 가운데에 두면 위로 쏠려 보인다)
+        //   - 머리띠: 실제 글꼴의 대문자 높이를 머리띠의 보이는 부분(위 테두리 선 아래 ~ 본문 시작) 가운데에
+        //     (대문자에는 아래 획이 없어 줄 가운데에 두면 위로 쏠려 보인다)
         //   - 본문: 글자 칸 하나 (칸 높이 = 글꼴 높이)를 본문 세로 가운데에, 왼쪽 정렬
         constexpr int width = 130;           // 블록 폭
         constexpr int height = 44;
         constexpr float corner = 3.0f;       // 모서리 (예전 8, 날카롭게)
 
         constexpr int bandHeight = 20;
+        constexpr float frameInset = 1.5f, frameThickness = 1.5f;   // 테두리: 블록 가장자리에서 1.5 안쪽에 1.5 px 선
         constexpr int textInsetX = 8;        // 좌우 여백
         constexpr float fontSize = 14.0f;    // 블록 안 모든 글자 (머리띠는 굵게)
 
@@ -864,10 +866,13 @@ namespace rig
                                            (float) (area.getWidth() - 2 * textInsetX), font.getHeight()).getSmallestIntegerContainer();
         }
 
+        // 머리띠의 보이는 부분 = 위 테두리 선의 안쪽 끝 (frameInset + frameThickness / 2) ~ bandHeight
+        constexpr float bandVisibleTop = frameInset + frameThickness * 0.5f;
+
         inline juce::Rectangle<int> headerLine (juce::Rectangle<int> area)
         {
             static const float cap = capHeight (headerFont());
-            return lineAt (area, headerFont(), (float) area.getY() + (float) bandHeight * 0.5f + cap * 0.5f);
+            return lineAt (area, headerFont(), (float) area.getY() + (bandVisibleTop + (float) bandHeight) * 0.5f + cap * 0.5f);
         }
 
         inline juce::Rectangle<int> body (juce::Rectangle<int> area) { return area.withTrimmedTop (bandHeight); }
