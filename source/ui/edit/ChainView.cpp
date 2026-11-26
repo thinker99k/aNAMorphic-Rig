@@ -127,6 +127,7 @@ namespace rig
 
         // 놓을 자리 위인지 / 그 자리가 다른 블록(Swap)인지 (Strip 이 정한다, 화면 좌표)
         std::function<bool (juce::Point<int>)> isOverDropZone, isOverSwap;
+        std::function<void (bool)> onRemovePreview;   // 떼면 삭제되는 자리에 들어오고 나갈 때 (Strip 이 원래 자리를 비워 보여 준다)
 
         // 선택은 끌지 않고 뗐을 때 (누를 때 고르면 패치맵이 다시 만들어져 끌기가 끊긴다).
         // 끌다 뗐을 때: 놓을 자리 위면 Strip 이 미리보기대로 처리하고 (우선), 자리 밖이면 삭제 범위(isDeleteAt)일 때만 삭제.
@@ -142,6 +143,9 @@ namespace rig
                 model.selectSlot (slotId);
                 return;
             }
+
+            if (onRemovePreview)
+                onRemovePreview (false);
 
             auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this);
             const auto screen = e.getScreenPosition();
@@ -186,6 +190,10 @@ namespace rig
                 {
                     shownMark = mark;
                     shownStomp = stompMark.has_value();
+
+                    if (onRemovePreview)
+                        onRemovePreview (mark == block::DragMark::remove);
+
                     container->setCurrentDragImage (juce::ScaledImage (shownStomp ? stompDrag.image (slotId, mark)
                                                                                   : block::createDragImage (snapshot, mark)));
                 }
@@ -851,39 +859,45 @@ namespace rig
                 g.endTransparencyLayer();
             }
 
-            if (! hover.has_value())
+            // 결과 미리보기 (드래그앤드롭 연산: −(p) = 블록 없이 테두리 흔적만, +(p,v) = v 를 반투명하게. 다른 블록은 당기지 않는다)
+            if (removingId != 0)
+                if (const auto* source = tileFor (removingId))
+                    paintEmpty (g, source->getBounds());   // 이동 + 버림: src 비움
+
+            if (! hover.has_value() || ! activeDrag.has_value())
                 return;
 
-            g.setColour (dropHover);   // 커서가 올라간 놓을 자리 = 진한 테두리
-
-            if (hover->kind == DropZone::insert)
-            {
-                strokeRect (g, hover->area.toFloat().reduced (2.0f), hoverThickness);
-                return;
-            }
+            auto* source = activeDrag->fromLibrary ? nullptr : tileFor (activeDrag->slotId);
+            const auto moved = activeDrag->fromLibrary || source == nullptr
+                             ? block::createBlockImage (activeDrag->type, activeDrag->file.getFileNameWithoutExtension())   // new: 새 블록
+                             : source->createComponentSnapshot (source->getLocalBounds());                                  // curr소멸: 끄는 블록
 
             if (hover->kind == DropZone::replace)
             {
+                auto* target = tileFor (hover->slotId);
+
+                // 스왑: src 에 dst 블록, dst 에 src 블록 / 추가 + 덮어쓰기 (선택기): dst 에 새 블록
+                if (source != nullptr && target != nullptr)
+                    paintGhost (g, target->createComponentSnapshot (target->getLocalBounds()), source->getBounds());
+
+                if (target != nullptr)
+                    paintGhost (g, moved, target->getBounds());
+
+                g.setColour (dropHover);   // 커서가 올라간 놓을 자리 = 진한 테두리
                 strokeRect (g, hover->area.toFloat().expanded (2.0f), hoverThickness);
+                return;
+            }
 
-                // Swap (패치맵 블록): 원래 자리에도 대상 블록이 들어올 모습을 반투명하게
-                if (activeDrag.has_value() && ! activeDrag->fromLibrary)
-                {
-                    const auto* source = tileFor (activeDrag->slotId);
-                    auto* target = tileFor (hover->slotId);
+            // 이동 (패치맵 블록): src 비움. 추가 (선택기) 는 src 가 바깥이라 없음
+            if (source != nullptr)
+                paintEmpty (g, source->getBounds());
 
-                    if (source != nullptr && target != nullptr)
-                    {
-                        // 원래 블록 위에 겹쳐 글자가 섞이지 않게 그 자리를 패치맵 바탕으로 덮은 뒤 그린다
-                        g.setColour (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.15f));   // ChainView::paint 와 같은 바탕
-                        g.fillRect (source->getBounds());
-                        g.setOpacity (block::dragImageAlpha);
-                        g.drawImageAt (target->createComponentSnapshot (target->getLocalBounds()), source->getX(), source->getY());
-                        g.setColour (dropHighlight);
-                        strokeRect (g, source->getBounds().toFloat().expanded (2.0f), 3.0f);
-                    }
-                }
-
+            if (hover->kind == DropZone::insert)
+            {
+                // 연결선 자리: 블록을 그 선 가운데에 (양옆 블록 위로 겹친다)
+                paintGhost (g, moved, juce::Rectangle<int> (tileWidth, tileHeight).withCentre (hover->area.getCentre()));
+                g.setColour (dropHover);
+                strokeRect (g, hover->area.toFloat().reduced (2.0f), hoverThickness);
                 return;
             }
 
@@ -902,12 +916,38 @@ namespace rig
             g.setColour (dropHighlight);
             g.strokePath (path, juce::PathStrokeType (lineThickness));
 
+            paintGhost (g, moved, hover->area);
+
             g.setColour (dropHover);
             strokeRect (g, lower.reduced (1.5f), hoverThickness);
 
             g.beginTransparencyLayer (dropHighlight.getFloatAlpha());
             drawMergeButton (g, *this, { merge, target.getCentreY() }, mergeSize, false, false);
             g.endTransparencyLayer();
+        }
+
+        // 그 자리를 패치맵 바탕으로 덮는다
+        void clearArea (juce::Graphics& g, juce::Rectangle<int> area) const
+        {
+            g.setColour (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.15f));   // ChainView::paint 와 같은 바탕
+            g.fillRect (area);
+        }
+
+        // 미리보기 −(p): 블록(내용)은 지우고 블록 테두리 자리에 흔적만 (되돌아올 수 있는 원래 자리)
+        void paintEmpty (juce::Graphics& g, juce::Rectangle<int> area) const
+        {
+            clearArea (g, area);
+            g.setColour (dropHighlight);
+            strokeRect (g, area.toFloat().reduced (block::frameInset), block::frameThickness);
+        }
+
+        // 미리보기 +(p,v): 그 자리를 비운 뒤 v 를 반투명하게 (끄는 그림과 같은 불투명도)
+        void paintGhost (juce::Graphics& g, const juce::Image& image, juce::Rectangle<int> area) const
+        {
+            clearArea (g, area);
+            g.setOpacity (block::dragImageAlpha);
+            g.drawImageAt (image, area.getX(), area.getY());
+            g.setOpacity (1.0f);
         }
 
     private:
@@ -1159,6 +1199,11 @@ namespace rig
             auto* tile = tiles.add (new Tile (model, id, active, marqueeStart, stompDrag));
             tile->isOverDropZone = [this, id] (juce::Point<int> screen) { return dropZoneAt (id, screen).has_value(); };
             tile->isOverSwap = [this, id] (juce::Point<int> screen) { const auto zone = dropZoneAt (id, screen); return zone.has_value() && zone->kind == DropZone::replace; };
+            tile->onRemovePreview = [this, id] (bool removing)
+            {
+                removingId = removing ? id : 0;
+                repaint();
+            };
             addAndMakeVisible (tile);
             return tile;
         }
@@ -1215,6 +1260,7 @@ namespace rig
         std::vector<Line> lines;                     // resized 에서 계산
         std::vector<DropZone> dropZones;             // resized 에서 계산
         std::optional<DropZone> hover;               // 끄는 동안 놓을 자리
+        juce::uint64 removingId = 0;                 // 떼면 삭제되는 자리에 있는 패치맵 블록 (원래 자리를 비워 보여 준다, 0 = 없음)
         std::vector<MergeTarget> mergeZones;         // resized 에서 계산
         std::vector<SplitEdge> splitEdges;           // resized 에서 계산
         std::optional<SplitEdge> splitFrom, splitTo; // 병렬 나누기: 누른 화살표 / 지금 놓을 화살표 (다른 줄, 같은 병렬)

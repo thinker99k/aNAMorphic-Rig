@@ -28,6 +28,7 @@ namespace rig
     //      패치맵 블록 → Stomp 칸 (Stomp 모드): 빈 칸 = 추가 (+), 묶인 칸 = 대체 (↔). 칸을 나누지 않는다
     //      빈 Stomp 칸은 끌 수 없다
     //    끄는 동안 놓을 수 있는 칸을 희미하게, 나뉜 칸은 가운데 선 + 반쪽마다 표시 기호, 커서 밑 자리는 진하게.
+    //    커서 밑 자리는 결과 미리보기 (드래그앤드롭 연산): 들어갈 칸 = 그 내용을 반투명하게, 비는 칸 = 내용 없이 테두리 흔적만 (스왑은 두 칸 맞바꾼 모습).
     //    놓은 뒤 바뀐 칸 테두리가 부드럽게 두 번 깜빡인다 (스왑·이동 = 두 칸)
     //  - Rename : 현재 씬 버튼 자리에 입력칸 (글자는 이름처럼 가운데, 오른쪽 위 귀퉁이에 정사각형 체크 버튼).
     //             체크 버튼이나 Enter 로 저장, 바깥 클릭·Esc 는 취소 (16자)
@@ -105,6 +106,20 @@ namespace rig
         void updateTimer();
         void paintDropHints (juce::Graphics&);
 
+        // 칸 하나에 그릴 내용: 씬 번호(scene) 또는 묶인 블록(slot), 둘 다 없으면 빈 Stomp 칸
+        struct CellContent
+        {
+            int scene = -1;
+            const RigModel::Slot* slot = nullptr;
+            bool stompOn = false;
+        };
+
+        CellContent contentOf (int cell) const;                                   // 지금 그 칸의 내용
+        void paintCell (juce::Graphics&, int cell, const CellContent&) const;     // cell 자리에 content 를 그린다
+        void paintGhost (juce::Graphics&, int cell, const CellContent&) const;    // 미리보기 채움 (반투명)
+        void paintEmpty (juce::Graphics&, int cell) const;                        // 미리보기 비움 (테두리 흔적만)
+        void paintDropPreview (juce::Graphics&) const;                            // 커서 밑 놓을 자리의 결과 미리보기
+
         RigModel& model;
 
         std::array<juce::Rectangle<int>, RigModel::numScenes> cellBounds;
@@ -119,6 +134,7 @@ namespace rig
         std::optional<Drop> hoverDrop;           // 커서 밑 놓을 자리
         juce::Image dragSnapshot;                // ssbar 칸을 끌기 시작할 때 칸 그림 (표시를 바꿀 때 다시 쓴다)
         block::DragMark shownMark = block::DragMark::none;
+        bool deletePreview = false;              // 끌던 Stomp 칸이 둘레 밖 (떼면 삭제): 원래 칸을 비워 보여 준다
         std::array<juce::uint32, RigModel::numScenes> flashStart {};   // 놓은 뒤 테두리 강조 시작 시각 (0 = 없음)
 
         PassThroughLabel nameEditor;                       // 이름 편집 (공용, Widgets.h)

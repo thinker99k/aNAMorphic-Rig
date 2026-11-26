@@ -1319,8 +1319,8 @@ namespace rig
             return image;
         }
 
-        // 선택기에서 끌 때 커서에 붙는 블록 그림 (mark 표시 포함). 미지정 블록은 emptyFill / emptyText, 그 밖은 중요 값 줄에 새 블록의 기본값
-        inline juce::Image createImage (BlockType type, const juce::String& name, DragMark mark = DragMark::add)
+        // 새 블록 그림 (선택기 항목): 미지정 블록은 emptyFill / emptyText, 그 밖은 머리띠 오른쪽에 새 블록의 기본값
+        inline juce::Image createBlockImage (BlockType type, const juce::String& name)
         {
             const juce::Rectangle<int> area (width, height);
             juce::Image block (juce::Image::ARGB, width, height, true);
@@ -1333,7 +1333,13 @@ namespace rig
                              none ? juce::String() : dbText (0.0));
             drawBlockText (g, area, none ? emptyText : name, juce::Colours::white);
             drawBlockFrame (g, area, none ? juce::Colours::grey.darker() : colour, false, false);
-            return createDragImage (block, mark);
+            return block;
+        }
+
+        // 선택기에서 끌 때 커서에 붙는 블록 그림 (mark 표시 포함)
+        inline juce::Image createImage (BlockType type, const juce::String& name, DragMark mark = DragMark::add)
+        {
+            return createDragImage (createBlockImage (type, name), mark);
         }
     }
 }

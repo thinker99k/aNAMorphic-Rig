@@ -209,7 +209,9 @@ namespace rig
             if (mark != shownMark)
             {
                 shownMark = mark;
+                deletePreview = mark == block::DragMark::remove;
                 container->setCurrentDragImage (juce::ScaledImage (block::createDragImage (dragSnapshot, mark)));
+                repaint();
             }
 
             return;
@@ -391,6 +393,7 @@ namespace rig
     {
         dragSource.reset();
         hoverDrop.reset();
+        deletePreview = false;
         repaint();
     }
 
@@ -510,43 +513,7 @@ namespace rig
         {
             const auto cell = cellBounds[(size_t) i];
             const auto bounds = cell.toFloat();
-            const auto* slot = s ? model.getStompSlot (i) : nullptr;
-
-            if (slot != nullptr)
-            {
-                // 묶인 Stomp 칸 = 블록 모양 (꺼지면 흐리게)
-                block::drawStomp (g, cell, slot->type, RigModel::shortName (*slot), ! model.isStompOn (i), 1.0f, block::headerFont(),
-                                  juce::Font (juce::FontOptions (stompNameSize)));
-            }
-            else
-            {
-                // 씬 칸 / 빈 Stomp 칸
-                const bool lit = ! s && i == model.getCurrentScene();
-                auto fill = lit ? juce::Colours::lightgrey : juce::Colour (0xff3a4148);
-
-                if (i == renamingScene)
-                    fill = juce::Colours::black.withAlpha (0.4f).overlaidWith (juce::Colour (0xff1e2328));   // 입력칸 바탕
-
-                g.setColour (fill);
-                g.fillRect (bounds);
-                g.setColour (i == renamingScene ? juce::Colours::grey : juce::Colours::grey.withAlpha (0.6f));
-                strokeRect (g, bounds.reduced (0.5f), 1.0f);
-
-                if (! s)
-                {
-                    // 번호: 왼쪽 위 / 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
-                    const auto textColour = lit ? juce::Colours::black : juce::Colours::white;
-                    g.setColour (textColour.withAlpha (0.7f));
-                    block::drawBandLabel (g, juce::String (i + 1), juce::Font (juce::FontOptions (numberFontSize, juce::Font::bold)), cell, 1.0f);
-
-                    if (i != renamingScene)   // 이름 자리는 입력칸이 같은 위치에 쓴다
-                    {
-                        g.setColour (textColour);
-                        drawWrappedText (g, model.getSceneName (i), cell.reduced (nameInset, numberRowHeight).toFloat(),
-                                        juce::Font (juce::FontOptions (nameFontSize)));
-                    }
-                }
-            }
+            paintCell (g, i, contentOf (i));
 
             // 놓은 뒤 테두리 강조: 부드럽게 두 번 깜빡인다 (켜졌다 꺼지는 한 번 = sin² 의 반 주기)
             if (const auto start = flashStart[(size_t) i]; start != 0 && now - start < flashMs)
@@ -563,6 +530,117 @@ namespace rig
         }
 
         paintDropHints (g);
+    }
+
+    SceneBar::CellContent SceneBar::contentOf (int cell) const
+    {
+        if (! stomp())
+            return { cell, nullptr, false };
+
+        return { -1, model.getStompSlot (cell), model.isStompOn (cell) };
+    }
+
+    // cell = 자리 (번호·현재 씬 밝기·이름 입력칸), content = 그 자리에 그릴 내용 (미리보기는 다른 칸의 내용)
+    void SceneBar::paintCell (juce::Graphics& g, int cell, const CellContent& content) const
+    {
+        const auto area = cellBounds[(size_t) cell];
+        const auto bounds = area.toFloat();
+
+        if (content.slot != nullptr)
+        {
+            // 묶인 Stomp 칸 = 블록 모양 (꺼지면 흐리게)
+            block::drawStomp (g, area, content.slot->type, RigModel::shortName (*content.slot), ! content.stompOn, 1.0f,
+                              block::headerFont(), juce::Font (juce::FontOptions (stompNameSize)));
+            return;
+        }
+
+        // 씬 칸 / 빈 Stomp 칸
+        const bool scene = content.scene >= 0;
+        const bool lit = scene && cell == model.getCurrentScene();
+        auto fill = lit ? juce::Colours::lightgrey : juce::Colour (0xff3a4148);
+
+        if (cell == renamingScene)
+            fill = juce::Colours::black.withAlpha (0.4f).overlaidWith (juce::Colour (0xff1e2328));   // 입력칸 바탕
+
+        g.setColour (fill);
+        g.fillRect (bounds);
+        g.setColour (cell == renamingScene ? juce::Colours::grey : juce::Colours::grey.withAlpha (0.6f));
+        strokeRect (g, bounds.reduced (0.5f), 1.0f);
+
+        if (! scene)
+            return;
+
+        // 번호: 왼쪽 위 / 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
+        const auto textColour = lit ? juce::Colours::black : juce::Colours::white;
+        g.setColour (textColour.withAlpha (0.7f));
+        block::drawBandLabel (g, juce::String (cell + 1), juce::Font (juce::FontOptions (numberFontSize, juce::Font::bold)), area, 1.0f);
+
+        if (cell != renamingScene)   // 이름 자리는 입력칸이 같은 위치에 쓴다
+        {
+            g.setColour (textColour);
+            drawWrappedText (g, model.getSceneName (content.scene), area.reduced (nameInset, numberRowHeight).toFloat(),
+                             juce::Font (juce::FontOptions (nameFontSize)));
+        }
+    }
+
+    // 미리보기 +(p,v): 그 자리를 바 바탕으로 비운 뒤 내용을 반투명하게 (끄는 그림과 같은 불투명도)
+    void SceneBar::paintGhost (juce::Graphics& g, int cell, const CellContent& content) const
+    {
+        g.setColour (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.15f));   // paint 의 바 바탕
+        g.fillRect (cellBounds[(size_t) cell]);
+        g.beginTransparencyLayer (block::dragImageAlpha);
+        paintCell (g, cell, content);
+        g.endTransparencyLayer();
+    }
+
+    // 미리보기 −(p): 칸 내용은 지우고 칸 테두리 자리에 흔적만 (되돌아올 수 있는 원래 자리)
+    void SceneBar::paintEmpty (juce::Graphics& g, int cell) const
+    {
+        const auto area = cellBounds[(size_t) cell];
+        g.setColour (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.15f));   // paint 의 바 바탕
+        g.fillRect (area);
+        g.setColour (dropHighlight);
+        strokeRect (g, area.toFloat().reduced (0.5f), 1.0f);
+    }
+
+    // 놓을 자리 결과 미리보기 (드래그앤드롭 연산: −(p) = 테두리 흔적만, +(p,v) = v 를 반투명하게)
+    void SceneBar::paintDropPreview (juce::Graphics& g) const
+    {
+        if (! dragSource.has_value())
+            return;
+
+        const int src = dragSource->cell;
+        if (deletePreview && src >= 0)
+        {
+            paintEmpty (g, src);   // 이동 + 버림: src 비움
+            return;
+        }
+
+        if (! hoverDrop.has_value())
+            return;
+
+        const int dst = hoverDrop->cell;
+        const auto moved = src >= 0 ? contentOf (src)   // 끄는 칸의 내용
+                                    : CellContent { -1, model.findSlot (dragSource->slotId), true };   // new: 패치맵 블록
+
+        switch (hoverDrop->action)
+        {
+            case Action::copy:      // 복제 (+ 덮어쓰기): src 그대로
+            case Action::add:       // 추가 / 복제 (빈 칸)
+            case Action::replace:   // 추가 + 덮어쓰기
+                paintGhost (g, dst, moved);
+                break;
+
+            case Action::move:      // 이동: src 비움
+                paintEmpty (g, src);
+                paintGhost (g, dst, moved);
+                break;
+
+            case Action::swap:      // 스왑: src 에 dst 내용, dst 에 src 내용
+                paintGhost (g, src, contentOf (dst));
+                paintGhost (g, dst, moved);
+                break;
+        }
     }
 
     // 끄는 동안: 놓을 수 있는 칸 전부 희미하게 + 표시 기호 (나뉜 칸은 가운데 선, 위아래 반쪽마다), 커서 밑 자리는 진한 테두리
@@ -596,6 +674,8 @@ namespace rig
             if (lower.has_value())
                 block::drawMarkSymbol (g, halfOf (cell, false).toFloat().getCentre(), markFor (*lower), markArm);
         }
+
+        paintDropPreview (g);
 
         if (hoverDrop.has_value())
         {
