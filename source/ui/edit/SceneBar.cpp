@@ -14,10 +14,11 @@ namespace rig
         constexpr int gap = bottomBarGap;       // 바깥 여백 (버튼 사이도 같은 값, 14칸 격자 bottomBarCell)
         constexpr int saveButtonSize = 24;      // 이름 입력칸 오른쪽 위 귀퉁이의 정사각형 체크 버튼
         constexpr float sceneCorner = 5.0f;     // 칸 버튼 둥근 모서리 반지름
-        constexpr float nameFontSize = 13.0f;   // 씬 이름 (입력칸도 같은 크기)
+        constexpr float nameFontSize = 12.0f;   // 씬 이름 (입력칸도 같은 크기)
+        constexpr float numberFontSize = 14.0f; // 씬 번호 (왼쪽 위, 굵게. Stomp 칸 머리띠 글자와 같은 크기·자리)
         constexpr int nameInset = 6;            // 이름 칸 좌우 여백
         constexpr int numberRowHeight = 20;     // 씬 번호 줄 (왼쪽 위). 이름 칸은 위아래를 이만큼 똑같이 비워 가운데에 둔다
-        constexpr float stompNameSize = block::fontSize;   // Stomp 칸 파일명 (블록과 같게)
+        constexpr float stompNameSize = block::bodyFontSize;   // Stomp 칸 파일명 (블록 본문과 같게 12, 머리띠는 블록과 같은 14)
         constexpr int dragStartDistance = 4;    // 칸을 이만큼 움직여야 끌기 (클릭과 구분, 패치맵과 같다)
         constexpr int keepMargin = 22;          // 끌던 Stomp 칸의 둘레 = 원래 칸 + 사방 이만큼 (패치맵 keepMargin 과 같은 값). 밖에서 떼면 삭제
         constexpr float markArm = 6.0f;         // 놓을 자리 힌트의 표시 기호 크기 (가운데에서 팔 끝까지)
@@ -372,7 +373,7 @@ namespace rig
         if (const auto* slot = model.findSlot (slotId))
         {
             juce::Graphics g (image);
-            block::drawStomp (g, area, slot->type, RigModel::shortName (*slot), false, 1.0f,
+            block::drawStomp (g, area, slot->type, RigModel::shortName (*slot), false, 1.0f, block::headerFont(),
                               juce::Font (juce::FontOptions (stompNameSize)));
         }
 
@@ -515,7 +516,7 @@ namespace rig
             if (slot != nullptr)
             {
                 // 묶인 Stomp 칸 = 블록 모양 (꺼지면 흐리게)
-                block::drawStomp (g, cell, slot->type, RigModel::shortName (*slot), ! model.isStompOn (i), 1.0f,
+                block::drawStomp (g, cell, slot->type, RigModel::shortName (*slot), ! model.isStompOn (i), 1.0f, block::headerFont(),
                                   juce::Font (juce::FontOptions (stompNameSize)));
             }
             else
@@ -537,8 +538,7 @@ namespace rig
                     // 번호: 왼쪽 위 / 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
                     const auto textColour = lit ? juce::Colours::black : juce::Colours::white;
                     g.setColour (textColour.withAlpha (0.7f));
-                    g.setFont (juce::FontOptions (16.0f, juce::Font::bold));
-                    g.drawText (juce::String (i + 1), cell.reduced (7, 4), juce::Justification::topLeft);
+                    block::drawBandLabel (g, juce::String (i + 1), juce::Font (juce::FontOptions (numberFontSize, juce::Font::bold)), cell, 1.0f);
 
                     if (i != renamingScene)   // 이름 자리는 입력칸이 같은 위치에 쓴다
                     {

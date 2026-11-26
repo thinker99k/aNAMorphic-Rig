@@ -9,8 +9,9 @@ namespace rig
         constexpr int padMargin = padGap;   // 바깥 여백 (위·아래·좌·우): 패드 사이와 같게
         constexpr int padInset = 8;     // 패드 안 여백 (번호·이름 모두 사방 같은 값)
         constexpr float padCorner = 6.0f;   // 둥근 모서리 반지름
-        constexpr float numberSize = 24.0f, nameSize = 40.0f;   // 이름이 주인공, 번호는 작게
-        constexpr float stompScale = 2.0f;  // Stomp 패드 = 블록 모양을 이만큼 키워서 (머리띠 40, 종류 글자 28)
+        constexpr float numberSize = 24.0f, nameSize = 40.0f;   // 이름이 주인공, 번호는 작게 (번호 = Stomp 패드 종류 글자와 같은 크기·자리)
+        constexpr float stompScale = 2.0f;  // Stomp 패드 = 블록 모양을 이만큼 키워서 (머리띠 40)
+        constexpr float stompHeaderSize = 24.0f, stompNameSize = 32.0f;   // Stomp 패드 종류 (굵게) / 파일명 (보통)
         static_assert (RigModel::numScenes == columns * rows);
 
         // 색 (시안)
@@ -90,7 +91,8 @@ namespace rig
             {
                 if (const auto* bound = model.getStompSlot (i))
                 {
-                    block::drawStomp (g, pad, bound->type, RigModel::shortName (*bound), ! model.isStompOn (i), stompScale, nameFont);
+                    block::drawStomp (g, pad, bound->type, RigModel::shortName (*bound), ! model.isStompOn (i), stompScale,
+                                      boldFont (stompHeaderSize), juce::Font (juce::FontOptions (stompNameSize)));
                 }
                 else
                 {
@@ -114,8 +116,7 @@ namespace rig
             const auto inner = pad.reduced (padInset);
             const auto textColour = active ? textDark : textLight;
             g.setColour (textColour);
-            g.setFont (numberFont);
-            g.drawText (juce::String (i + 1), inner, juce::Justification::topLeft, false);
+            block::drawBandLabel (g, juce::String (i + 1), numberFont, pad, stompScale);   // Stomp 패드 종류 글자와 같은 자리
 
             // 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
             drawWrappedText (g, model.getSceneName (i), inner.reduced (0, juce::roundToInt (numberFont.getHeight())).toFloat(), nameFont);

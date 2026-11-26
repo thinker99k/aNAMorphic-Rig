@@ -865,7 +865,7 @@ namespace rig
     namespace block
     {
         // 블록 = 박스 안 박스 2줄: [머리띠: 종류 (왼쪽) | 중요 값 (오른쪽), 종류 색으로 채움, 흰 굵은 글자] / 본문 [이름 한 줄]
-        //   높이 44 = 머리띠 20 + 본문 24. 글자는 모두 같은 글꼴·크기 (fontSize), 머리띠만 굵게
+        //   높이 44 = 머리띠 20 + 본문 24. 머리띠 = 굵게 fontSize 14, 본문 = 보통 bodyFontSize 12
         //   - 머리띠: 실제 글꼴의 대문자 높이를 머리띠의 보이는 부분(위 테두리 선 아래 ~ 본문 시작) 가운데에
         //     (대문자에는 아래 획이 없어 줄 가운데에 두면 위로 쏠려 보인다)
         //   - 본문: 글자 칸 하나 (칸 높이 = 글꼴 높이)를 본문 세로 가운데에, 왼쪽 정렬
@@ -878,7 +878,8 @@ namespace rig
         constexpr float selectedThickness = 2.5f;
         constexpr float selectedAlpha = 0.6f;   // 선택 테두리는 살짝 투명하게 (밑의 Stomp 파랑 테두리가 비친다)
         constexpr int textInsetX = 8;        // 좌우 여백
-        constexpr float fontSize = 14.0f;    // 블록 안 모든 글자 (머리띠는 굵게)
+        constexpr float fontSize = 14.0f;    // 머리띠 글자 (굵게)
+        constexpr float bodyFontSize = 12.0f;   // 본문 글자 (파일명, IN / OUT 채널)
 
         // 미지정 블록: 어두운 회색 머리띠 "EMPTY" (IN / OUT 의 테마 회청색과 구분) + 검정보다 살짝 밝은 본문에 "Passthrough" (소리 그대로 통과)
         const juce::Colour emptyFill (0xff1e1e1e);
@@ -916,7 +917,7 @@ namespace rig
         inline juce::Rectangle<int> band (juce::Rectangle<int> area) { return area.withHeight (bandHeight); }
 
         inline juce::Font headerFont() { return juce::Font (juce::FontOptions (fontSize, juce::Font::bold)); }
-        inline juce::Font nameFont()   { return juce::Font (juce::FontOptions (fontSize)); }
+        inline juce::Font nameFont()   { return juce::Font (juce::FontOptions (bodyFontSize)); }
 
         // 글꼴의 대문자 높이 (실제 그린 "H" 윤곽의 높이). 글꼴은 OS 마다 다르므로 잰다.
         // (GlyphArrangement::getBoundingBox 는 글자 칸 = ascent + descent 를 돌려줘 대문자 높이가 아니다)
@@ -986,7 +987,7 @@ namespace rig
         inline juce::Colour dimmedText() { return juce::Colours::white.darker (0.5f); }
 
         // 머리띠 글자 자리 하나로 그린다 (같은 역할의 글자는 화면·모드가 달라도 이 함수로: 위치를 따로 계산하지 않는다).
-        //  쓰는 곳: 패치맵 블록·IN / OUT 머리띠 (종류, 중요 값), Stomp 칸 머리띠 (ssbar, Live 패드).
+        //  쓰는 곳: 패치맵 블록·IN / OUT 머리띠 (종류, 중요 값), Stomp 칸 머리띠 (ssbar, Live 패드), Scene 칸 왼쪽 위 번호.
         //  area 위쪽 bandHeight x scale 줄, 좌우 textInsetX x scale 안쪽, 세로 = 보이는 머리띠 가운데 (drawBandText)
         inline void drawBandLabel (juce::Graphics& g, const juce::String& text, const juce::Font& font, juce::Rectangle<int> area,
                                    float scale = 1.0f, juce::Justification justification = juce::Justification::left)
@@ -1059,9 +1060,9 @@ namespace rig
 
         // Stomp 칸 (Edit ssbar, Live 패드, ssbar 에서 끄는 그림): 블록 모양을 칸 크기로. 머리띠 = 종류 (왼쪽, 블록과 같게), 본문 = 파일명
         // (가운데, 고정 글꼴로 줄마다 채우고 넘치면 말줄임, drawWrappedText). 중요 값·칸 번호 없음. 꺼진 블록은 패치맵처럼 흐리게.
-        // scale = 머리띠 높이·종류 글자·여백·테두리·모서리 배율 (ssbar 1, Live 패드는 크게), nameFont = 파일명 글꼴
+        // scale = 머리띠 높이·여백·테두리·모서리 배율 (ssbar 1, Live 패드는 크게), header / nameFont = 종류 / 파일명 글꼴
         inline void drawStomp (juce::Graphics& g, juce::Rectangle<int> area, BlockType type, const juce::String& name, bool off,
-                               float scale, const juce::Font& nameFont)
+                               float scale, const juce::Font& header, const juce::Font& nameFont)
         {
             const bool none = type == BlockType::None;
             const auto colour = off ? dimmed (colourFor (type)) : colourFor (type);
@@ -1079,7 +1080,7 @@ namespace rig
 
             // 머리띠 글자: 대문자 높이를 머리띠의 보이는 부분 가운데에 (drawBlockHeader 와 같은 방법)
             g.setColour (textColour);
-            drawBandLabel (g, labelFor (type), headerFont().withHeight (fontSize * scale), area, scale);
+            drawBandLabel (g, labelFor (type), header, area, scale);
 
             const auto body = area.toFloat().withTrimmedTop (band).reduced ((float) textInsetX * scale, 2.0f * scale);
             drawWrappedText (g, none ? emptyText : name, body, nameFont);
