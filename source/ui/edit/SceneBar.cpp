@@ -209,7 +209,9 @@ namespace rig
             if (mark != shownMark)
             {
                 shownMark = mark;
+                deletePreview = mark == block::DragMark::remove;
                 container->setCurrentDragImage (juce::ScaledImage (block::createDragImage (dragSnapshot, mark)));
+                repaint();
             }
 
             return;
@@ -391,6 +393,7 @@ namespace rig
     {
         dragSource.reset();
         hoverDrop.reset();
+        deletePreview = false;
         repaint();
     }
 
@@ -580,6 +583,66 @@ namespace rig
         }
     }
 
+    // 미리보기 +(p,v): 그 자리를 바 바탕으로 비운 뒤 내용을 반투명하게 (끄는 그림과 같은 불투명도)
+    void SceneBar::paintGhost (juce::Graphics& g, int cell, const CellContent& content) const
+    {
+        g.setColour (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.15f));   // paint 의 바 바탕
+        g.fillRect (cellBounds[(size_t) cell]);
+        g.beginTransparencyLayer (block::dragImageAlpha);
+        paintCell (g, cell, content);
+        g.endTransparencyLayer();
+    }
+
+    // 미리보기 −(p): 칸 내용은 지우고 칸 테두리 자리에 흔적만 (되돌아올 수 있는 원래 자리)
+    void SceneBar::paintEmpty (juce::Graphics& g, int cell) const
+    {
+        const auto area = cellBounds[(size_t) cell];
+        g.setColour (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId).darker (0.15f));   // paint 의 바 바탕
+        g.fillRect (area);
+        g.setColour (dropHighlight);
+        strokeRect (g, area.toFloat().reduced (0.5f), 1.0f);
+    }
+
+    // 놓을 자리 결과 미리보기 (드래그앤드롭 연산: −(p) = 테두리 흔적만, +(p,v) = v 를 반투명하게)
+    void SceneBar::paintDropPreview (juce::Graphics& g) const
+    {
+        if (! dragSource.has_value())
+            return;
+
+        const int src = dragSource->cell;
+        if (deletePreview && src >= 0)
+        {
+            paintEmpty (g, src);   // 이동 + 버림: src 비움
+            return;
+        }
+
+        if (! hoverDrop.has_value())
+            return;
+
+        const int dst = hoverDrop->cell;
+        const auto moved = src >= 0 ? contentOf (src)   // 끄는 칸의 내용
+                                    : CellContent { -1, model.findSlot (dragSource->slotId), true };   // new: 패치맵 블록
+
+        switch (hoverDrop->action)
+        {
+            case Action::copy:      // 복제 (+ 덮어쓰기): src 그대로
+            case Action::add:       // 추가 / 복제 (빈 칸)
+            case Action::replace:   // 추가 + 덮어쓰기
+                paintGhost (g, dst, moved);
+                break;
+
+            case Action::move:      // 이동: src 비움
+                paintEmpty (g, src);
+                paintGhost (g, dst, moved);
+                break;
+
+            case Action::swap:      // 스왑: src 에 dst 내용, dst 에 src 내용
+                paintGhost (g, src, contentOf (dst));
+                paintGhost (g, dst, moved);
+                break;
+        }
+    }
+
     // 끄는 동안: 놓을 수 있는 칸 전부 희미하게 + 표시 기호 (나뉜 칸은 가운데 선, 위아래 반쪽마다), 커서 밑 자리는 진한 테두리
     void SceneBar::paintDropHints (juce::Graphics& g)
     {
@@ -611,6 +674,8 @@ namespace rig
             if (lower.has_value())
                 block::drawMarkSymbol (g, halfOf (cell, false).toFloat().getCentre(), markFor (*lower), markArm);
         }
+
+        paintDropPreview (g);
 
         if (hoverDrop.has_value())
         {
