@@ -112,17 +112,18 @@ namespace rig
             saveNameButton.setVisible (false);
             editNameButton.setVisible (true);
         };
-        patchNameBox.onTextChange = [this]
+        // 체크 버튼·Enter 로 저장하면 이름이 그대로여도 알린다 (조작했으면 Undo)
+        patchNameBox.onCommit = [this] (const juce::String& name)
         {
             if (onPatchNameChanged)
-                onPatchNameChanged (patchNameBox.getText());
+                onPatchNameChanged (name);
         };
 
         // 체크 버튼을 눌러도 입력칸의 키보드 포커스를 빼앗지 않아야 저장된다 (포커스를 잃으면 취소되므로)
         saveNameButton.setTooltip ("Save patch name (Enter to save, Escape to cancel)");
         saveNameButton.setWantsKeyboardFocus (false);
         saveNameButton.setMouseClickGrabsKeyboardFocus (false);
-        saveNameButton.onClick = [this] { patchNameBox.hideEditor (false); };
+        saveNameButton.onClick = [this] { patchNameBox.commit(); };
         patchNameBox.allowWhileEditing = [this] (const juce::Component* target) { return target == &saveNameButton; };
 
         editNameButton.setTooltip ("Rename patch");

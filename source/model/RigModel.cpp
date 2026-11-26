@@ -139,8 +139,8 @@ namespace rig
     void RigModel::setPatchName (const juce::String& name)
     {
         const auto trimmedName = name.trim().substring (0, maxPatchNameLength).trimEnd();
-        if (trimmedName.isEmpty() || trimmedName == patchName)
-            return;
+        if (trimmedName.isEmpty())
+            return;   // 빈 이름은 저장하지 않는다 (원래 이름 그대로)
 
         remember();
         touch ({ .patchName = true });
@@ -491,7 +491,7 @@ namespace rig
 
     void RigModel::setInputChannel (int channel)
     {
-        if (channel < 0 || channel == routing.input)
+        if (channel < 0)
             return;
 
         remember();
@@ -502,7 +502,7 @@ namespace rig
 
     void RigModel::setOutputChannel (int firstChannel, bool stereo)
     {
-        if (firstChannel < 0 || (firstChannel == routing.output && stereo == routing.stereoOutput))
+        if (firstChannel < 0)
             return;
 
         remember();
@@ -749,56 +749,23 @@ namespace rig
 
     void RigModel::saveEdit()
     {
+        // 조작했으면 값이 그대로여도 한 칸 (값 비교 없음). 조작이 아닌 것(누르고 떼기, 취소, 자기 자리)은 UI 가 편집 함수를 부르지 않는다
         if (pendingUndo.has_value())
         {
-            if (! sameContent (*pendingUndo))
-            {
-                // 이 칸을 Undo 하면 편집 직전 선택·강조로, 그 뒤 Redo 하면 지금(편집 직후) 선택·강조로
-                pendingUndo->otherSelection = currentSelection();
-                pendingUndo->touched = pendingBefore;
-                pendingUndo->otherTouched = pendingAfter;
-                undoStack.push_back (std::move (*pendingUndo));
+            // 이 칸을 Undo 하면 편집 직전 선택·강조로, 그 뒤 Redo 하면 지금(편집 직후) 선택·강조로
+            pendingUndo->otherSelection = currentSelection();
+            pendingUndo->touched = pendingBefore;
+            pendingUndo->otherTouched = pendingAfter;
+            undoStack.push_back (std::move (*pendingUndo));
 
-                if ((int) undoStack.size() > maxUndoSteps)
-                    undoStack.erase (undoStack.begin());
+            if ((int) undoStack.size() > maxUndoSteps)
+                undoStack.erase (undoStack.begin());
 
-                redoStack.clear();
-            }
-
+            redoStack.clear();
             forgetEdit();
         }
 
         savePatch();
-    }
-
-    bool RigModel::sameContent (const Snapshot& s) const
-    {
-        const auto sameSlot = [] (const Slot& a, const Slot& b)
-        {
-            return a.type == b.type && a.file == b.file && a.on == b.on && a.paramValues == b.paramValues && a.stomps == b.stomps;
-        };
-
-        const auto sameSlots = [&] (const std::vector<Slot>& a, const std::vector<Slot>& b)
-        {
-            return std::equal (a.begin(), a.end(), b.begin(), b.end(), sameSlot);
-        };
-
-        const auto sameItem = [&] (const Item& a, const Item& b)
-        {
-            if (a.index() != b.index())
-                return false;
-
-            if (const auto* slot = std::get_if<Slot> (&a))
-                return sameSlot (*slot, std::get<Slot> (b));
-
-            const auto& p = std::get<Parallel> (a);
-            const auto& q = std::get<Parallel> (b);
-            return p.branchOn == q.branchOn && p.levelDb == q.levelDb
-                && sameSlots (p.branches[0], q.branches[0]) && sameSlots (p.branches[1], q.branches[1]);
-        };
-
-        return routing == s.routing && sceneNames == s.sceneNames && patchName == s.patchName
-            && std::equal (chain.begin(), chain.end(), s.chain.begin(), s.chain.end(), sameItem);
     }
 
     void RigModel::undo() { step (undoStack, redoStack); }
@@ -1389,7 +1356,7 @@ namespace rig
 
     void RigModel::renameScene (int scene, const juce::String& name)
     {
-        if (! juce::isPositiveAndBelow (scene, numScenes) || sanitizeSceneName (name, scene) == sceneNames[(size_t) scene])
+        if (! juce::isPositiveAndBelow (scene, numScenes))
             return;
 
         remember();
@@ -1645,13 +1612,17 @@ namespace rig
         if (usesFile (type) && newFile == juce::File())
             return;
 
-        // 같은 지정이면 무시. 단 로딩 실패한 파일은 다시 시도한다
-        if (slot->type == type && slot->file == newFile
-            && (type == BlockType::None || slot->dsp != nullptr || slot->loading))
-            return;
-
         remember();
         touch ({ .slots = { slotId } });
+
+        // 같은 지정도 조작이라 Undo 한 칸 (다시 로딩하지는 않는다). 단 로딩 실패한 파일은 다시 시도한다
+        if (slot->type == type && slot->file == newFile
+            && (type == BlockType::None || slot->dsp != nullptr || slot->loading))
+        {
+            saveEdit();
+            sendChangeMessage();
+            return;
+        }
 
         // 교체 = 같은 종류여도 8 씬 모두 기본값. 같은 파일을 다시 시도할 때만 (로딩 실패 후) 값을 둔다
         // 옛 DSP 는 옛 객체를 들고 있어서 크로스페이드가 끝날 때까지 옛 값으로 소리를 낸다

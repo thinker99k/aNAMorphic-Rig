@@ -74,7 +74,7 @@ namespace rig
                 model.setBranchLevel (model.getSelectedParallelId(), b, (float) levelSlider[(size_t) b].getValue(), false);
                 levelValue[(size_t) b].setText (levelText (levelSlider[(size_t) b].getValue()), juce::dontSendNotification);
             };
-            slider.onDragEnd = [this, b]
+            slider.onEditEnd = [this, b]   // 끌었거나 더블클릭했을 때만 (누르고 떼기는 조작 아님)
             {
                 model.setBranchLevel (model.getSelectedParallelId(), b, (float) levelSlider[(size_t) b].getValue(), true);
             };

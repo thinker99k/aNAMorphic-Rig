@@ -32,7 +32,7 @@ namespace rig
         ~ParamKnob() override;
 
         std::function<void (double)> onValueChanged;   // 사용자가 돌릴 때만
-        std::function<void()> onDragEnded;             // 드래그가 끝났을 때 (저장은 여기서)
+        std::function<void()> onDragEnded;             // 끌기·더블클릭이 끝났을 때 (저장은 여기서). 누르고 떼기만 하면 오지 않는다
 
         void setValue (double value);                  // 콜백을 부르지 않는다
         double getValue() const { return slider.getValue(); }
@@ -64,7 +64,7 @@ namespace rig
 
         // slider 보다 먼저 선언: 멤버는 역순으로 소멸하므로 slider 가 먼저 사라진다
         KnobLookAndFeel knobLnf;
-        LeftClickOnly<juce::Slider> slider;
+        EditSlider slider;
         juce::Label nameLabel;
         ValuePopup popup;   // 소멸 때 창 맨 위 컴포넌트에서 스스로 빠진다
 
