@@ -13,9 +13,21 @@ namespace rig
         constexpr int animationHz = 60;         // src 밝기 오르내림·실행 뒤 깜빡임 다시 그리기
         constexpr int gap = bottomBarGap;       // 바깥 여백 (버튼 사이도 같은 값, 14칸 격자 bottomBarCell)
         constexpr int saveButtonSize = 24;      // 이름 입력칸 오른쪽 위 귀퉁이의 정사각형 체크 버튼
-        constexpr float sceneCorner = 5.0f;     // 씬 버튼 둥근 모서리 반지름
-        constexpr float nameFontSize = 13.0f;   // 씬 이름 (버튼 표시와 입력칸이 같은 크기와 위치)
+        constexpr float sceneCorner = 5.0f;     // 칸 버튼 둥근 모서리 반지름
+        constexpr float nameFontSize = 13.0f;   // 칸 이름 (버튼 표시와 입력칸이 같은 크기와 위치)
         constexpr int nameInset = 6;
+        constexpr float unboundAlpha = 0.4f;    // 안 묶인 Stomp 칸의 번호
+
+        // 14칸 격자 칸 번호 (0부터)
+        constexpr int resetCell = 0, actionCell = 2, firstCell = 3, copyCell = 11;
+
+        // 한 칸을 위아래 두 버튼으로 (사이 gap)
+        void stack (juce::Rectangle<int> cell, juce::Component& top, juce::Component& bottom)
+        {
+            top.setBounds (cell.removeFromTop ((cell.getHeight() - gap) / 2));
+            cell.removeFromTop (gap);
+            bottom.setBounds (cell);
+        }
     }
 
     SceneBar::SceneBar (RigModel& m) : model (m), modeSwitch (m)
@@ -23,39 +35,62 @@ namespace rig
         addAndMakeVisible (modeSwitch);
         setWantsKeyboardFocus (true);   // 모드 중 ESC 를 받는다
         shownPatch = model.getPatchNumber();
+        shownStomp = stomp();
 
         liveButton.onClick = [this] { if (onLiveClicked) onLiveClicked(); };
         disableHoverHighlight (liveButton);   // Live 와 연관된 버튼
         addAndMakeVisible (liveButton);
 
-        for (auto* b : { &copyButton, &swapButton, &sceneResetButton })
+        for (auto* b : { &copyButton, &swapButton, &renameButton, &sceneResetButton, &bindButton, &unbindButton, &resetAllButton })
         {
-            // 눌러도 키보드 포커스를 가져가지 않는다 (ESC 는 씬 바가 받는다)
+            // 눌러도 키보드 포커스를 가져가지 않는다 (ESC 는 ssbar 가 받는다)
             b->setWantsKeyboardFocus (false);
             b->setMouseClickGrabsKeyboardFocus (false);
-            addAndMakeVisible (b);
+            addChildComponent (b);
         }
 
-        for (auto* b : { &copyButton, &swapButton })
+        for (auto* b : { &copyButton, &swapButton, &bindButton, &unbindButton })
             indicator::setColours (*b, indicator::amberFill, indicator::amber);   // 모드 중 = 켜짐 표시 (주황)
 
-        copyButton.setTooltip ("Copy a scene: pick the source scene, then the destination");
-        swapButton.setTooltip ("Swap two scenes: pick one scene, then the other");
         copyButton.onClick = [this] { toggleMode (Mode::copy); };
         swapButton.onClick = [this] { toggleMode (Mode::swap); };
+        bindButton.onClick = [this] { toggleMode (Mode::bind); };
+        unbindButton.onClick = [this] { toggleMode (Mode::unbind); };
+        bindButton.setTooltip ("Bind the selected block: then pick a stomp");
+        unbindButton.setTooltip ("Unbind a stomp: pick the stomp");
 
-        // Copy / Swap 모드 중이면 바깥 클릭처럼 모드를 끝낸다. 경고창에서 Reset 을 눌러야 초기화
-        sceneResetButton.setTooltip ("Reset all scenes: every block On with default parameters, branches -3 dB, default names");
+        renameButton.setTooltip ("Rename the current scene");
+        renameButton.onClick = [this]
+        {
+            cancelMode();
+            startRename (model.getCurrentScene());
+        };
+
+        // 씬 하나 = 중간 리셋이라 경고 없이 바로
+        sceneResetButton.setTooltip ("Reset the current scene: every block On with default parameters, branches -3 dB, default name");
         sceneResetButton.onClick = [this]
+        {
+            cancelMode();
+            cancelRename();
+            model.resetScene (model.getCurrentScene());
+        };
+
+        // 고르는 모드 중이면 바깥 클릭처럼 모드를 끝낸다. 경고창에서 Reset 을 눌러야 초기화
+        resetAllButton.onClick = [this]
         {
             cancelMode();
             cancelRename();
 
             juce::Component::SafePointer<SceneBar> safeThis (this);
-            showResetWarning (*this, "Scene Reset",
-                              "Reset all 8 scenes?\n\nIn every scene, every block will be On with default parameters, "
-                              "parallel branches will be On at -3 dB, and the scene names go back to \"Scene 1\" ... \"Scene 8\".",
-                              [safeThis] { if (safeThis != nullptr) safeThis->model.resetAllScenes(); });
+
+            if (stomp())
+                showResetWarning (*this, "Stomp Reset", "Unbind all 8 stomps?",
+                                  [safeThis] { if (safeThis != nullptr) safeThis->model.resetStomps(); });
+            else
+                showResetWarning (*this, "Scene Reset",
+                                  "Reset all 8 scenes?\n\nIn every scene, every block will be On with default parameters, "
+                                  "parallel branches will be On at -3 dB, and the scene names go back to \"Scene 1\" ... \"Scene 8\".",
+                                  [safeThis] { if (safeThis != nullptr) safeThis->model.resetAllScenes(); });
         };
 
         // 이름 편집 (평소에는 숨김)
@@ -101,6 +136,7 @@ namespace rig
         addChildComponent (saveNameButton);
 
         model.addChangeListener (this);
+        updateButtons();
     }
 
     SceneBar::~SceneBar()
@@ -112,21 +148,53 @@ namespace rig
     //==============================================================================
     void SceneBar::changeListenerCallback (juce::ChangeBroadcaster*)
     {
-        // 패치가 바뀌면 (씬 1 로 열린다) 진행 중인 모드와 이름 편집을 취소한다
-        if (model.getPatchNumber() != shownPatch)
+        // 패치나 Scene / Stomp 가 바뀌면 진행 중인 모드와 이름 편집을 취소한다
+        if (model.getPatchNumber() != shownPatch || stomp() != shownStomp)
         {
             shownPatch = model.getPatchNumber();
+            shownStomp = stomp();
             cancelMode();
             cancelRename();
+            flashStart.fill (0);
         }
 
-        repaint();   // 이름과 현재 씬 강조
+        updateButtons();
+        repaint();   // 이름과 현재 씬 / 켜진 Stomp 강조
     }
 
-    int SceneBar::sceneAt (juce::Point<int> position) const
+    void SceneBar::updateButtons()
     {
-        for (int i = 0; i < RigModel::numScenes; ++i)
-            if (sceneBounds[(size_t) i].contains (position))
+        const bool s = stomp();
+
+        renameButton.setVisible (! s);
+        sceneResetButton.setVisible (! s);
+        bindButton.setVisible (s);
+        unbindButton.setVisible (s);
+        copyButton.setVisible (true);
+        swapButton.setVisible (true);
+        resetAllButton.setVisible (true);
+        resetAllButton.setButtonText (s ? "Stomp\nReset..." : "Scene\nReset...");
+
+        copyButton.setTooltip (s ? "Copy a stomp: pick the source stomp, then the destination"
+                                 : "Copy a scene: pick the source scene, then the destination");
+        swapButton.setTooltip (s ? "Swap two stomps: pick one stomp, then the other"
+                                 : "Swap two scenes: pick one scene, then the other");
+        resetAllButton.setTooltip (s ? "Unbind all stomps"
+                                     : "Reset all scenes: every block On with default parameters, branches -3 dB, default names");
+
+        bool anyBound = false;
+        for (int i = 0; i < RigModel::numStomps; ++i)
+            anyBound = anyBound || model.getStompSlot (i) != nullptr;
+
+        // 고르는 중인 모드 버튼은 끄지 않는다 (누르면 모드가 끝나야 하므로)
+        bindButton.setEnabled (model.getSelectedSlot() != nullptr || mode == Mode::bind);
+        unbindButton.setEnabled (anyBound || mode == Mode::unbind);
+    }
+
+    int SceneBar::cellAt (juce::Point<int> position) const
+    {
+        for (int i = 0; i < (int) cellBounds.size(); ++i)
+            if (cellBounds[(size_t) i].contains (position))
                 return i;
 
         return -1;
@@ -134,62 +202,67 @@ namespace rig
 
     void SceneBar::mouseDown (const juce::MouseEvent& e)
     {
-        const int scene = sceneAt (e.getPosition());
-
-        if (scene < 0)
-            return;
-
-        if (e.mods.isPopupMenu())
-            showSceneMenu (scene, e);
-        else if (isLeftClick (e))
-            sceneClicked (scene);
+        if (const int cell = cellAt (e.getPosition()); cell >= 0 && isLeftClick (e))
+            cellClicked (cell);
     }
 
-    void SceneBar::sceneClicked (int scene)
+    void SceneBar::cellClicked (int cell)
     {
-        if (mode == Mode::none)
+        switch (mode)
         {
-            model.selectScene (scene);
-            return;
+            case Mode::none:
+                if (stomp())
+                    model.toggleStomp (cell);
+                else
+                    model.selectScene (cell);
+                return;
+
+            case Mode::bind:
+                cancelMode();
+                model.bindStomp (cell, model.getSelectedSlotId());
+                flash (cell);
+                return;
+
+            case Mode::unbind:
+                if (model.getStompSlot (cell) == nullptr)
+                    return;   // 묶인 칸을 계속 기다린다
+
+                cancelMode();
+                model.unbindStomp (cell);
+                flash (cell);
+                return;
+
+            case Mode::copy:
+            case Mode::swap:
+                break;
         }
 
-        if (sourceScene < 0)
+        if (sourceCell < 0)
         {
-            sourceScene = scene;
+            sourceCell = cell;
             updateTimer();
             repaint();
             return;
         }
 
-        if (scene == sourceScene)
+        if (cell == sourceCell)
             return;   // dst 를 계속 기다린다
 
-        const int source = sourceScene;
+        const int source = sourceCell;
         const bool swapping = mode == Mode::swap;
         cancelMode();
 
         if (swapping)
         {
-            model.swapScene (source, scene);
+            stomp() ? model.swapStomp (source, cell) : model.swapScene (source, cell);
             flash (source);
         }
         else
         {
-            model.copyScene (source, scene);
+            stomp() ? model.copyStomp (source, cell) : model.copyScene (source, cell);
         }
 
-        flash (scene);
-    }
-
-    void SceneBar::showSceneMenu (int scene, const juce::MouseEvent& click)
-    {
-        // 오른쪽 클릭은 전환하지 않는다
-        cancelMode();
-
-        juce::PopupMenu menu;
-        menu.addItem ("Rename", [this, scene] { startRename (scene); });
-        menu.addItem ("Reset", [this, scene] { model.resetScene (scene); });   // 씬 하나 = 중간 리셋이라 경고 없이 바로
-        showContextMenu (menu, click);
+        flash (cell);
     }
 
     //==============================================================================
@@ -207,9 +280,11 @@ namespace rig
             juce::Desktop::getInstance().addGlobalMouseListener (&outsideClickWatcher);
 
         mode = newMode;
-        sourceScene = -1;
+        sourceCell = -1;
         copyButton.setToggleState (mode == Mode::copy, juce::dontSendNotification);
         swapButton.setToggleState (mode == Mode::swap, juce::dontSendNotification);
+        bindButton.setToggleState (mode == Mode::bind, juce::dontSendNotification);
+        unbindButton.setToggleState (mode == Mode::unbind, juce::dontSendNotification);
         grabKeyboardFocus();
         updateTimer();
         repaint();
@@ -222,9 +297,12 @@ namespace rig
 
         juce::Desktop::getInstance().removeGlobalMouseListener (&outsideClickWatcher);
         mode = Mode::none;
-        sourceScene = -1;
-        copyButton.setToggleState (false, juce::dontSendNotification);
-        swapButton.setToggleState (false, juce::dontSendNotification);
+        sourceCell = -1;
+
+        for (auto* b : { &copyButton, &swapButton, &bindButton, &unbindButton })
+            b->setToggleState (false, juce::dontSendNotification);
+
+        updateButtons();
         updateTimer();
         repaint();
     }
@@ -262,13 +340,13 @@ namespace rig
     // 입력칸은 씬 버튼 전체, 정사각형 체크 버튼은 그 오른쪽 위 귀퉁이에 겹쳐 둔다
     void SceneBar::layoutNameEditor()
     {
-        const auto area = sceneBounds[(size_t) renamingScene];
+        const auto area = cellBounds[(size_t) renamingScene];
         nameEditor.setBounds (area);
         saveNameButton.setBounds (area.getRight() - saveButtonSize, area.getY(), saveButtonSize, saveButtonSize);
         saveNameButton.toFront (false);
     }
 
-        void SceneBar::cancelRename()
+    void SceneBar::cancelRename()
     {
         if (renamingScene >= 0)
             nameEditor.hideEditor (true);
@@ -281,9 +359,9 @@ namespace rig
     }
 
     //==============================================================================
-    void SceneBar::flash (int scene)
+    void SceneBar::flash (int cell)
     {
-        flashStart[(size_t) scene] = juce::jmax<juce::uint32> (1, juce::Time::getMillisecondCounter());
+        flashStart[(size_t) cell] = juce::jmax<juce::uint32> (1, juce::Time::getMillisecondCounter());
         updateTimer();
         repaint();
     }
@@ -291,7 +369,7 @@ namespace rig
     void SceneBar::updateTimer()
     {
         const bool flashing = std::any_of (flashStart.begin(), flashStart.end(), [] (auto t) { return t != 0; });
-        const bool pulsing = sourceScene >= 0;
+        const bool pulsing = sourceCell >= 0;
 
         if (flashing || pulsing)
         {
@@ -325,14 +403,17 @@ namespace rig
         // 위상은 정수 나머지로 (ms 카운터를 통째로 float 로 바꾸면 부팅 뒤 시간이 길수록 정밀도가 떨어져 계단이 된다)
         const float phase = (float) (now % pulseMs) / (float) pulseMs;
         const float pulse = 0.5f + 0.5f * std::sin (phase * juce::MathConstants<float>::twoPi);
+        const bool s = stomp();
+        const auto& touched = s ? model.getHighlight().stomps : model.getHighlight().scenes;
 
-        for (int i = 0; i < RigModel::numScenes; ++i)
+        for (int i = 0; i < (int) cellBounds.size(); ++i)
         {
-            const auto bounds = sceneBounds[(size_t) i].toFloat();
-            const bool current = mode == Mode::none && i == model.getCurrentScene();
-            const bool source = i == sourceScene;
+            const auto bounds = cellBounds[(size_t) i].toFloat();
+            const auto* bound = s ? model.getStompSlot (i) : nullptr;
+            const bool lit = mode == Mode::none && (s ? model.isStompOn (i) : i == model.getCurrentScene());
+            const bool source = i == sourceCell;
 
-            auto fill = current ? juce::Colours::lightgrey : juce::Colour (0xff3a4148);
+            auto fill = lit ? juce::Colours::lightgrey : juce::Colour (0xff3a4148);
             if (source)
                 fill = fill.interpolatedWith (juce::Colours::white, 0.1f + 0.35f * pulse);   // 흰 글자가 읽히는 밝기까지만
 
@@ -348,30 +429,31 @@ namespace rig
             // 실행 뒤 테두리 강조: 부드럽게 두 번 깜빡인다 (켜졌다 꺼지는 한 번 = sin² 의 반 주기)
             if (const auto start = flashStart[(size_t) i]; start != 0 && now - start < flashMs)
             {
-                const float s = std::sin (juce::MathConstants<float>::pi * (float) (now - start) / (float) blinkMs);
-                const float alpha = s * s;
+                const float sine = std::sin (juce::MathConstants<float>::pi * (float) (now - start) / (float) blinkMs);
+                const float alpha = sine * sine;
                 g.setColour (juce::Colours::orange.brighter (0.5f * alpha).withAlpha (alpha));
                 g.drawRoundedRectangle (bounds.reduced (1.5f), sceneCorner, 3.0f);
             }
 
-            // Undo / Redo 로 되돌아간 씬
-            if (const auto& scenes = model.getHighlight().scenes; std::find (scenes.begin(), scenes.end(), i) != scenes.end())
+            // Undo / Redo 로 되돌아간 칸
+            if (std::find (touched.begin(), touched.end(), i) != touched.end())
                 drawHighlight (g, bounds.reduced (2.0f), highlightAlpha (model.getHighlightStart()), sceneCorner);
 
             // src 는 밝기가 오르내리는 동안 글자색을 바꾸지 않는다 (중간에 흑백이 뒤집히면 뚝 끊겨 보인다)
-            const auto textColour = current ? juce::Colours::black : juce::Colours::white;
+            const auto textColour = lit ? juce::Colours::black : juce::Colours::white;
 
-            // 번호: 왼쪽 위, 크게 / 이름: 아래 가운데
-            g.setColour (textColour.withAlpha (0.7f));
+            // 번호: 왼쪽 위, 크게 / 이름: 아래 가운데. 안 묶인 Stomp 칸은 번호만 흐리게
+            g.setColour (textColour.withAlpha (s && bound == nullptr ? unboundAlpha : 0.7f));
             g.setFont (juce::FontOptions (16.0f, juce::Font::bold));
-            g.drawText (juce::String (i + 1), sceneBounds[(size_t) i].reduced (7, 4), juce::Justification::topLeft);
+            g.drawText (juce::String (i + 1), cellBounds[(size_t) i].reduced (7, 4), juce::Justification::topLeft);
 
             if (i == renamingScene)
                 continue;   // 이름 자리는 입력칸이 같은 위치에 쓴다
 
+            const auto name = s ? (bound != nullptr ? RigModel::shortName (*bound) : juce::String()) : model.getSceneName (i);
             g.setColour (textColour);
             g.setFont (juce::FontOptions (nameFontSize));
-            g.drawText (model.getSceneName (i), sceneBounds[(size_t) i].reduced (nameInset), juce::Justification::centredBottom, true);
+            g.drawText (name, cellBounds[(size_t) i].reduced (nameInset), juce::Justification::centredBottom, true);
         }
     }
 
@@ -379,19 +461,19 @@ namespace rig
     {
         const auto area = getLocalBounds().reduced (gap);
 
-        // 14칸 격자 (bottomBarCell, Live 아래 줄과 같은 격자): [Scene Reset] [ ] [Copy / Swap] [1] ~ [8] [ ] [Scene / Stomp] [Live]
-        // 전체 리셋은 왼쪽 끝, Live 는 오른쪽 끝. 버튼은 모두 같은 한 칸 (바깥 여백·버튼 사이 6 px). Copy / Swap 은 한 칸을 위아래로 나눈다 (사이 6 px)
-        sceneResetButton.setBounds (bottomBarCell (area, 0));
+        // 14칸 격자 (bottomBarCell, Live statbar 와 같은 격자):
+        //   [Scene / Stomp Reset] [ ] [Rename / Reset | Bind / Unbind] [1] ~ [8] [Copy / Swap] [Scene|Stomp] [Live]
+        // 전체 리셋은 왼쪽 끝, Live 는 오른쪽 끝. 버튼은 모두 같은 한 칸 (바깥 여백·버튼 사이 6 px). 위아래 두 버튼은 한 칸을 나눈다 (사이 6 px)
+        resetAllButton.setBounds (bottomBarCell (area, resetCell));
         liveButton.setBounds (bottomBarCell (area, bottomBarCells - 1));
         modeSwitch.setBounds (bottomBarCell (area, bottomBarCells - 2));
 
-        for (int i = 0; i < RigModel::numScenes; ++i)
-            sceneBounds[(size_t) i] = bottomBarCell (area, 3 + i);
+        for (int i = 0; i < (int) cellBounds.size(); ++i)
+            cellBounds[(size_t) i] = bottomBarCell (area, firstCell + i);
 
-        auto modeCell = bottomBarCell (area, 2);
-        copyButton.setBounds (modeCell.removeFromTop ((modeCell.getHeight() - gap) / 2));
-        modeCell.removeFromTop (gap);
-        swapButton.setBounds (modeCell);
+        stack (bottomBarCell (area, actionCell), renameButton, sceneResetButton);
+        stack (bottomBarCell (area, actionCell), bindButton, unbindButton);
+        stack (bottomBarCell (area, copyCell), copyButton, swapButton);
 
         if (renamingScene >= 0)
             layoutNameEditor();

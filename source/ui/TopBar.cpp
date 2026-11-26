@@ -8,6 +8,8 @@ namespace rig
     namespace
     {
         constexpr float fontSize = 16.0f;   // TopBar 글자 (Patch, 패치 이름). 콤보·버튼도 JUCE 기본 계산으로 16 (높이 28)
+        constexpr int settingsWidth = 90;   // Settings... 버튼 폭 (패치맵 [SPECTRUM] 버튼도 같은 크기)
+        constexpr int resetWidth = 70, resetGap = 4;   // 패치 이름 칸 바로 오른쪽 Reset...
     }
 
     TopBar::TopBar (int numPatches)
@@ -102,9 +104,14 @@ namespace rig
             }
 
             saveNameButton.setVisible (true);
+            editNameButton.setVisible (false);
             resized();
         };
-        patchNameBox.onEditorHide = [this] { saveNameButton.setVisible (false); };
+        patchNameBox.onEditorHide = [this]
+        {
+            saveNameButton.setVisible (false);
+            editNameButton.setVisible (true);
+        };
         patchNameBox.onTextChange = [this]
         {
             if (onPatchNameChanged)
@@ -117,7 +124,18 @@ namespace rig
         saveNameButton.setMouseClickGrabsKeyboardFocus (false);
         saveNameButton.onClick = [this] { patchNameBox.hideEditor (false); };
         patchNameBox.allowWhileEditing = [this] (const juce::Component* target) { return target == &saveNameButton; };
-        patchNameBox.addMouseListener (this, false);   // 오른쪽 클릭 메뉴는 TopBar::mouseDown 에서
+
+        editNameButton.setTooltip ("Rename patch");
+        editNameButton.setWantsKeyboardFocus (false);
+        editNameButton.onClick = [this] { patchNameBox.showEditor(); };
+
+        resetPatchButton.setTooltip ("Reset this patch: remove all blocks, default scenes and name");
+        resetPatchButton.setWantsKeyboardFocus (false);
+        resetPatchButton.onClick = [this]
+        {
+            patchNameBox.hideEditor (true);
+            resetPatchWithWarning();
+        };
 
         addAndMakeVisible (patchLabel);
         addAndMakeVisible (patchBox);
@@ -125,6 +143,8 @@ namespace rig
         addAndMakeVisible (nextPatchButton);
         addAndMakeVisible (patchNameBox);
         addChildComponent (saveNameButton);
+        addAndMakeVisible (editNameButton);
+        addAndMakeVisible (resetPatchButton);
         addAndMakeVisible (settingsButton);
         addAndMakeVisible (undoButton);
         addAndMakeVisible (redoButton);
@@ -193,7 +213,7 @@ namespace rig
         previousPatchButton.setBounds (area.removeFromLeft (28));
         area.removeFromLeft (4);
         nextPatchButton.setBounds (area.removeFromLeft (28));
-        settingsButton.setBounds (area.removeFromRight (110));
+        settingsButton.setBounds (area.removeFromRight (settingsWidth));
         area.removeFromRight (6);
         tunerButton.setBounds (area.removeFromRight (80));
 
@@ -207,26 +227,16 @@ namespace rig
         undoArea.removeFromLeft (4);
         redoButton.setBounds (undoArea);
 
-        // 체크 버튼: 입력칸 오른쪽 끝, 입력칸 높이의 정사각형 (세로 가운데)
+        // 연필 / 체크 버튼: 입력칸 오른쪽 끝, 입력칸 높이의 정사각형 (세로 가운데). 둘 중 하나만 보인다
         const auto nameBounds = patchNameBox.getBounds();
         const int checkSize = nameBounds.getHeight();
         saveNameButton.setBounds (nameBounds.getRight() - checkSize, nameBounds.getCentreY() - checkSize / 2, checkSize, checkSize);
-    }
+        editNameButton.setBounds (saveNameButton.getBounds());
 
-    void TopBar::mouseDown (const juce::MouseEvent& e)
-    {
-        // 패치 이름 오른쪽 클릭만: 메뉴 외 다른 동작 없음
-        if (e.eventComponent == &patchNameBox && e.mods.isPopupMenu() && ! patchNameBox.isBeingEdited())
-            showPatchNameMenu (e);
-    }
+        // 글자는 연필 / 체크 버튼을 피하고 가운데 그대로: 좌우 여백을 버튼 폭만큼 같게 (입력칸도 이 여백을 쓴다)
+        patchNameBox.setBorderSize ({ 1, checkSize, 1, checkSize });
 
-    void TopBar::showPatchNameMenu (const juce::MouseEvent& click)
-    {
-        juce::PopupMenu menu;   // 씬 버튼 메뉴와 같은 모양 (머리글 없음)
-        menu.addItem ("Rename", [this] { patchNameBox.showEditor(); });
-        menu.addSeparator();    // 큰 리셋: 구분선 아래 + 말줄임표 (경고창이 뜬다)
-        menu.addItem ("Patch Reset...", [this] { resetPatchWithWarning(); });
-        showContextMenu (menu, click);
+        resetPatchButton.setBounds (nameBounds.getRight() + resetGap, nameBounds.getY(), resetWidth, nameBounds.getHeight());
     }
 
     // 씬 8개가 함께 바뀌는 큰 리셋이므로 경고를 띄운다 (리셋 단계는 Widgets.h showResetWarning)

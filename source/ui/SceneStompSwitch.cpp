@@ -15,7 +15,11 @@ namespace rig
         : LeftClickOnly ("Scene / Stomp"), model (m)
     {
         setWantsKeyboardFocus (false);
-        setInterceptsMouseClicks (false, false);   // 반응 없음 (Stomp 모드가 생기면 켠다)
+        setMouseClickGrabsKeyboardFocus (false);
+        onClick = [this]
+        {
+            model.setPlayMode (model.isStompMode() ? RigModel::PlayMode::scene : RigModel::PlayMode::stomp);
+        };
         model.addChangeListener (this);
     }
 
@@ -26,13 +30,14 @@ namespace rig
 
     void SceneStompSwitch::changeListenerCallback (juce::ChangeBroadcaster*)
     {
-        repaint();   // 패치를 바꾸면 Scene
+        repaint();   // 모드가 바뀌면 (Edit 씬 바·Live 아래 줄 어느 쪽에서 바꿔도)
     }
 
+    // 마우스를 올려도 강조하지 않는다 (Live 에서 쓰는 버튼)
     void SceneStompSwitch::paintButton (juce::Graphics& g, bool, bool)
     {
         const auto area = getLocalBounds().toFloat();
-        const bool scene = model.getPlayMode() == RigModel::PlayMode::scene;
+        const bool scene = ! model.isStompMode();
 
         indicator::drawBox (g, area, scene ? indicator::redFill : indicator::blueFill, scene ? indicator::red : indicator::blue);
 

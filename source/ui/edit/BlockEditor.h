@@ -25,6 +25,7 @@ namespace rig
     //       - NAM / IR 표를 따로 두어 열 폭과 정렬 상태를 각자 유지한다 (메모리에만, 다시 켜면 기본값)
     //   - 파일 없는 카테고리(Built-in 등) : 내장 블록 목록. 새 카테고리는 categories 에 탭 이름과 내장 블록 목록만 추가하면 된다
     //   - 선택된 블록이 없어도 끌어올 라이브러리로 활성 (둘러보던 탭과 강조 유지, 더블클릭은 무동작). IN / OUT 이나 합류 버튼을 고른 동안만 비활성
+    //   - 오른쪽 끝 버튼 줄 (ssbar Live 칸과 같은 가로 자리): 행 컨텍스트 메뉴 대신. 지금은 임시 버튼 하나 (동작 없음)
     //   - 검색창 위 Open Folder: ~/Documents/aNAMorphic-Rig 를 OS 파일 관리자로 연다 (선택기와 같이 비활성)
     class BlockEditor final : public juce::Component,
                               private juce::ChangeListener,
@@ -131,7 +132,7 @@ namespace rig
         static constexpr float rowFontSize = 14.0f;
         static constexpr int rowHeight = 24;
         static constexpr int categoryListWidth = 96;   // 카테고리 목록 폭 (고정). 머리글 "Category" 가 잘리지 않는 폭
-        void drawRowBackground (juce::Graphics&, int row, int width, int height, bool selected, bool menuTarget) const;   // 네 표 공통 행 배경
+        void drawRowBackground (juce::Graphics&, int row, int width, int height, bool selected) const;   // 네 표 공통 행 배경
         void paintRowText (juce::Graphics&, const juce::String& text, int width, int height, bool selected) const;   // 네 표 공통 칸 글자
 
         juce::TableListBox& activeList() { return shownCategory().fileType == BlockType::Ir ? irList : namList; }
@@ -146,7 +147,7 @@ namespace rig
 
         HeaderLookAndFeel headerLookAndFeel;   // 표보다 먼저 선언: 표가 먼저 소멸한다
 
-        // 표 행의 마우스 규칙 (Widgets.h). 행 컨텍스트 메뉴는 파일 표만 (fileRowMouse.fillMenu). 카테고리와 내장 블록 목록은 메뉴 없음
+        // 표 행의 마우스 규칙 (Widgets.h). 컨텍스트 메뉴 없음 (모바일 대비, 할 일은 오른쪽 버튼 줄)
         TableRowMouse categoryRowMouse, fileRowMouse, builtInRowMouse;   // 파일 표는 NAM / IR 이 같은 모델이라 하나를 같이 쓴다
 
         std::vector<Category> categories;
@@ -157,6 +158,7 @@ namespace rig
         juce::TableListBox builtInList;
         LeftClickOnly<juce::TextEditor> searchBox;
         LeftClickOnly<juce::TextButton> openFolderButton { "Open Folder" };   // 사용자 데이터 폴더를 파일 관리자로 연다
+        LeftClickOnly<juce::TextButton> temporaryButton { "Temporary" };      // 오른쪽 버튼 줄 (행 메뉴 대신). 임시, 동작 없음
 
         std::vector<Entry> namEntries, irEntries;   // refresh() 의 스캔 결과 (+ addFiles() 로 가져온 파일)
         Entry outsideEntry;                         // 폴더 밖의 현재 파일 (메타데이터를 매번 읽지 않도록 보관)

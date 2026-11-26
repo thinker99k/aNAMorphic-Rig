@@ -50,15 +50,13 @@ namespace rig
         void filesDropped (const juce::StringArray& files, int x, int y) override;
 
     private:
-        enum class ViewMode { edit, live };
-
-        void setViewMode (ViewMode);   // TopBar + EditView ↔ LiveView (두 뷰는 파괴하지 않는다)
+        void showView (RigModel::View);   // TopBar + EditView ↔ LiveView (두 뷰는 파괴하지 않는다). 모드의 주인은 RigModel
         void timerCallback() override;
         void openSettings();
         void openSpectrum();   // [SPECTRUM]
         void updateMuteButton();   // 뮤트 상태(RigModel 소유)를 버튼 색으로 보여준다
         void updateUndoButtons();  // 되돌릴 것 / 다시 할 것이 있을 때만 TopBar 의 Undo / Redo 활성
-        void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태
+        void changeListenerCallback (juce::ChangeBroadcaster*) override;   // 모델이 바뀌면 Undo / Redo 상태, 화면 모드
         void toggleTuner();        // 튜너 창 열기 / 닫기 (모달 아님). 열려 있는 동안 출력 무음 (AudioEngine::setTunerActive)
         void closeTuner();
         void libraryImported (const LibraryImportResult&);   // 드롭 가져오기가 끝난 뒤 (메시지 스레드)
@@ -72,7 +70,7 @@ namespace rig
         LiveView liveView;
         StatusBar statusBar;   // 볼륨 노브와 MUTE 버튼도 여기 있다
 
-        ViewMode viewMode = ViewMode::edit;   // 항상 Edit 로 시작, 저장하지 않는다
+        RigModel::View shownView = RigModel::View::edit;   // 지금 보이는 화면 (RigModel 의 모드를 따라간다)
 
         std::unique_ptr<TunerWindow> tunerWindow;   // 닫으면 숨기만 하고, 다음에 열 때 새로 만들거나 MainComponent 와 함께 지워진다
 

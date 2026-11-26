@@ -215,21 +215,20 @@ namespace rig
 
             // 블록 양식. 미지정 블록은 회색 머리띠 "EMPTY" + block::emptyFill 본문에 "Passthrough"
             drawBlockBackground (g, getLocalBounds(), none ? block::emptyFill : baseColour (*slot).darker (0.75f));
-            drawBlockHeader (g, getLocalBounds(), labelFor (slot->type), baseColour (*slot),
-                             isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white);
+            const auto textColour = isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white;
+
+            // 머리띠 오른쪽 = 중요 값 (이름은 아래에서 따로: 선택된 긴 이름은 흘러간다)
+            drawBlockHeader (g, getLocalBounds(), labelFor (slot->type), baseColour (*slot), textColour,
+                             juce::Justification::centredLeft, headline (*slot));
 
             if (none)
             {
-                drawBlockText (g, getLocalBounds(), block::emptyText, {},
-                               isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white);
+                drawBlockText (g, getLocalBounds(), block::emptyText, textColour);
                 return;
             }
 
-            const auto nameColour = isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white;
+            const auto nameColour = textColour;
             const auto name = slot->file.getFileNameWithoutExtension();
-
-            // 값 줄 (이름은 아래에서 따로: 선택된 긴 이름은 흘러간다)
-            drawBlockText (g, getLocalBounds(), {}, headline (*slot), nameColour);
 
             const auto text = nameArea();
             g.setColour (nameColour);
@@ -1358,7 +1357,7 @@ namespace rig
         viewport.setBounds (getLocalBounds());
 
         // [SPECTRUM] 오른쪽 위 고정 (스크롤 안 됨). 오류 / 경고 문구(왼쪽 위)와 같은 여백
-        constexpr int spectrumWidth = 90, spectrumHeight = 26;                                                   // [SPECTRUM]
+        constexpr int spectrumWidth = 90, spectrumHeight = 28;   // [SPECTRUM] TopBar Settings... 버튼과 같은 크기 (글자도 JUCE 기본 계산 16)
         spectrumButton.setBounds (getWidth() - margin - spectrumWidth, margin, spectrumWidth, spectrumHeight);   // [SPECTRUM]
 
         // 오류 / 경고: 왼쪽 위 (IN 노드와 같은 여백), 위에서부터 오류 → 경고. 글자의 줄바꿈(\n)만큼 줄 수

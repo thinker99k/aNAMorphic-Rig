@@ -9,6 +9,7 @@ namespace rig
         constexpr int padMargin = padGap;   // 바깥 여백 (위·아래·좌·우): 패드 사이와 같게
         constexpr int padInset = 8;     // 패드 안 여백 (번호·이름 모두 사방 같은 값)
         constexpr float padCorner = 6.0f;   // 둥근 모서리 반지름
+        constexpr float unboundAlpha = 0.4f;   // 안 묶인 Stomp 패드의 번호
         static_assert (RigModel::numScenes == columns * rows);
 
         // 색 (시안)
@@ -49,7 +50,7 @@ namespace rig
 
     void ScenePads::changeListenerCallback (juce::ChangeBroadcaster*)
     {
-        repaint();   // 현재 씬 강조와 씬 이름
+        repaint();   // 현재 씬 / 켜진 Stomp 강조와 이름
     }
 
     void ScenePads::resized()
@@ -72,6 +73,7 @@ namespace rig
     void ScenePads::paint (juce::Graphics& g)
     {
         const int current = model.getCurrentScene();
+        const bool stomp = model.isStompMode();
 
         // 글꼴은 패드마다 만들지 않고 한 번만
         // 이름이 주인공, 번호는 작게
@@ -82,7 +84,8 @@ namespace rig
         {
             const auto pad = padBounds[(size_t) i];
             const auto area = pad.toFloat();
-            const bool active = i == current;
+            const auto* bound = stomp ? model.getStompSlot (i) : nullptr;
+            const bool active = stomp ? model.isStompOn (i) : i == current;
             const float thickness = active ? 2.0f : 1.0f;
 
             g.setColour (active ? activeFill : padFill);
@@ -91,12 +94,15 @@ namespace rig
             g.drawRoundedRectangle (area.reduced (thickness / 2.0f), padCorner, thickness);
 
             const auto inner = pad.reduced (padInset);
-            g.setColour (active ? textDark : textLight);
+            const auto textColour = active ? textDark : textLight;
+            g.setColour (stomp && bound == nullptr ? textColour.withAlpha (unboundAlpha) : textColour);
             g.setFont (numberFont);
             g.drawText (juce::String (i + 1), inner, juce::Justification::topLeft, false);
 
+            g.setColour (textColour);
             g.setFont (nameFont);
-            g.drawText (model.getSceneName (i), inner, juce::Justification::centred, true);
+            g.drawText (stomp ? (bound != nullptr ? RigModel::shortName (*bound) : juce::String()) : model.getSceneName (i),
+                        inner, juce::Justification::centred, true);
         }
     }
 
@@ -109,7 +115,9 @@ namespace rig
         {
             if (padBounds[(size_t) i].contains (e.getPosition()))
             {
-                if (i != model.getCurrentScene())
+                if (model.isStompMode())
+                    model.toggleStomp (i);
+                else if (i != model.getCurrentScene())
                     model.selectScene (i);
                 return;
             }

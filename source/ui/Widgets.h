@@ -13,8 +13,8 @@
 
 namespace rig
 {
-    // 마우스 규칙 (앱 전체): 조작은 왼쪽 클릭으로만 한다. 오른쪽 클릭은 컨텍스트 메뉴가 있는 곳(씬 버튼, 패치 이름)에서만 쓰고,
-    // 가운데/옆 버튼은 아무 동작도 하지 않는다. 클릭에 반응하는 컴포넌트는 LeftClickOnly<...> 로 선언하고,
+    // 마우스 규칙 (앱 전체): 조작은 왼쪽 클릭으로만 한다. 컨텍스트 메뉴는 없고 (모바일 대비, 할 일은 버튼으로),
+    // 오른쪽/가운데/옆 버튼은 아무 동작도 하지 않는다. 클릭에 반응하는 컴포넌트는 LeftClickOnly<...> 로 선언하고,
     // 직접 mouseDown 을 처리하는 곳은 isLeftClick 으로 거른다
     inline bool isLeftClick (const juce::MouseEvent& e)
     {
@@ -37,9 +37,9 @@ namespace rig
     // 켜짐 표시 버튼 (모드·상태가 켜진 버튼, Live 화면 Live / 튜너 스위치와 같은 모양): 어두운 색 바탕 + 2 px 색 테두리, 글자도 그 색 굵게
     namespace indicator
     {
-        inline const juce::Colour amber     { 0xffffa500 };   // 튜너, Copy / Swap (앱 강조색 주황)
+        inline const juce::Colour amber     { 0xffffa500 };   // 튜너, Copy / Swap, MUTE (앱 강조색 주황)
         inline const juce::Colour amberFill { 0xff3b2c12 };
-        inline const juce::Colour red       { 0xffd9534f };   // MUTE, Scene 모드 (Scene / Stomp 스위치)
+        inline const juce::Colour red       { 0xffd9534f };   // Scene 모드 (Scene / Stomp 스위치)
         inline const juce::Colour redFill   { 0xff3b1c1c };
         inline const juce::Colour blue      { 0xff4a90d9 };   // Stomp 모드 (Scene / Stomp 스위치)
         inline const juce::Colour blueFill  { 0xff1c2a3b };
@@ -142,19 +142,9 @@ namespace rig
         return id >= channelPairIdBase ? std::pair { id - channelPairIdBase, true } : std::pair { id - 1, false };
     }
 
-    // 컨텍스트 메뉴는 오른쪽 클릭한 커서 위치에 띄운다: 메뉴의 왼쪽 위 = 클릭 지점, 화면 밖으로 나가면 위/왼쪽으로 붙인다.
-    // 영역이 비어 있으면(withMousePosition) JUCE 가 화면 가운데 쪽으로 펼치므로 1 px 영역을 준다
-    inline void showContextMenu (juce::PopupMenu& menu, const juce::MouseEvent& click, std::function<void (int)> onClosed = nullptr)
-    {
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetScreenArea ({ click.getScreenX(), click.getScreenY(), 1, 1 }),
-                            std::move (onClosed));
-    }
-
     // 표(TableListBox) 행의 마우스 규칙. JUCE 의 행은 어느 버튼으로 눌러도 선택하므로, 칸마다 투명한 Cell 을 얹어 클릭을 대신 받는다.
     //  - 왼쪽 클릭: 행 선택 / 왼쪽 더블클릭: onDoubleClick
-    //  - 오른쪽 클릭: fillMenu 가 항목을 채우면 커서 위치에 메뉴. 선택은 바꾸지 않고, 메뉴가 열린 동안 그 행이 isMenuRow (테두리는 모델이 그린다).
-    //      fillMenu 가 없거나 비면 무반응
-    //  - 가운데 클릭: 무반응
+    //  - 오른쪽·가운데 클릭: 무반응 (컨텍스트 메뉴 없음)
     //  - 왼쪽으로 누른 채 끌기: dragDescription 이 있으면 끌어 놓기 시작
     // 사용: 모델의 refreshComponentForCell 에서 refreshCell 을 그대로 돌려준다. 칸 그림은 모델의 paintCell 을 Cell 이 대신 부른다
     //      (JUCE 는 커스텀 컴포넌트가 있는 칸을 직접 그리지 않는다). 행 배경(paintRowBackground)은 JUCE 가 그대로 그린다
@@ -162,14 +152,11 @@ namespace rig
     {
     public:
         std::function<void (int row)> onDoubleClick;
-        std::function<void (juce::PopupMenu&, int row)> fillMenu;
 
         // 왼쪽으로 누른 채 끌면 끌어 놓기를 시작한다 (부모 중 DragAndDropContainer 가 있어야 한다).
         // dragDescription 이 void 를 돌려주면 끌지 않는다. dragImage 는 커서 가운데에 붙는 그림
         std::function<juce::var (int row)> dragDescription;
         std::function<juce::Image (int row)> dragImage;
-
-        bool isMenuRow (int row) const { return row >= 0 && row == menuRow; }
 
         juce::Component* refreshCell (int row, int columnId, juce::Component* existing)
         {
@@ -240,41 +227,8 @@ namespace rig
         void clicked (juce::TableListBox& table, int row, const juce::MouseEvent& e)
         {
             if (isLeftClick (e))
-            {
                 table.selectRowsBasedOnModifierKeys (row, e.mods, false);
-                return;
-            }
-
-            if (! e.mods.isPopupMenu() || fillMenu == nullptr)
-                return;
-
-            juce::PopupMenu menu;
-            fillMenu (menu, row);
-
-            if (menu.getNumItems() == 0)
-                return;
-
-            menuRow = row;
-            table.repaint();
-
-            // 메뉴가 열린 채로 다른 행을 우클릭하면 새 메뉴가 먼저 뜨고 옛 메뉴가 나중에 닫힌다.
-            // 옛 메뉴의 닫힘이 새 메뉴의 테두리를 지우지 않도록, 가장 최근 메뉴가 닫힐 때만 지운다
-            const auto menuId = ++lastMenuId;
-
-            showContextMenu (menu, e, [this, menuId, safeTable = juce::Component::SafePointer<juce::TableListBox> (&table)] (int)
-            {
-                if (menuId != lastMenuId)
-                    return;
-
-                menuRow = -1;
-
-                if (safeTable != nullptr)
-                    safeTable->repaint();
-            });
         }
-
-        int menuRow = -1;      // 메뉴가 열린 행 (-1 = 없음)
-        int lastMenuId = 0;    // 가장 최근에 연 메뉴 번호
     };
 
     // 둥근 버튼(블록, 씬 버튼 등)의 오른쪽 위 귀퉁이에 딱 붙는 작은 칸.
@@ -329,6 +283,35 @@ namespace rig
 
             g.setColour (juce::Colours::white.withAlpha (active ? 1.0f : 0.85f));
             g.strokePath (check, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    };
+
+    // 이름 편집 시작 연필 버튼: 이름 칸 오른쪽 끝 (CheckCornerButton 과 같은 자리·모양, 편집 중에는 체크 버튼이 대신 보인다)
+    struct PencilCornerButton final : public CornerButton
+    {
+        PencilCornerButton (const juce::String& name, float cornerSize, float edgeInset)
+            : CornerButton (name, cornerSize, edgeInset, juce::Colours::grey) {}
+
+        void drawContent (juce::Graphics& g, juce::Rectangle<float> area, bool active) override
+        {
+            // 오른쪽 위 → 왼쪽 아래로 누운 연필 (20 x 20 틀): 몸통 + 지우개 머리
+            juce::Path pencil;
+            pencil.startNewSubPath (3.0f, 14.0f);
+            pencil.lineTo (13.0f, 4.0f);
+            pencil.lineTo (17.0f, 8.0f);
+            pencil.lineTo (7.0f, 18.0f);
+            pencil.lineTo (2.0f, 19.0f);
+            pencil.closeSubPath();
+            pencil.startNewSubPath (14.0f, 3.0f);
+            pencil.lineTo (16.0f, 1.0f);
+            pencil.lineTo (20.0f, 5.0f);
+            pencil.lineTo (18.0f, 7.0f);
+            pencil.closeSubPath();
+
+            const auto box = area.reduced (area.getWidth() * 0.25f);
+            pencil.applyTransform (pencil.getTransformToScaleToFit (box, true));
+            g.setColour (juce::Colours::white.withAlpha (active ? 1.0f : 0.85f));
+            g.fillPath (pencil);
         }
     };
 
@@ -810,20 +793,17 @@ namespace rig
 
     namespace block
     {
-        // 블록 = 박스 안 박스 3줄: [머리띠: 종류 (종류 색으로 채움, 흰 글자)] / 본문 [이름 칸] [값 칸]
-        //   높이 60 = 머리띠 18 + 본문 42.
+        // 블록 = 박스 안 박스 2줄: [머리띠: 종류 (왼쪽) | 중요 값 (오른쪽), 종류 색으로 채움, 흰 굵은 글자] / 본문 [이름 한 줄]
+        //   높이 44 = 머리띠 20 + 본문 24. 글자는 모두 같은 글꼴·크기 (fontSize), 머리띠만 굵게
         //   - 머리띠: 실제 글꼴의 대문자 높이를 머리띠 가운데에 (대문자에는 아래 획이 없어 줄 가운데에 두면 위로 쏠려 보인다)
-        //   - 본문: 글자 칸 2개 (칸 높이 = 각 글꼴 높이), 칸 사이 lineGap, 두 칸 묶음을 본문 세로 가운데에. 이름은 왼쪽, 값은 오른쪽 정렬
+        //   - 본문: 글자 칸 하나 (칸 높이 = 글꼴 높이)를 본문 세로 가운데에, 왼쪽 정렬
         constexpr int width = 130;           // 블록 폭
-        constexpr int height = 60;
+        constexpr int height = 44;
         constexpr float corner = 3.0f;       // 모서리 (예전 8, 날카롭게)
 
-        constexpr int bandHeight = 18;
-        constexpr float lineGap = 6.0f;           // 본문 이름 칸과 값 칸 사이 (본문 위아래 여백은 남는 만큼 반씩)
-        constexpr int textInsetX = 8;            // 좌우 여백
-        constexpr float headerFontSize = 11.0f;  // 머리띠 글자 (굵게)
-        constexpr float nameFontSize = 13.0f;    // 이름
-        constexpr float valueFontSize = 12.0f;   // 중요 값
+        constexpr int bandHeight = 20;
+        constexpr int textInsetX = 8;        // 좌우 여백
+        constexpr float fontSize = 14.0f;    // 블록 안 모든 글자 (머리띠는 굵게)
 
         // 미지정 블록: 어두운 회색 머리띠 "EMPTY" (IN / OUT 의 테마 회청색과 구분) + 검정보다 살짝 밝은 본문에 "Passthrough" (소리 그대로 통과)
         const juce::Colour emptyFill (0xff1e1e1e);
@@ -860,9 +840,8 @@ namespace rig
 
         inline juce::Rectangle<int> band (juce::Rectangle<int> area) { return area.withHeight (bandHeight); }
 
-        inline juce::Font headerFont() { return juce::Font (juce::FontOptions (headerFontSize, juce::Font::bold)); }
-        inline juce::Font nameFont()   { return juce::Font (juce::FontOptions (nameFontSize)); }
-        inline juce::Font valueFont()  { return juce::Font (juce::FontOptions (valueFontSize)); }
+        inline juce::Font headerFont() { return juce::Font (juce::FontOptions (fontSize, juce::Font::bold)); }
+        inline juce::Font nameFont()   { return juce::Font (juce::FontOptions (fontSize)); }
 
         // 글꼴의 대문자 높이 (실제 그린 "H" 의 높이). 글꼴은 OS 마다 다르므로 처음 쓸 때 한 번 잰다
         inline float capHeight (const juce::Font& font)
@@ -887,20 +866,12 @@ namespace rig
 
         inline juce::Rectangle<int> body (juce::Rectangle<int> area) { return area.withTrimmedTop (bandHeight); }
 
-        // 본문 글자 칸 2개: [이름 칸][값 칸] 사이 간격 0, 묶음을 본문 세로 가운데에
-        inline juce::Rectangle<float> nameLineF (juce::Rectangle<int> area)
+        // 본문 글자 칸 하나 (이름), 본문 세로 가운데에
+        inline juce::Rectangle<int> nameLine (juce::Rectangle<int> area)
         {
             const auto inner = body (area).toFloat().reduced ((float) textInsetX, 0.0f);
-            const float total = nameFont().getHeight() + lineGap + valueFont().getHeight();
-            return inner.withY (inner.getY() + (inner.getHeight() - total) * 0.5f).withHeight (nameFont().getHeight());
-        }
-
-        inline juce::Rectangle<int> nameLine (juce::Rectangle<int> area)  { return nameLineF (area).getSmallestIntegerContainer(); }
-
-        inline juce::Rectangle<int> valueLine (juce::Rectangle<int> area)
-        {
-            const auto name = nameLineF (area);
-            return name.withY (name.getBottom() + lineGap).withHeight (valueFont().getHeight()).getSmallestIntegerContainer();
+            const float h = nameFont().getHeight();
+            return inner.withY (inner.getY() + (inner.getHeight() - h) * 0.5f).withHeight (h).getSmallestIntegerContainer();
         }
 
         // 로딩 실패 표시: 블록 위에 굵은 빨간 대각선 하나 (테두리와 같은 굵기)
@@ -923,11 +894,12 @@ namespace rig
             g.fillRoundedRectangle (area.toFloat().reduced (1.5f), corner);
         }
 
-        // 머리띠: 종류 색으로 채운 윗줄 (위 두 모서리만 둥글게) + 흰 종류 글자 (굵게)
+        // 머리띠: 종류 색으로 채운 윗줄 (위 두 모서리만 둥글게) + 흰 종류 글자 (굵게), value 가 있으면 오른쪽 끝에 (굵게)
         // textColour: 꺼진 블록은 흐린 흰색. justification: 블록은 왼쪽, IN / OUT 은 가운데
         inline void drawBlockHeader (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& text, juce::Colour colour,
                                      juce::Colour textColour = juce::Colours::white,
-                                     juce::Justification justification = juce::Justification::centredLeft)
+                                     juce::Justification justification = juce::Justification::centredLeft,
+                                     const juce::String& value = {})
         {
             const auto strip = band (area).toFloat().reduced (1.5f, 0).withTrimmedTop (1.5f);
             juce::Path path;
@@ -937,18 +909,16 @@ namespace rig
 
             g.setColour (textColour);
             g.setFont (headerFont());
+            g.drawText (value, headerLine (area), juce::Justification::centredRight, true);
             g.drawText (text, headerLine (area), justification, true);
         }
 
-        // 본문 두 줄: 이름 + 중요 값 (같은 색, 보통 흰색). 넘치면 말줄임
-        inline void drawBlockText (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, const juce::String& value,
-                                   juce::Colour nameColour)
+        // 본문 한 줄: 이름 (보통 흰색). 넘치면 말줄임
+        inline void drawBlockText (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, juce::Colour nameColour)
         {
             g.setColour (nameColour);
             g.setFont (nameFont());
             g.drawText (name, nameLine (area), juce::Justification::centredLeft, true);
-            g.setFont (valueFont());
-            g.drawText (value, valueLine (area), juce::Justification::centredRight, true);
         }
 
         // 테두리: 선택 = 흰색 2.5 px, 아니면 border 1.5 px.
@@ -1082,8 +1052,9 @@ namespace rig
             const auto colour = colourFor (type);
 
             drawBlockBackground (g, area, none ? emptyFill : colour.darker (0.75f));
-            drawBlockHeader (g, area, labelFor (type), colour);
-            drawBlockText (g, area, none ? emptyText : name, none ? juce::String() : dbText (0.0), juce::Colours::white);
+            drawBlockHeader (g, area, labelFor (type), colour, juce::Colours::white, juce::Justification::centredLeft,
+                             none ? juce::String() : dbText (0.0));
+            drawBlockText (g, area, none ? emptyText : name, juce::Colours::white);
             drawBlockFrame (g, area, none ? juce::Colours::grey.darker() : colour, false, false);
             return createDragImage (block, mark);
         }

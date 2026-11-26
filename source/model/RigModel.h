@@ -21,6 +21,9 @@ namespace rig
     // 합류(Merge). 병렬은 한 단계만 (갈래 안에 병렬 없음), 갈래는 반드시 다시 합쳐진다.
     //
     // 씬: 패치마다 8개. 씬은 블록별 On/Off·파라미터, 병렬 갈래별 On/Off·레벨, 이름을 가진다.
+    //
+    // Stomp: 패치마다 8칸. 칸마다 블록 하나를 묶는다 (Bind, 패치에 저장). 한 블록이 여러 칸에 묶일 수 있다 (Copy).
+    //  Stomp 모드에서 묶인 블록의 On/Off 는 씬 값과 무관한 Stomp 상태 (저장하지 않음, Stomp 모드에 들어갈 때·묶을 때 지금 씬 값으로 시작)
     //  - 현재 씬 번호는 저장하지 않는다 (패치는 항상 씬 1 로 열린다). 씬 전환은 디스크에 쓰지 않는다
     //  - 씬 편집(On/Off, 복사/교환/초기화/이름)은 패치에 저장한다
     //
@@ -34,6 +37,7 @@ namespace rig
     {
     public:
         static constexpr int numScenes = 8;
+        static constexpr int numStomps = 8;
         static constexpr int maxSceneNameLength = 16;   // 글자(코드 포인트) 수
 
         static constexpr std::array<bool, numScenes> allScenesOn()
@@ -50,6 +54,7 @@ namespace rig
             juce::File file;                     // None 이면 비어 있고, NAM / IR 이면 항상 지정되어 있다
             std::array<bool, numScenes> on = allScenesOn();   // 씬별 On/Off: 블록을 옮기거나 종류가 바뀌어도 블록에 남는다
             std::array<std::vector<float>, numScenes> paramValues;   // 씬별 블록 파라미터 (BlockParams::specs 순서, 없는 종류면 비어 있다)
+            std::array<bool, numStomps> stomps {};   // 이 블록이 묶인 Stomp 칸 (블록을 옮기거나 종류가 바뀌어도 블록에 남는다)
             std::shared_ptr<BlockParams> params; // 지금 씬의 파라미터 값 (DSP 가 같은 객체를 읽는다. 없는 종류면 nullptr). 교체하면 새 객체
 
             std::shared_ptr<Block> dsp;          // 소리를 내는 DSP (없으면 통과). 새 파일을 로딩하는 동안은 옛 DSP 를 그대로 둔다
@@ -100,9 +105,22 @@ namespace rig
         void loadPatch (int number);
         void resetPatch();   // 지금 패치를 기본 패치로 (블록 없음, 기본 씬, 이름 = 파일명). 번호 유지, 저장, 크로스페이드
 
-        // 연주 모드 (Scene / Stomp, 항상 둘 중 하나): 저장하지 않고, 앱 시작·패치 전환·Patch Reset 때 Scene. 아직 바꾸는 방법은 없다 (Stomp 모드 미구현)
+        // 모드 = 화면 {Edit, Live} x 연주 {Scene, Stomp} 네 가지. 둘은 따로 바뀐다.
+        // 저장하지 않고 앱 시작 때 (Edit, Scene). 패치를 바꾸거나 Patch Reset 해도 그대로
+        enum class View { edit, live };
         enum class PlayMode { scene, stomp };
-        PlayMode getPlayMode() const noexcept { return playMode; }
+
+        struct Mode
+        {
+            View view = View::edit;
+            PlayMode play = PlayMode::scene;
+        };
+
+        const Mode& getMode() const noexcept { return mode; }
+        bool isLive() const noexcept { return mode.view == View::live; }
+        bool isStompMode() const noexcept { return mode.play == PlayMode::stomp; }
+        void setView (View);              // 알림만 (화면 전환은 MainComponent 가 알림을 받아서)
+        void setPlayMode (PlayMode);      // Stomp 로 들어가면 묶인 블록의 Stomp 상태를 지금 씬 값으로
 
         // 패치 파일을 저장할 때마다 결과 (ok = 써짐). UI 가 쓰기 실패 경고를 띄운다
         std::function<void (bool ok, const juce::File& file)> onPatchSaved;
@@ -156,8 +174,9 @@ namespace rig
         // 두 갈래 모두 블록 사이여야 한다 (1 <= count < 갈래 길이). 뒤 병렬 = 원래 합류 버튼(값 유지), 앞 병렬 = 새 합류(기본값)
         void splitParallel (juce::uint64 parallelId, int upperCount, int lowerCount);
         void removeBlock (juce::uint64 slotId);   // 갈래가 비면 병렬 해제. 선택은 신호 흐름상 바로 앞 블록, 없으면(체인 맨 앞) 미선택
-        void setOn (juce::uint64 slotId, bool shouldBeOn);   // 현재 씬의 값만 바꾼다
-        bool isOn (const Slot& slot) const noexcept { return slot.on[(size_t) currentScene]; }
+        // 현재 씬의 값만 바꾼다. Stomp 모드에서 묶인 블록이면 씬 값 대신 Stomp 상태 (저장·Undo 없음)
+        void setOn (juce::uint64 slotId, bool shouldBeOn);
+        bool isOn (const Slot& slot) const noexcept;   // 지금 소리의 On/Off (Stomp 모드의 묶인 블록 = Stomp 상태)
 
         // 씬 (index 0~7). 범위를 벗어나면 무시
         int getCurrentScene() const noexcept { return currentScene; }
@@ -168,6 +187,19 @@ namespace rig
         void resetScene (int scene);                   // 모두 On, 기본 이름
         void resetAllScenes();                         // 8개 씬 모두 resetScene
         void renameScene (int scene, const juce::String& name);
+
+        // 블록을 짧게 부르는 이름 (Stomp 칸): 파일명 (확장자 없이), 미지정 블록은 "Empty"
+        static juce::String shortName (const Slot& slot) { return slot.type == BlockType::None ? juce::String ("Empty") : slot.file.getFileNameWithoutExtension(); }
+
+        // Stomp 칸 (index 0~7). 범위를 벗어나면 무시. 편집(Bind / Unbind / Copy / Swap / Reset)은 저장 + Undo
+        const Slot* getStompSlot (int stomp) const;            // 그 칸에 묶인 블록 (없으면 nullptr)
+        bool isStompOn (int stomp) const;                      // 묶인 블록의 지금 On/Off (묶인 게 없으면 false)
+        void toggleStomp (int stomp);                          // 묶인 블록을 켜고 끈다 (같은 블록이 묶인 칸은 같이). Stomp 모드에서만
+        void bindStomp (int stomp, juce::uint64 slotId);       // 그 칸에 있던 블록은 풀린다
+        void unbindStomp (int stomp);
+        void copyStomp (int source, int destination);          // destination 에 source 의 블록을 묶는다 (source 가 비었으면 destination 도 풀린다)
+        void swapStomp (int source, int destination);
+        void resetStomps();                                    // Stomp Reset: 8칸 모두 풀기
 
         // 입출력 채널 (패치별, 0부터). 장치에 없는 채널이어도 그대로 저장하고, 소리는 엔진이 기본 채널로 낸다
         const AudioEngine::Routing& getRouting() const noexcept { return routing; }
@@ -213,6 +245,7 @@ namespace rig
             bool power = false;                                 // 선택된 블록의 전원 (파라미터 바 [14])
             std::vector<int> branchPower {}, branchLevel {};    // 선택된 합류의 갈래 전원 / 레벨 (파라미터 바)
             std::vector<int> scenes {};                         // 씬 버튼
+            std::vector<int> stomps {};                         // Stomp 칸 버튼
             bool patchName = false;                       // 패치 이름 칸
             Endpoint endpoint = Endpoint::none;           // IN / OUT 노드
         };
@@ -313,6 +346,9 @@ namespace rig
         void changed();   // 저장 + 체인 재구성 + UI 알림
         void applyCurrentScene();   // 모든 DSP 의 On/Off 와 Merge 게인을 현재 씬 값으로
         void sceneEdited (int scene);   // 씬 편집 후: 현재 씬이면 DSP 반영, 저장, UI 알림
+        void stompEdited();             // Stomp 편집 후: DSP 반영, 저장, UI 알림
+        Slot* editStompSlot (int stomp);
+        void syncStompStates();         // 묶인 칸의 Stomp 상태를 지금 씬 값으로
 
         static juce::String defaultSceneName (int scene) { return "Scene " + juce::String (scene + 1); }
         static juce::String sanitizeSceneName (const juce::var& value, int scene);
@@ -332,7 +368,8 @@ namespace rig
         AudioEngine::Routing routing;
         std::optional<AudioEngine::Routing> liveRouting;   // Live 전용 채널 (저장하지 않는다)
         int currentScene = 0;                   // 저장하지 않는다
-        PlayMode playMode = PlayMode::scene;    // 저장하지 않는다
+        Mode mode;                              // 저장하지 않는다
+        std::array<bool, numStomps> stompOn {};   // Stomp 모드의 칸별 On/Off (저장하지 않는다)
         std::array<juce::String, numScenes> sceneNames;
         bool waitingForLoads = false;           // 로딩을 시작한 블록(패치 전환, 추가, 이동 등)이 다 준비될 때까지 옛 소리 유지
         juce::uint64 nextId = 1;                // 슬롯과 병렬의 id (0 = 없음)
