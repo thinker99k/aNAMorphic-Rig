@@ -105,6 +105,17 @@ namespace rig
         void updateTimer();
         void paintDropHints (juce::Graphics&);
 
+        // 칸 하나에 그릴 내용: 씬 번호(scene) 또는 묶인 블록(slot), 둘 다 없으면 빈 Stomp 칸
+        struct CellContent
+        {
+            int scene = -1;
+            const RigModel::Slot* slot = nullptr;
+            bool stompOn = false;
+        };
+
+        CellContent contentOf (int cell) const;                                   // 지금 그 칸의 내용
+        void paintCell (juce::Graphics&, int cell, const CellContent&) const;     // cell 자리에 content 를 그린다
+
         RigModel& model;
 
         std::array<juce::Rectangle<int>, RigModel::numScenes> cellBounds;

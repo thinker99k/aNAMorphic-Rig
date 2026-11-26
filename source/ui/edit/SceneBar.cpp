@@ -510,43 +510,7 @@ namespace rig
         {
             const auto cell = cellBounds[(size_t) i];
             const auto bounds = cell.toFloat();
-            const auto* slot = s ? model.getStompSlot (i) : nullptr;
-
-            if (slot != nullptr)
-            {
-                // 묶인 Stomp 칸 = 블록 모양 (꺼지면 흐리게)
-                block::drawStomp (g, cell, slot->type, RigModel::shortName (*slot), ! model.isStompOn (i), 1.0f, block::headerFont(),
-                                  juce::Font (juce::FontOptions (stompNameSize)));
-            }
-            else
-            {
-                // 씬 칸 / 빈 Stomp 칸
-                const bool lit = ! s && i == model.getCurrentScene();
-                auto fill = lit ? juce::Colours::lightgrey : juce::Colour (0xff3a4148);
-
-                if (i == renamingScene)
-                    fill = juce::Colours::black.withAlpha (0.4f).overlaidWith (juce::Colour (0xff1e2328));   // 입력칸 바탕
-
-                g.setColour (fill);
-                g.fillRect (bounds);
-                g.setColour (i == renamingScene ? juce::Colours::grey : juce::Colours::grey.withAlpha (0.6f));
-                strokeRect (g, bounds.reduced (0.5f), 1.0f);
-
-                if (! s)
-                {
-                    // 번호: 왼쪽 위 / 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
-                    const auto textColour = lit ? juce::Colours::black : juce::Colours::white;
-                    g.setColour (textColour.withAlpha (0.7f));
-                    block::drawBandLabel (g, juce::String (i + 1), juce::Font (juce::FontOptions (numberFontSize, juce::Font::bold)), cell, 1.0f);
-
-                    if (i != renamingScene)   // 이름 자리는 입력칸이 같은 위치에 쓴다
-                    {
-                        g.setColour (textColour);
-                        drawWrappedText (g, model.getSceneName (i), cell.reduced (nameInset, numberRowHeight).toFloat(),
-                                        juce::Font (juce::FontOptions (nameFontSize)));
-                    }
-                }
-            }
+            paintCell (g, i, contentOf (i));
 
             // 놓은 뒤 테두리 강조: 부드럽게 두 번 깜빡인다 (켜졌다 꺼지는 한 번 = sin² 의 반 주기)
             if (const auto start = flashStart[(size_t) i]; start != 0 && now - start < flashMs)
@@ -563,6 +527,57 @@ namespace rig
         }
 
         paintDropHints (g);
+    }
+
+    SceneBar::CellContent SceneBar::contentOf (int cell) const
+    {
+        if (! stomp())
+            return { cell, nullptr, false };
+
+        return { -1, model.getStompSlot (cell), model.isStompOn (cell) };
+    }
+
+    // cell = 자리 (번호·현재 씬 밝기·이름 입력칸), content = 그 자리에 그릴 내용 (미리보기는 다른 칸의 내용)
+    void SceneBar::paintCell (juce::Graphics& g, int cell, const CellContent& content) const
+    {
+        const auto area = cellBounds[(size_t) cell];
+        const auto bounds = area.toFloat();
+
+        if (content.slot != nullptr)
+        {
+            // 묶인 Stomp 칸 = 블록 모양 (꺼지면 흐리게)
+            block::drawStomp (g, area, content.slot->type, RigModel::shortName (*content.slot), ! content.stompOn, 1.0f,
+                              block::headerFont(), juce::Font (juce::FontOptions (stompNameSize)));
+            return;
+        }
+
+        // 씬 칸 / 빈 Stomp 칸
+        const bool scene = content.scene >= 0;
+        const bool lit = scene && cell == model.getCurrentScene();
+        auto fill = lit ? juce::Colours::lightgrey : juce::Colour (0xff3a4148);
+
+        if (cell == renamingScene)
+            fill = juce::Colours::black.withAlpha (0.4f).overlaidWith (juce::Colour (0xff1e2328));   // 입력칸 바탕
+
+        g.setColour (fill);
+        g.fillRect (bounds);
+        g.setColour (cell == renamingScene ? juce::Colours::grey : juce::Colours::grey.withAlpha (0.6f));
+        strokeRect (g, bounds.reduced (0.5f), 1.0f);
+
+        if (! scene)
+            return;
+
+        // 번호: 왼쪽 위 / 이름: 가운데 (고정 글꼴로 줄마다 채우고 넘치면 말줄임. 번호 줄만큼 위아래를 똑같이 비운다)
+        const auto textColour = lit ? juce::Colours::black : juce::Colours::white;
+        g.setColour (textColour.withAlpha (0.7f));
+        block::drawBandLabel (g, juce::String (cell + 1), juce::Font (juce::FontOptions (numberFontSize, juce::Font::bold)), area, 1.0f);
+
+        if (cell != renamingScene)   // 이름 자리는 입력칸이 같은 위치에 쓴다
+        {
+            g.setColour (textColour);
+            drawWrappedText (g, model.getSceneName (content.scene), area.reduced (nameInset, numberRowHeight).toFloat(),
+                             juce::Font (juce::FontOptions (nameFontSize)));
+        }
     }
 
     // 끄는 동안: 놓을 수 있는 칸 전부 희미하게 + 표시 기호 (나뉜 칸은 가운데 선, 위아래 반쪽마다), 커서 밑 자리는 진한 테두리
