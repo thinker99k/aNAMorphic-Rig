@@ -9,7 +9,8 @@ namespace rig
         constexpr int padMargin = padGap;   // 바깥 여백 (위·아래·좌·우): 패드 사이와 같게
         constexpr int padInset = 8;     // 패드 안 여백 (번호·이름 모두 사방 같은 값)
         constexpr float padCorner = 6.0f;   // 둥근 모서리 반지름
-        constexpr float unboundAlpha = 0.4f;   // 안 묶인 Stomp 패드의 번호
+        constexpr float numberSize = 24.0f, nameSize = 40.0f;   // 이름이 주인공, 번호는 작게. 이름은 넘치면 글꼴만 줄인다
+        constexpr float stompScale = 2.0f;  // Stomp 패드 = 블록 모양을 이만큼 키워서 (머리띠 40, 종류 글자 28)
         static_assert (RigModel::numScenes == columns * rows);
 
         // 색 (시안)
@@ -76,16 +77,33 @@ namespace rig
         const bool stomp = model.isStompMode();
 
         // 글꼴은 패드마다 만들지 않고 한 번만
-        // 이름이 주인공, 번호는 작게
-        const auto numberFont = boldFont (24.0f);
-        const auto nameFont = semiBoldFont (40.0f);
+        const auto numberFont = boldFont (numberSize);
+        const auto nameFont = semiBoldFont (nameSize);
 
         for (int i = 0; i < RigModel::numScenes; ++i)
         {
             const auto pad = padBounds[(size_t) i];
             const auto area = pad.toFloat();
-            const auto* bound = stomp ? model.getStompSlot (i) : nullptr;
-            const bool active = stomp ? model.isStompOn (i) : i == current;
+
+            // Stomp: 묶인 패드 = 블록 모양 (번호·중요 값 없음, 꺼지면 흐리게), 안 묶인 패드 = 빈 패드
+            if (stomp)
+            {
+                if (const auto* bound = model.getStompSlot (i))
+                {
+                    block::drawStomp (g, pad, bound->type, RigModel::shortName (*bound), ! model.isStompOn (i), stompScale, nameFont);
+                }
+                else
+                {
+                    g.setColour (padFill);
+                    g.fillRoundedRectangle (area, padCorner);
+                    g.setColour (padBorder);
+                    g.drawRoundedRectangle (area.reduced (0.5f), padCorner, 1.0f);
+                }
+
+                continue;
+            }
+
+            const bool active = i == current;
             const float thickness = active ? 2.0f : 1.0f;
 
             g.setColour (active ? activeFill : padFill);
@@ -95,14 +113,12 @@ namespace rig
 
             const auto inner = pad.reduced (padInset);
             const auto textColour = active ? textDark : textLight;
-            g.setColour (stomp && bound == nullptr ? textColour.withAlpha (unboundAlpha) : textColour);
+            g.setColour (textColour);
             g.setFont (numberFont);
             g.drawText (juce::String (i + 1), inner, juce::Justification::topLeft, false);
 
-            g.setColour (textColour);
-            g.setFont (nameFont);
-            g.drawText (stomp ? (bound != nullptr ? RigModel::shortName (*bound) : juce::String()) : model.getSceneName (i),
-                        inner, juce::Justification::centred, true);
+            // 이름: 가운데 (자르지 않고 글꼴만 줄인다. 번호 줄만큼 위아래를 똑같이 비운다)
+            drawShrunkText (g, model.getSceneName (i), inner.reduced (0, juce::roundToInt (numberFont.getHeight())).toFloat(), nameFont);
         }
     }
 

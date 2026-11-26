@@ -809,7 +809,9 @@ namespace rig
         constexpr float corner = 3.0f;       // 모서리 (예전 8, 날카롭게)
 
         constexpr int bandHeight = 20;
-        constexpr float frameInset = 1.5f, frameThickness = 1.5f;   // 테두리: 블록 가장자리에서 1.5 안쪽에 1.5 px 선
+        constexpr float frameInset = 1.5f, frameThickness = 1.5f;   // 테두리: 블록 가장자리에서 1.5 안쪽에 1.5 px 선 (선택은 selectedThickness)
+        constexpr float selectedThickness = 2.5f;
+        constexpr float selectedAlpha = 0.6f;   // 선택 테두리는 살짝 투명하게 (밑의 Stomp 파랑 테두리가 비친다)
         constexpr int textInsetX = 8;        // 좌우 여백
         constexpr float fontSize = 14.0f;    // 블록 안 모든 글자 (머리띠는 굵게)
 
@@ -827,7 +829,7 @@ namespace rig
             switch (t)
             {
                 case BlockType::Nam:  return juce::Colour (0xffd9822b);
-                case BlockType::Ir:   return juce::Colour (0xff2b9bd9);
+                case BlockType::Ir:   return juce::Colour (0xff4a8a52);   // Celestion Greenback 뒤판 같은 탁한 초록 (Stomp 강조 파랑과 구분)
                 case BlockType::None: break;
             }
 
@@ -902,8 +904,12 @@ namespace rig
         inline void drawBlockBackground (juce::Graphics& g, juce::Rectangle<int> area, juce::Colour fill)
         {
             g.setColour (fill);
-            g.fillRoundedRectangle (area.toFloat().reduced (1.5f), corner);
+            g.fillRoundedRectangle (area.toFloat().reduced (frameInset), corner);
         }
+
+        // 꺼진 블록(바이패스)·꺼진 갈래 안 블록의 색 (패치맵, Stomp 칸)
+        inline juce::Colour dimmed (juce::Colour c) { return c.withSaturation (0.1f).darker (0.5f); }
+        inline juce::Colour dimmedText() { return juce::Colours::white.darker (0.5f); }
 
         // 머리띠: 종류 색으로 채운 윗줄 (위 두 모서리만 둥글게) + 흰 종류 글자 (굵게), value 가 있으면 오른쪽 끝에 (굵게)
         // textColour: 꺼진 블록은 흐린 흰색. justification: 블록은 왼쪽, IN / OUT 은 가운데
@@ -912,7 +918,7 @@ namespace rig
                                      juce::Justification justification = juce::Justification::centredLeft,
                                      const juce::String& value = {})
         {
-            const auto strip = band (area).toFloat().reduced (1.5f, 0).withTrimmedTop (1.5f);
+            const auto strip = band (area).toFloat().reduced (frameInset, 0).withTrimmedTop (frameInset);
             juce::Path path;
             path.addRoundedRectangle (strip.getX(), strip.getY(), strip.getWidth(), strip.getHeight(), corner, corner, true, true, false, false);
             g.setColour (colour);
@@ -932,25 +938,74 @@ namespace rig
             g.drawText (name, nameLine (area), juce::Justification::centredLeft, true);
         }
 
-        // 테두리: 선택 = 흰색 2.5 px, 아니면 border 1.5 px.
-        // 오류 = 굵은 빨간 대각선 + 같은 굵기의 빨간 테두리 (선택까지 되어 있으면 그 바깥에 흰 테두리)
-        inline void drawBlockFrame (juce::Graphics& g, juce::Rectangle<int> area, juce::Colour border, bool selected, bool failed)
+        // 테두리: border 1.5 px. Stomp 에 묶인 블록 (Edit Stomp 모드) = Stomp 파랑 2.5 px.
+        // 선택 = 그 위에 살짝 투명한 흰색 2.5 px (Stomp 파랑이 먼저 보이고 선택이 덮는다).
+        // 오류 = 굵은 빨간 대각선 + 같은 굵기의 빨간 테두리 (선택·Stomp 까지 되어 있으면 그 바깥에)
+        inline void drawBlockFrame (juce::Graphics& g, juce::Rectangle<int> area, juce::Colour border, bool selected, bool failed,
+                                    bool stompBound = false)
         {
-            const auto bounds = area.toFloat().reduced (1.5f);
+            const auto bounds = area.toFloat().reduced (frameInset);
 
             if (failed)
             {
-                const auto inner = selected ? bounds.reduced (2.5f) : bounds;
+                const auto inner = selected || stompBound ? bounds.reduced (selectedThickness) : bounds;
                 drawErrorSlash (g, inner);
                 g.setColour (juce::Colours::red);
                 g.drawRoundedRectangle (inner.reduced (errorThickness * 0.5f - 0.75f), corner, errorThickness);
             }
 
-            if (selected || ! failed)
+            if (stompBound)
             {
-                g.setColour (selected ? juce::Colours::white : border);
-                g.drawRoundedRectangle (bounds, corner, selected ? 2.5f : 1.5f);
+                g.setColour (indicator::blue);
+                g.drawRoundedRectangle (bounds, corner, selectedThickness);
             }
+            else if (! failed)
+            {
+                g.setColour (border);
+                g.drawRoundedRectangle (bounds, corner, frameThickness);
+            }
+
+            if (selected)
+            {
+                g.setColour (juce::Colours::white.withAlpha (selectedAlpha));
+                g.drawRoundedRectangle (bounds, corner, selectedThickness);
+            }
+        }
+
+        // Stomp 칸 (Edit ssbar, Live 패드, ssbar 에서 끄는 그림): 블록 모양을 칸 크기로. 머리띠 = 종류 (가운데), 본문 = 파일명
+        // (가운데, 자르지 않고 글꼴만 줄인다). 중요 값·칸 번호 없음. 꺼진 블록은 패치맵처럼 흐리게.
+        // scale = 머리띠 높이·종류 글자·테두리·모서리 배율 (ssbar 1, Live 패드는 크게), nameSize = 파일명 최대 크기
+        inline void drawStomp (juce::Graphics& g, juce::Rectangle<int> area, BlockType type, const juce::String& name, bool off,
+                               float scale, const juce::Font& nameFontMax)
+        {
+            const bool none = type == BlockType::None;
+            const auto colour = off ? dimmed (colourFor (type)) : colourFor (type);
+            const auto textColour = off ? dimmedText() : juce::Colours::white;
+            const auto bounds = area.toFloat().reduced (frameInset * scale);
+            const float r = corner * scale, band = (float) bandHeight * scale;
+
+            g.setColour (none ? emptyFill : colour.darker (0.75f));
+            g.fillRoundedRectangle (bounds, r);
+
+            juce::Path strip;
+            strip.addRoundedRectangle (bounds.getX(), bounds.getY(), bounds.getWidth(), band - frameInset * scale, r, r, true, true, false, false);
+            g.setColour (colour);
+            g.fillPath (strip);
+
+            // 머리띠 글자: 대문자 높이를 머리띠의 보이는 부분 가운데에 (headerLine 과 같은 방법)
+            const auto header = headerFont().withHeight (fontSize * scale);
+            const float visibleTop = (float) area.getY() + bandVisibleTop * scale;
+            const float baseline = (visibleTop + (float) area.getY() + band) * 0.5f + capHeight (header) * 0.5f;
+            g.setColour (textColour);
+            g.setFont (header);
+            g.drawText (labelFor (type), juce::Rectangle<float> (bounds.getX(), baseline - header.getAscent(), bounds.getWidth(), header.getHeight()),
+                        juce::Justification::centred, false);
+
+            const auto body = area.toFloat().withTrimmedTop (band).reduced ((float) textInsetX * scale, 4.0f * scale);
+            drawShrunkText (g, none ? emptyText : name, body, nameFontMax);
+
+            g.setColour (none ? juce::Colours::grey.darker() : colour);
+            g.drawRoundedRectangle (bounds, r, frameThickness * scale);
         }
 
         // 끌어 놓기 내용 (DragAndDropContainer 의 sourceDescription).
@@ -977,10 +1032,13 @@ namespace rig
         constexpr float dragImageAlpha = 0.70f;
 
         // 끄는 그림의 표시: 블록 오른쪽 위 꼭짓점에서 안쪽으로 markInset 들어간 곳을 중심으로 원 하나
-        //  - remove : 빨간 원 + 흰 X (패치맵 블록, 떼면 삭제되는 위치)
-        //  - add    : 초록 원 + 흰 + (선택기 항목, 새 블록이 들어간다)
-        //  - replace: 어두운 노란 원 + 흰 ↔ (선택기 항목을 기존 블록 위에, 교체)
-        //  - swap   : 어두운 노란 원 + 흰 ⇄ (패치맵 블록을 다른 블록 위에, 맞바꾸기)
+        //  드래그앤드롭 원칙 (n개에서): 추가 n→n+1 / 삭제 n→n−1 / 스왑 있는 둘이 맞바뀜 / 이동 있는 하나가 빈 자리로 /
+        //                              대체 있는 하나가 새것으로 / 복제 있는 하나가 다른 있는 하나로 덮어씌워짐
+        //  - remove : 빨간 원 + 흰 X (삭제: 패치맵 블록·Stomp 칸을 둘레 밖에서 뗄 때)
+        //  - add    : 초록 원 + 흰 + (추가·복제: 선택기 항목, ssbar 칸 위 절반, 패치맵 블록 → 빈 Stomp 칸)
+        //  - replace: 어두운 노란 원 + 흰 ↔ (대체: 선택기 항목을 기존 블록 위에, 패치맵 블록 → 묶인 Stomp 칸)
+        //  - swap   : 어두운 노란 원 + 흰 ⇄ (스왑: 패치맵 블록을 다른 블록 위에, ssbar 칸 아래 절반)
+        //  - none   : 이동 (표시 없음, 놓을 자리 강조만)
         // 원이 블록 밖으로 나가므로 끄는 그림은 사방에 (반지름 - 안쪽) 만큼 여백을 둔다: 표시가 바뀌어도 블록 위치가 그대로, 그림 가운데 = 블록 가운데
         enum class DragMark { none, remove, add, replace, swap };
         constexpr float markRadius = 10.0f, markInset = 3.0f;

@@ -120,8 +120,8 @@ namespace rig
     class ChainView::Tile final : public juce::Component
     {
     public:
-        Tile (RigModel& m, juce::uint64 id, bool inActiveBranch, const juce::uint32& startMs)
-            : model (m), slotId (id), branchActive (inActiveBranch), marqueeStart (startMs)
+        Tile (RigModel& m, juce::uint64 id, bool inActiveBranch, const juce::uint32& startMs, const StompDrag& stomp)
+            : model (m), slotId (id), branchActive (inActiveBranch), marqueeStart (startMs), stompDrag (stomp)
         {
         }
 
@@ -130,6 +130,7 @@ namespace rig
 
         // 선택은 끌지 않고 뗐을 때 (누를 때 고르면 패치맵이 다시 만들어져 끌기가 끊긴다).
         // 끌다 뗐을 때: 놓을 자리 위면 Strip 이 미리보기대로 처리하고 (우선), 자리 밖이면 삭제 범위(isDeleteAt)일 때만 삭제.
+        // Edit Stomp 모드에서 ssbar 쪽(stompDrag)이면 지우지 않는다 (ssbar 칸 위면 ssbar 가 받는다).
         // (블록의 mouseUp 이 끌기 그림보다 먼저 불린다. Esc 로 취소했으면 끌기가 이미 끝나 있다)
         void mouseUp (const juce::MouseEvent& e) override
         {
@@ -145,7 +146,7 @@ namespace rig
             auto* container = juce::DragAndDropContainer::findParentDragContainerFor (this);
             const auto screen = e.getScreenPosition();
 
-            if (container == nullptr || ! container->isDragAndDropActive() || ! isDeleteAt (screen))
+            if (container == nullptr || ! container->isDragAndDropActive() || ! isDeleteAt (screen) || stompMarkAt (screen).has_value())
                 return;
 
             model.removeBlock (slotId);
@@ -161,7 +162,8 @@ namespace rig
         }
 
         // 끌어서 다른 자리에 놓으면 이동
-        // 끄는 동안 커서의 블록 그림 표시: 삭제 범위(isDeleteAt) = X, 다른 블록 위(Swap) = ⇄, 그 밖 = 없음 (떼면 일어날 일의 미리보기)
+        // 끄는 동안 커서의 블록 그림 표시: 삭제 범위(isDeleteAt) = X, 다른 블록 위(Swap) = ⇄, 그 밖 = 없음 (떼면 일어날 일의 미리보기).
+        // Edit Stomp 모드에서 선택기·ssbar 쪽이면 Stomp 칸 모양 그림 + ssbar 표시 (+ / ↔ / 없음)
         void mouseDrag (const juce::MouseEvent& e) override
         {
             if (! isLeftClick (e) || e.getDistanceFromDragStart() < dragStartDistance)
@@ -174,14 +176,18 @@ namespace rig
             if (container->isDragAndDropActive())
             {
                 const auto screen = e.getScreenPosition();
-                const auto mark = isDeleteAt (screen) ? block::DragMark::remove
+                const auto stompMark = stompMarkAt (screen);
+                const auto mark = stompMark.has_value() ? *stompMark
+                                : isDeleteAt (screen) ? block::DragMark::remove
                                 : isOverSwap != nullptr && isOverSwap (screen) ? block::DragMark::swap
                                                                                : block::DragMark::none;
 
-                if (mark != shownMark)
+                if (mark != shownMark || stompMark.has_value() != shownStomp)
                 {
                     shownMark = mark;
-                    container->setCurrentDragImage (juce::ScaledImage (block::createDragImage (snapshot, mark)));
+                    shownStomp = stompMark.has_value();
+                    container->setCurrentDragImage (juce::ScaledImage (shownStomp ? stompDrag.image (slotId, mark)
+                                                                                  : block::createDragImage (snapshot, mark)));
                 }
 
                 return;
@@ -189,6 +195,7 @@ namespace rig
 
             snapshot = createComponentSnapshot (getLocalBounds());
             shownMark = block::DragMark::none;
+            shownStomp = false;
             const auto dragImage = block::createDragImage (snapshot, shownMark);
 
             // 커서 = 블록 가운데 = 끄는 그림 가운데 (표시 원 여백은 사방에 같다)
@@ -197,6 +204,11 @@ namespace rig
         }
 
         juce::uint64 getSlotId() const noexcept { return slotId; }
+
+        std::optional<block::DragMark> stompMarkAt (juce::Point<int> screen) const
+        {
+            return stompDrag.markAt != nullptr ? stompDrag.markAt (screen) : std::nullopt;
+        }
 
         // 화면 좌표 screen 에서 떼면 삭제되는지: 놓을 자리가 없고 (미리보기 조작이 우선), 커서가 원래 블록 + 사방 keepMargin 밖.
         // 블록 사이 연결선은 양쪽 블록이 절반씩 나눠 가진다 (블록을 옆 화살표까지 살짝 밀어도 지워지지 않게)
@@ -215,7 +227,7 @@ namespace rig
 
             // 블록 양식. 미지정 블록은 회색 머리띠 "EMPTY" + block::emptyFill 본문에 "Passthrough"
             drawBlockBackground (g, getLocalBounds(), none ? block::emptyFill : baseColour (*slot).darker (0.75f));
-            const auto textColour = isDimmed (*slot) ? juce::Colours::white.darker (0.5f) : juce::Colours::white;
+            const auto textColour = isDimmed (*slot) ? block::dimmedText() : juce::Colours::white;
 
             // 머리띠 오른쪽 = 중요 값 (이름은 아래에서 따로: 선택된 긴 이름은 흘러간다)
             drawBlockHeader (g, getLocalBounds(), labelFor (slot->type), baseColour (*slot), textColour,
@@ -273,8 +285,11 @@ namespace rig
             if (slot == nullptr)
                 return;
 
+            // Edit Stomp 모드: Stomp 칸에 묶인 블록은 Stomp 파랑 테두리 (선택 테두리가 그 위에 살짝 투명하게)
+            const bool stompBound = model.isStompMode()
+                                 && std::find (slot->stomps.begin(), slot->stomps.end(), true) != slot->stomps.end();
             drawBlockFrame (g, getLocalBounds(), slot->type == BlockType::None ? juce::Colours::grey.darker() : baseColour (*slot),
-                            model.getSelectedSlotId() == slotId, slot->error.isNotEmpty());
+                            model.getSelectedSlotId() == slotId, slot->error.isNotEmpty(), stompBound);
         }
 
     private:
@@ -300,15 +315,17 @@ namespace rig
         juce::Colour baseColour (const RigModel::Slot& slot) const
         {
             const auto base = colourFor (slot.type);
-            return isDimmed (slot) ? base.withSaturation (0.1f).darker (0.5f) : base;
+            return isDimmed (slot) ? block::dimmed (base) : base;
         }
 
         RigModel& model;
         const juce::uint64 slotId;
         const bool branchActive;            // 블록이 있는 갈래가 현재 씬에서 켜져 있는지 (본 줄은 항상 true)
         const juce::uint32& marqueeStart;   // ChainView 소유: 타일을 다시 만들어도 흘러가던 위치가 이어진다
+        const StompDrag& stompDrag;          // ChainView 소유
         juce::Image snapshot;                // 끄기 시작할 때 블록 그림 (표시를 바꿀 때 다시 쓴다)
         block::DragMark shownMark = block::DragMark::none;
+        bool shownStomp = false;             // 지금 끄는 그림이 Stomp 칸 모양인지
     };
 
     //==============================================================================
@@ -394,8 +411,8 @@ namespace rig
                                    public juce::DragAndDropTarget
     {
     public:
-        Strip (RigModel& m, bool inFailed, bool outFailed, const juce::uint32& startMs)
-            : model (m), inputFailed (inFailed), outputFailed (outFailed), marqueeStart (startMs)
+        Strip (RigModel& m, bool inFailed, bool outFailed, const juce::uint32& startMs, const StompDrag& stomp)
+            : model (m), inputFailed (inFailed), outputFailed (outFailed), marqueeStart (startMs), stompDrag (stomp)
         {
             // 넣을 자리의 순서 = resized() 에서 연결선을 배치하는 순서
             const auto& chain = model.getChain();
@@ -1139,7 +1156,7 @@ namespace rig
 
         Tile* addTile (juce::uint64 id, bool active)
         {
-            auto* tile = tiles.add (new Tile (model, id, active, marqueeStart));
+            auto* tile = tiles.add (new Tile (model, id, active, marqueeStart, stompDrag));
             tile->isOverDropZone = [this, id] (juce::Point<int> screen) { return dropZoneAt (id, screen).has_value(); };
             tile->isOverSwap = [this, id] (juce::Point<int> screen) { const auto zone = dropZoneAt (id, screen); return zone.has_value() && zone->kind == DropZone::replace; };
             addAndMakeVisible (tile);
@@ -1188,6 +1205,7 @@ namespace rig
         RigModel& model;
         const bool inputFailed, outputFailed;
         const juce::uint32& marqueeStart;   // ChainView 소유 (타일에 넘긴다)
+        const StompDrag& stompDrag;         // ChainView 소유 (타일에 넘긴다)
         bool hasParallel = false;
         std::vector<Item> items;                 // 본 줄 순서
         std::vector<ParallelView> parallels;
@@ -1285,7 +1303,7 @@ namespace rig
             marqueeStartMs = juce::Time::getMillisecondCounter();
         }
 
-        strip = std::make_unique<Strip> (model, inputFailed, outputFailed, marqueeStartMs);
+        strip = std::make_unique<Strip> (model, inputFailed, outputFailed, marqueeStartMs, stompDrag);
         viewport.setViewedComponent (strip.get(), false);
         resized();
         viewport.setViewPosition (scroll);
