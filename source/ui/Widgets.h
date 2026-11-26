@@ -446,8 +446,57 @@ namespace rig
         }
     };
 
-    // 앱 기본 LookAndFeel (V4 그대로). TextButton 글자는 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 맞춘다.
-    // 한 줄과 "단어마다 한 줄" 중 글꼴을 더 크게 쓸 수 있는 쪽으로 그린다. 글자에 \n 이 있으면 그 줄바꿈 그대로
+    // 글자를 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 area 가운데에 그린다 (버튼 글자, 씬·Stomp 칸 이름).
+    // 한 줄과 "단어마다 한 줄" 중 글꼴을 더 크게 쓸 수 있는 쪽. 글자에 \n 이 있으면 그 줄바꿈 그대로.
+    // font = 가장 큰 크기와 굵기 (줄 수만큼 area 높이에 들어가도록 먼저 줄인다). 색은 미리 g 에
+    inline void drawShrunkText (juce::Graphics& g, const juce::String& rawText, juce::Rectangle<float> area, const juce::Font& font)
+    {
+        constexpr float minHeight = 6.0f;
+        const auto text = rawText.trim();
+
+        const auto bestFont = [&] (const juce::StringArray& lines)
+        {
+            auto f = font.withHeight (juce::jmin (font.getHeight(), area.getHeight() / (float) lines.size()));
+
+            const auto fits = [&]
+            {
+                for (const auto& line : lines)
+                    if (juce::GlyphArrangement::getStringWidth (f, line) > area.getWidth())
+                        return false;
+                return true;
+            };
+
+            while (f.getHeight() > minHeight && ! fits())
+                f = f.withHeight (f.getHeight() - 0.5f);
+
+            return f;
+        };
+
+        auto lines = juce::StringArray::fromLines (text);
+        auto best = bestFont (lines);
+
+        const auto words = juce::StringArray::fromTokens (text, " ", {});
+        if (lines.size() == 1 && words.size() > 1)
+        {
+            if (const auto wordFont = bestFont (words); wordFont.getHeight() > best.getHeight())
+            {
+                lines = words;
+                best = wordFont;
+            }
+        }
+
+        g.setFont (best);
+        const auto lineHeight = best.getHeight();
+        auto y = area.getCentreY() - lineHeight * (float) lines.size() / 2.0f;
+
+        for (const auto& line : lines)
+        {
+            g.drawText (line, juce::Rectangle<float> (area.getX(), y, area.getWidth(), lineHeight), juce::Justification::centred, false);
+            y += lineHeight;
+        }
+    }
+
+    // 앱 기본 LookAndFeel (V4 그대로). TextButton 글자는 자르지도 찌그러뜨리지도 않고 글꼴 크기만 줄여 맞춘다 (drawShrunkText)
     struct AppLookAndFeel : public juce::LookAndFeel_V4
     {
         // 창 제목 표시줄의 X 도 왼쪽 클릭만 (마우스 규칙). 모양은 LookAndFeel_V4 의 X 그대로 (V4 버튼 클래스는 JUCE 안에 숨어 있어 상속할 수 없다)
@@ -512,59 +561,16 @@ namespace rig
 
         void drawButtonText (juce::Graphics& g, juce::TextButton& button, bool, bool) override
         {
-            const auto area = button.getLocalBounds().reduced (3, 2).toFloat();
-            const auto text = button.getButtonText().trim();
             const auto maxHeight = juce::LookAndFeel_V4::getTextButtonFont (button, button.getHeight()).getHeight();
 
             // 모드 스위치 원칙: 토글이 켜져 있으면 (그 모드에 들어가 있으면, 예: Copy / Swap) 글자를 굵게
             const int style = button.getToggleState() ? juce::Font::bold : juce::Font::plain;
 
-            const auto bestFont = [&] (const juce::StringArray& lines)
-            {
-                auto font = juce::Font (juce::FontOptions (juce::jmin (maxHeight, area.getHeight() / (float) lines.size()), style));
-
-                const auto fits = [&]
-                {
-                    for (const auto& line : lines)
-                        if (juce::GlyphArrangement::getStringWidth (font, line) > area.getWidth())
-                            return false;
-                    return true;
-                };
-
-                while (font.getHeight() > 6.0f && ! fits())
-                    font = font.withHeight (font.getHeight() - 0.5f);
-
-                return font;
-            };
-
-            // 글자에 줄바꿈(\n)이 있으면 그대로 그 줄들로 (예: "All\nReset")
-            auto lines = juce::StringArray::fromLines (text);
-            auto font = bestFont (lines);
-
-            const auto words = juce::StringArray::fromTokens (text, " ", {});
-            if (lines.size() == 1 && words.size() > 1)
-            {
-                if (const auto wordFont = bestFont (words); wordFont.getHeight() > font.getHeight())
-                {
-                    lines = words;
-                    font = wordFont;
-                }
-            }
-
-            g.setFont (font);
             g.setColour (button.findColour (button.getToggleState() ? juce::TextButton::textColourOnId
                                                                     : juce::TextButton::textColourOffId)
                              .withMultipliedAlpha (button.isEnabled() ? 1.0f : 0.5f));
-
-            const auto lineHeight = font.getHeight();
-            auto y = area.getCentreY() - lineHeight * (float) lines.size() / 2.0f;
-
-            for (const auto& line : lines)
-            {
-                g.drawText (line, juce::Rectangle<float> (area.getX(), y, area.getWidth(), lineHeight),
-                            juce::Justification::centred, false);
-                y += lineHeight;
-            }
+            drawShrunkText (g, button.getButtonText(), button.getLocalBounds().reduced (3, 2).toFloat(),
+                            juce::Font (juce::FontOptions (maxHeight, style)));
         }
     };
 
@@ -974,6 +980,56 @@ namespace rig
         enum class DragMark { none, remove, add, replace, swap };
         constexpr float markRadius = 10.0f, markInset = 3.0f;
 
+        // 표시 기호만 (X / + / ↔ / ⇄), 지금 색으로. arm = 가운데에서 팔 끝까지. 끄는 그림의 원 안과 ssbar 놓을 자리 힌트가 같이 쓴다
+        inline void drawMarkSymbol (juce::Graphics& g, juce::Point<float> centre, DragMark mark, float arm, float thickness = 2.0f)
+        {
+            if (mark == DragMark::remove)
+            {
+                const float d = arm * 0.9f;
+                g.drawLine (centre.x - d, centre.y - d, centre.x + d, centre.y + d, thickness);
+                g.drawLine (centre.x + d, centre.y - d, centre.x - d, centre.y + d, thickness);
+            }
+            else if (mark == DragMark::add)
+            {
+                g.drawLine (centre.x - arm, centre.y, centre.x + arm, centre.y, thickness);
+                g.drawLine (centre.x, centre.y - arm, centre.x, centre.y + arm, thickness);
+            }
+            else if (mark == DragMark::replace || mark == DragMark::swap)
+            {
+                // 가로 화살표: replace = ↔ (한 줄, 양쪽 화살촉), swap = ⇄ (위 →, 아래 ←). 화살촉·줄 간격은 arm 에 비례 (arm 4.5 에서 3)
+                const float h = arm * 0.667f;
+
+                const auto arrow = [&] (float y, bool right, bool left)
+                {
+                    g.drawLine (centre.x - arm, y, centre.x + arm, y, thickness);
+
+                    if (right)
+                    {
+                        juce::Path head;
+                        head.addTriangle (centre.x + arm + h * 0.5f, y, centre.x + arm - h, y - h, centre.x + arm - h, y + h);
+                        g.fillPath (head);
+                    }
+
+                    if (left)
+                    {
+                        juce::Path head;
+                        head.addTriangle (centre.x - arm - h * 0.5f, y, centre.x - arm + h, y - h, centre.x - arm + h, y + h);
+                        g.fillPath (head);
+                    }
+                };
+
+                if (mark == DragMark::replace)
+                {
+                    arrow (centre.y, true, true);
+                }
+                else
+                {
+                    arrow (centre.y - h, true, false);
+                    arrow (centre.y + h, false, true);
+                }
+            }
+        }
+
         inline juce::Image createDragImage (const juce::Image& block, DragMark mark)
         {
             const int pad = (int) std::ceil (markRadius - markInset);
@@ -989,53 +1045,8 @@ namespace rig
                                                     : juce::Colour (0xffc9a227));   // 어두운 노랑 (replace / swap)
                 g.fillEllipse (juce::Rectangle<float> (markRadius * 2.0f, markRadius * 2.0f).withCentre (centre));
 
-                const float arm = markRadius * 0.45f;
                 g.setColour (juce::Colours::white);
-
-                if (mark == DragMark::remove)
-                {
-                    const float d = arm * 0.9f;
-                    g.drawLine (centre.x - d, centre.y - d, centre.x + d, centre.y + d, 2.0f);
-                    g.drawLine (centre.x + d, centre.y - d, centre.x - d, centre.y + d, 2.0f);
-                }
-                else if (mark == DragMark::add)
-                {
-                    g.drawLine (centre.x - arm, centre.y, centre.x + arm, centre.y, 2.0f);
-                    g.drawLine (centre.x, centre.y - arm, centre.x, centre.y + arm, 2.0f);
-                }
-                else
-                {
-                    // 가로 화살표: replace = ↔ (한 줄, 양쪽 화살촉), swap = ⇄ (위 →, 아래 ←)
-                    const auto arrow = [&] (float y, bool right, bool left)
-                    {
-                        g.drawLine (centre.x - arm, y, centre.x + arm, y, 2.0f);
-                        const float h = 3.0f;
-
-                        if (right)
-                        {
-                            juce::Path head;
-                            head.addTriangle (centre.x + arm + 1.5f, y, centre.x + arm - h, y - h, centre.x + arm - h, y + h);
-                            g.fillPath (head);
-                        }
-
-                        if (left)
-                        {
-                            juce::Path head;
-                            head.addTriangle (centre.x - arm - 1.5f, y, centre.x - arm + h, y - h, centre.x - arm + h, y + h);
-                            g.fillPath (head);
-                        }
-                    };
-
-                    if (mark == DragMark::replace)
-                    {
-                        arrow (centre.y, true, true);
-                    }
-                    else
-                    {
-                        arrow (centre.y - 3.0f, true, false);
-                        arrow (centre.y + 3.0f, false, true);
-                    }
-                }
+                drawMarkSymbol (g, centre, mark, markRadius * 0.45f);
             }
 
             image.multiplyAllAlphas (dragImageAlpha);
