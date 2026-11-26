@@ -25,6 +25,7 @@ namespace rig
         shownPatch = model.getPatchNumber();
 
         liveButton.onClick = [this] { if (onLiveClicked) onLiveClicked(); };
+        disableHoverHighlight (liveButton);   // Live 와 연관된 버튼
         addAndMakeVisible (liveButton);
 
         for (auto* b : { &copyButton, &swapButton, &sceneResetButton })

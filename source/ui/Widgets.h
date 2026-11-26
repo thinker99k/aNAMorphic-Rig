@@ -61,6 +61,10 @@ namespace rig
         }
     }
 
+    // 마우스를 올리거나 누르는 동안에도 밝아지지 않는 버튼 (Live 와 연관되거나 Live 에서도 쓰는 버튼: Live, MUTE). AppLookAndFeel 이 본다
+    inline void disableHoverHighlight (juce::Button& b) { b.getProperties().set ("noHover", true); }
+    inline bool hoverHighlightDisabled (juce::Button& b) { return (bool) b.getProperties()["noHover"]; }
+
     // 장치 채널 번호 표시 (first 는 0부터, 화면은 1부터): 하나 = "3", 둘 = "1+2"
     inline juce::String channelText (int first, int count)
     {
@@ -508,6 +512,9 @@ namespace rig
         void drawButtonBackground (juce::Graphics& g, juce::Button& button, const juce::Colour& background,
                                    bool highlighted, bool down) override
         {
+            if (hoverHighlightDisabled (button))
+                highlighted = down = false;
+
             if (! button.getToggleState())
                 return juce::LookAndFeel_V4::drawButtonBackground (g, button, background, highlighted, down);
 
